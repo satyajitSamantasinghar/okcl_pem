@@ -1,0 +1,215 @@
+.login-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-page);
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+}
+
+/* ===== Decorative Circles ===== */
+.login-circle {
+    position: absolute;
+    border-radius: 50%;
+    z-index: 0;
+}
+
+.login-circle--large {
+    width: 120px;
+    height: 120px;
+    background: var(--primary);
+    bottom: 60px;
+    left: 30px;
+}
+
+.login-circle--medium {
+    width: 50px;
+    height: 50px;
+    background: var(--primary);
+    opacity: 0.7;
+    bottom: 40px;
+    left: 110px;
+}
+
+.login-circle--corner {
+    width: 300px;
+    height: 300px;
+    background: var(--primary);
+    top: -80px;
+    right: -80px;
+    opacity: 0.95;
+}
+
+/* ===== Card ===== */
+.login-card {
+    position: relative;
+    z-index: 1;
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    padding: 40px 40px 32px;
+    width: 100%;
+    max-width: 440px;
+    animation: fadeIn 0.5s ease;
+}
+
+/* ===== Logo ===== */
+.login-logo {
+    text-align: center;
+    margin-bottom: 16px;
+}
+
+.login-logo-img {
+    width: 72px;
+    height: 72px;
+    object-fit: contain;
+    margin: 0 auto;
+}
+
+/* ===== Title ===== */
+.login-title {
+    text-align: center;
+    font-size: 1.45rem;
+    font-weight: 700;
+    font-style: italic;
+    color: var(--text-primary);
+    margin-bottom: 32px;
+    line-height: 1.4;
+}
+
+.login-title-accent {
+    color: var(--primary);
+}
+
+/* ===== Form ===== */
+.login-form {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.login-field label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+
+.login-field input {
+    width: 100%;
+    padding: 13px 16px;
+    border: 1.5px solid var(--border-default);
+    border-radius: var(--radius-md);
+    font-size: 0.9375rem;
+    background: var(--bg-card);
+    transition: all var(--transition-fast);
+}
+
+.login-field input:focus {
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 3px rgba(255, 122, 24, 0.1);
+}
+
+/* ===== Submit Button ===== */
+.login-submit {
+    width: 100%;
+    padding: 14px;
+    background: var(--primary-gradient);
+    color: var(--text-on-primary);
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: 1rem;
+    font-weight: 600;
+    font-family: 'Inter', sans-serif;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    box-shadow: 0 4px 16px rgba(255, 122, 24, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 48px;
+}
+
+.login-submit:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 24px rgba(255, 122, 24, 0.4);
+}
+
+.login-submit:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.login-submit:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+/* ===== Spinner ===== */
+.login-spinner {
+    width: 22px;
+    height: 22px;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+}
+
+/* ===== Footer ===== */
+.login-footer {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 20px;
+}
+
+.login-link {
+    font-size: 0.8125rem;
+    color: var(--primary);
+    font-weight: 500;
+    transition: color var(--transition-fast);
+}
+
+.login-link:hover {
+    color: var(--primary-hover);
+    text-decoration: underline;
+}
+
+/* ===== Mobile ===== */
+@media (max-width: 480px) {
+    .login-card {
+        padding: 32px 24px 24px;
+    }
+
+    .login-title {
+        font-size: 1.2rem;
+    }
+
+    .login-circle--large {
+        width: 80px;
+        height: 80px;
+        bottom: 40px;
+        left: 15px;
+    }
+
+    .login-circle--medium {
+        width: 35px;
+        height: 35px;
+        bottom: 25px;
+        left: 75px;
+    }
+
+    .login-circle--corner {
+        width: 200px;
+        height: 200px;
+        top: -60px;
+        right: -60px;
+    }
+
+    .login-footer {
+        flex-direction: column;
+        gap: 8px;
+        align-items: center;
+    }
+}

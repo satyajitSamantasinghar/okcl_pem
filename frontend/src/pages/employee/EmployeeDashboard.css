@@ -1,0 +1,71 @@
+.action-card {
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-lg);
+    padding: 28px;
+    text-decoration: none;
+    color: inherit;
+    transition: all var(--transition-normal);
+    box-shadow: var(--shadow-card);
+}
+
+.action-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-md);
+    border-color: var(--primary-light);
+}
+
+.action-card-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    margin-bottom: 16px;
+}
+
+.action-card-icon.orange {
+    background: var(--primary-light);
+    color: var(--primary);
+}
+
+.action-card-icon.blue {
+    background: var(--info-bg);
+    color: var(--info);
+}
+
+.action-card-icon.yellow {
+    background: var(--warning-bg);
+    color: var(--warning);
+}
+
+.action-card-icon.green {
+    background: var(--success-bg);
+    color: var(--success);
+}
+
+.action-card h3 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: var(--text-primary);
+}
+
+.action-card p {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    flex: 1;
+    line-height: 1.5;
+}
+
+.action-card-link {
+    display: inline-block;
+    margin-top: 16px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--primary);
+}
