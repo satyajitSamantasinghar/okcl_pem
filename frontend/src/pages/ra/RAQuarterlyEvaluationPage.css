@@ -1,0 +1,559 @@
+/* ========== RA QUARTERLY EVALUATION PAGE ========== */
+
+/* Quarter selector row */
+.qtr-page-actions {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 28px;
+    flex-wrap: wrap;
+}
+
+.qtr-quarter-select {
+    position: relative;
+}
+
+.qtr-quarter-select select {
+    appearance: none;
+    background: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    padding: 10px 36px 10px 14px;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: border-color var(--transition-fast);
+    min-width: 160px;
+}
+
+.qtr-quarter-select select:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+
+.qtr-quarter-select::after {
+    content: '▼';
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.625rem;
+    color: var(--text-muted);
+    pointer-events: none;
+}
+
+/* Status badges */
+.qtr-remarks-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 12px;
+    border-radius: 100px;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+}
+
+.qtr-remarks-badge.has-remarks {
+    background: var(--success-bg);
+    color: var(--success);
+}
+
+.qtr-remarks-badge.needs-remarks {
+    background: var(--warning-bg);
+    color: var(--warning);
+}
+
+/* ========== REPORT CARDS GRID ========== */
+.qtr-reports-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 16px;
+    margin-top: 16px;
+}
+
+.qtr-report-card {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+    box-shadow: var(--shadow-card);
+    border: 1px solid var(--border-default);
+    cursor: pointer;
+    transition: all var(--transition-normal);
+    position: relative;
+    overflow: hidden;
+}
+
+.qtr-report-card:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-md);
+    border-color: var(--primary-light);
+}
+
+.qtr-report-card-top {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 16px;
+}
+
+.qtr-report-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--primary-gradient);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    font-weight: 700;
+    flex-shrink: 0;
+    text-transform: uppercase;
+}
+
+.qtr-report-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.qtr-report-name {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 2px;
+}
+
+.qtr-report-meta {
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+}
+
+.qtr-report-score-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 0;
+    border-top: 1px solid var(--border-default);
+}
+
+.qtr-report-score-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--text-secondary);
+}
+
+.qtr-report-score-value {
+    font-size: 1.5rem;
+    font-weight: 800;
+}
+
+.qtr-report-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 8px;
+}
+
+.qtr-report-view-hint {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    color: var(--primary);
+    opacity: 0;
+    transition: opacity var(--transition-fast);
+}
+
+.qtr-report-card:hover .qtr-report-view-hint {
+    opacity: 1;
+}
+
+/* ========== DETAIL MODAL ========== */
+.qtr-detail-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 20px;
+    animation: fadeIn 0.2s ease;
+}
+
+.qtr-detail-modal {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    width: 100%;
+    max-width: 680px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: var(--shadow-lg);
+    animation: raModalSlideUp 0.3s ease;
+}
+
+.qtr-detail-header {
+    padding: 24px 28px 16px;
+    border-bottom: 1px solid var(--border-default);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.qtr-detail-header h2 {
+    font-size: 1.25rem;
+    font-weight: 800;
+}
+
+.qtr-detail-close {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: none;
+    background: var(--bg-muted);
+    color: var(--text-secondary);
+    font-size: 1.1rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--transition-fast);
+}
+
+.qtr-detail-close:hover {
+    background: var(--error-bg);
+    color: var(--error);
+}
+
+.qtr-detail-body {
+    padding: 20px 28px 28px;
+}
+
+/* Profile section */
+.qtr-detail-profile {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.qtr-detail-avatar {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: var(--primary-gradient);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.qtr-detail-info h3 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: 2px;
+}
+
+.qtr-detail-info p {
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+}
+
+/* Average score card */
+.qtr-detail-avg {
+    background: var(--bg-muted);
+    border-radius: var(--radius-md);
+    padding: 24px;
+    text-align: center;
+    margin-bottom: 28px;
+    position: relative;
+}
+
+.qtr-detail-avg-value {
+    font-size: 2.75rem;
+    font-weight: 800;
+    line-height: 1;
+    margin-bottom: 4px;
+}
+
+.qtr-detail-avg-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--text-secondary);
+}
+
+/* ========== HORIZONTAL BAR CHART ========== */
+.qtr-chart-section {
+    margin-bottom: 28px;
+}
+
+.qtr-chart-title {
+    font-size: 0.8125rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 16px;
+}
+
+.qtr-bar-chart {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.qtr-bar-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.qtr-bar-label {
+    width: 110px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    flex-shrink: 0;
+    text-align: right;
+}
+
+.qtr-bar-track {
+    flex: 1;
+    height: 28px;
+    background: var(--bg-muted);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    position: relative;
+}
+
+.qtr-bar-fill {
+    height: 100%;
+    border-radius: var(--radius-md);
+    transition: width 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 10px;
+    min-width: 40px;
+}
+
+.qtr-bar-fill-text {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.qtr-bar-score {
+    width: 48px;
+    font-size: 0.9375rem;
+    font-weight: 800;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+/* ========== RADIAL GAUGE ========== */
+.qtr-gauge-container {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 24px;
+}
+
+.qtr-gauge {
+    position: relative;
+    width: 160px;
+    height: 160px;
+}
+
+.qtr-gauge svg {
+    transform: rotate(-90deg);
+}
+
+.qtr-gauge-bg {
+    fill: none;
+    stroke: var(--bg-muted);
+    stroke-width: 12;
+}
+
+.qtr-gauge-fill {
+    fill: none;
+    stroke-width: 12;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.qtr-gauge-center {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.qtr-gauge-value {
+    font-size: 2rem;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.qtr-gauge-label {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+}
+
+/* ========== REMARKS SECTION ========== */
+.qtr-detail-remarks {
+    margin-top: 24px;
+}
+
+.qtr-detail-remarks-label {
+    font-size: 0.8125rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.qtr-detail-remarks-box {
+    background: var(--bg-muted);
+    border-radius: var(--radius-md);
+    padding: 14px 16px;
+    font-size: 0.9375rem;
+    color: var(--text-primary);
+    min-height: 60px;
+    line-height: 1.6;
+}
+
+.qtr-detail-remarks-empty {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.qtr-detail-remarks textarea {
+    width: 100%;
+    min-height: 80px;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    padding: 12px 14px;
+    font-size: 0.9375rem;
+    resize: vertical;
+    font-family: inherit;
+    transition: border-color var(--transition-fast);
+}
+
+.qtr-detail-remarks textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+
+.qtr-detail-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 12px;
+    justify-content: flex-end;
+}
+
+/* Prompt card on main page */
+.qtr-remarks-prompt {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--warning);
+    animation: qtrPulse 2s ease-in-out infinite;
+}
+
+@keyframes qtrPulse {
+
+    0%,
+    100% {
+        opacity: 0.7;
+    }
+
+    50% {
+        opacity: 1;
+    }
+}
+
+/* Generated timestamp */
+.qtr-generated-at {
+    margin-top: 20px;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* Empty state */
+.qtr-empty {
+    text-align: center;
+    padding: 60px 20px;
+}
+
+.qtr-empty-icon {
+    font-size: 3rem;
+    color: var(--text-muted);
+    opacity: 0.3;
+    margin-bottom: 16px;
+}
+
+.qtr-empty h3 {
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+}
+
+.qtr-empty p {
+    color: var(--text-muted);
+    font-size: 0.9375rem;
+    max-width: 400px;
+    margin: 0 auto;
+    line-height: 1.6;
+}
+
+/* ========== RESPONSIVE ========== */
+@media (max-width: 768px) {
+    .qtr-reports-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .qtr-detail-modal {
+        margin: 8px;
+    }
+
+    .qtr-detail-header,
+    .qtr-detail-body {
+        padding-left: 20px;
+        padding-right: 20px;
+    }
+
+    .qtr-bar-label {
+        width: 80px;
+        font-size: 0.75rem;
+    }
+
+    .qtr-gauge {
+        width: 140px;
+        height: 140px;
+    }
+}

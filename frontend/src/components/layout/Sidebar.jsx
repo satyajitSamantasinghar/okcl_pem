@@ -10,6 +10,8 @@ import {
     FiAward,
     FiCheckCircle,
     FiFileText,
+    FiShield,
+    FiList,
     FiX,
 } from 'react-icons/fi';
 import './Sidebar.css';
@@ -23,17 +25,23 @@ const navItemsByRole = {
     ],
     RA: [
         { path: '/ra', label: 'Dashboard', icon: <FiHome /> },
+        { path: '/ra/employees', label: 'My Employees', icon: <FiUsers /> },
         { path: '/ra/monthly-evaluation', label: 'Monthly Evaluation', icon: <FiClipboard /> },
         { path: '/ra/quarterly-evaluation', label: 'Quarterly Evaluation', icon: <FiBarChart2 /> },
         { path: '/ra/yearly-appraisal', label: 'Yearly Appraisal', icon: <FiAward /> },
     ],
     HRD: [
         { path: '/hrd', label: 'Dashboard', icon: <FiHome /> },
+        { path: '/hrd/employees', label: 'People Directory', icon: <FiUsers /> },
+        { path: '/hrd/monthly-overview', label: 'Monthly Overview', icon: <FiList /> },
         { path: '/hrd/yearly-appraisal', label: 'Yearly Appraisal', icon: <FiAward /> },
     ],
     MD: [
         { path: '/md', label: 'Dashboard', icon: <FiHome /> },
+        { path: '/md/employees', label: 'People Directory', icon: <FiUsers /> },
+        { path: '/md/monthly-overview', label: 'Monthly Overview', icon: <FiList /> },
         { path: '/md/approvals', label: 'Approvals', icon: <FiCheckCircle /> },
+        { path: '/md/audit', label: 'Audit Trail', icon: <FiShield /> },
     ],
 };
 

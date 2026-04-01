@@ -1,0 +1,403 @@
+.ra-pending-page {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.ra-pending-hero {
+    background: linear-gradient(135deg, #fff7ed 0%, #ffffff 70%);
+    border: 1px solid #f5dfc9;
+    border-radius: 24px;
+    padding: 28px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
+    box-shadow: var(--shadow-card);
+}
+
+.ra-pending-hero-copy {
+    min-width: 0;
+}
+
+.ra-pending-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.74rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--primary);
+    margin-bottom: 10px;
+}
+
+.ra-pending-hero h1 {
+    margin-bottom: 8px;
+}
+
+.ra-pending-hero p {
+    color: var(--text-secondary);
+    max-width: 760px;
+    overflow-wrap: anywhere;
+}
+
+.ra-pending-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    min-width: 360px;
+}
+
+.ra-pending-year-filter,
+.ra-pending-search {
+    background: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+}
+
+.ra-pending-year-filter {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+}
+
+.ra-pending-year-filter label {
+    margin-bottom: 0;
+}
+
+.ra-pending-year-filter select {
+    width: 120px;
+    min-width: 120px;
+    padding: 10px 12px;
+}
+
+.ra-pending-search {
+    position: relative;
+    min-width: 320px;
+    flex: 1;
+}
+
+.ra-pending-search svg {
+    position: absolute;
+    top: 50%;
+    left: 14px;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+}
+
+.ra-pending-search input {
+    padding-left: 40px;
+    border: none;
+    box-shadow: none;
+}
+
+.ra-pending-search input:focus {
+    box-shadow: none;
+}
+
+.ra-pending-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 16px;
+}
+
+.ra-pending-summary-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: 22px;
+    padding: 22px;
+    box-shadow: var(--shadow-card);
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    min-width: 0;
+}
+
+.ra-pending-summary-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+
+.ra-pending-summary-icon.amber {
+    background: var(--warning-bg);
+    color: var(--warning);
+}
+
+.ra-pending-summary-icon.blue {
+    background: var(--info-bg);
+    color: var(--info);
+}
+
+.ra-pending-summary-icon.green {
+    background: var(--success-bg);
+    color: var(--success);
+}
+
+.ra-pending-summary-icon.rose {
+    background: var(--error-bg);
+    color: var(--error);
+}
+
+.ra-pending-summary-label {
+    display: block;
+    font-size: 0.74rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+}
+
+.ra-pending-summary-card strong {
+    display: block;
+    font-size: 1.8rem;
+    line-height: 1;
+    margin-bottom: 8px;
+}
+
+.ra-pending-summary-card p {
+    color: var(--text-secondary);
+    font-size: 0.88rem;
+    line-height: 1.55;
+    overflow-wrap: anywhere;
+}
+
+.ra-pending-list-card {
+    padding: 0;
+    overflow: hidden;
+}
+
+.ra-pending-list-header {
+    margin-bottom: 0;
+}
+
+.ra-pending-subtitle {
+    color: var(--text-secondary);
+    font-size: 0.92rem;
+    margin-top: 6px;
+    overflow-wrap: anywhere;
+}
+
+.ra-pending-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.ra-pending-list-head,
+.ra-pending-list-row {
+    display: grid;
+    grid-template-columns: minmax(220px, 1.35fr) minmax(140px, 0.9fr) minmax(220px, 1.15fr) minmax(120px, 0.75fr) minmax(250px, 1.2fr);
+    gap: 18px;
+    align-items: center;
+    padding: 18px 24px;
+}
+
+.ra-pending-list-head {
+    background: var(--bg-muted);
+    border-top: 1px solid var(--border-default);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 700;
+    color: var(--text-secondary);
+}
+
+.ra-pending-list-row {
+    border-top: 1px solid var(--border-default);
+    background: var(--bg-card);
+}
+
+.ra-pending-list-row:hover {
+    background: #fffaf4;
+}
+
+.ra-pending-employee {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.ra-pending-employee strong,
+.ra-pending-employee span,
+.ra-pending-cell {
+    overflow-wrap: anywhere;
+}
+
+.ra-pending-employee strong {
+    font-size: 0.98rem;
+}
+
+.ra-pending-employee span {
+    color: var(--text-secondary);
+    font-size: 0.84rem;
+}
+
+.ra-pending-cell {
+    font-size: 0.9rem;
+}
+
+.ra-pending-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+}
+
+.ra-pending-actions .btn {
+    white-space: nowrap;
+}
+
+.ra-pending-modal {
+    max-width: 980px;
+    width: min(980px, calc(100vw - 32px));
+    padding: 28px;
+}
+
+.ra-pending-modal-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.ra-pending-modal-header p {
+    color: var(--text-secondary);
+    margin-top: 4px;
+    overflow-wrap: anywhere;
+}
+
+.ra-pending-close {
+    width: 38px;
+    height: 38px;
+    border: none;
+    border-radius: 50%;
+    background: var(--bg-muted);
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--transition-fast);
+    flex-shrink: 0;
+}
+
+.ra-pending-close:hover {
+    background: var(--error-bg);
+    color: var(--error);
+}
+
+.ra-pending-detail-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.ra-pending-detail-card {
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    background: #fff;
+    min-width: 0;
+}
+
+.ra-pending-detail-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 16px 18px;
+    background: var(--bg-muted);
+    border-bottom: 1px solid var(--border-default);
+}
+
+.ra-pending-detail-head h3 {
+    font-size: 1rem;
+}
+
+.ra-pending-detail-body {
+    padding: 18px;
+    min-height: 180px;
+    white-space: pre-wrap;
+    color: var(--text-primary);
+    overflow-wrap: anywhere;
+}
+
+.ra-pending-form {
+    border-top: 1px solid var(--border-default);
+    padding-top: 24px;
+}
+
+.ra-pending-form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+}
+
+@media (max-width: 1200px) {
+    .ra-pending-hero {
+        flex-direction: column;
+    }
+
+    .ra-pending-toolbar {
+        width: 100%;
+        min-width: 0;
+        justify-content: flex-start;
+    }
+
+    .ra-pending-list-head,
+    .ra-pending-list-row {
+        grid-template-columns: minmax(180px, 1.2fr) minmax(120px, 0.9fr) minmax(200px, 1fr) minmax(110px, 0.7fr) minmax(220px, 1fr);
+    }
+}
+
+@media (max-width: 960px) {
+    .ra-pending-list-head {
+        display: none;
+    }
+
+    .ra-pending-list-row {
+        grid-template-columns: 1fr;
+        gap: 12px;
+        padding: 18px;
+    }
+
+    .ra-pending-actions {
+        justify-content: flex-start;
+    }
+}
+
+@media (max-width: 768px) {
+    .ra-pending-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .ra-pending-search {
+        min-width: 0;
+    }
+
+    .ra-pending-detail-grid,
+    .ra-pending-form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .ra-pending-modal {
+        padding: 22px;
+    }
+
+    .ra-pending-modal-header {
+        flex-direction: column;
+    }
+}

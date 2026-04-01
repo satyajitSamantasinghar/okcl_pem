@@ -1,0 +1,1266 @@
+/* =====================================================
+   RA YEARLY APPRAISAL PAGE — DESIGN SYSTEM v2
+   Prefix: yap-
+   8px spacing system · CSS vars from index.css
+   Enterprise SaaS aesthetic (Workday / Zoho standard)
+===================================================== */
+
+/* ─── PAGE WRAPPER ─────────────────────── */
+.yap-page {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    padding-bottom: 40px;
+}
+
+/* ─── TOP BAR ───────────────────────────── */
+.yap-topbar {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 20px 24px;
+    background: linear-gradient(135deg, #fff9f5 0%, #ffffff 70%);
+    border: 1px solid #f0ddd0;
+    border-radius: 14px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+    flex-wrap: wrap;
+}
+
+.yap-topbar-left {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.yap-topbar-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--primary, #ff7a18);
+}
+
+.yap-topbar-title {
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    margin: 0;
+    line-height: 1.2;
+}
+
+.yap-topbar-desc {
+    font-size: 0.84rem;
+    color: var(--text-secondary);
+    margin: 0;
+    max-width: 520px;
+}
+
+.yap-topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+/* ─── SUMMARY PANEL ─────────────────────── */
+.yap-summary-panel {
+    display: flex;
+    gap: 16px;
+    padding: 10px 16px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: 10px;
+}
+
+.yap-summary-stat {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.yap-summary-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+}
+
+.yap-summary-icon--blue   { background: var(--info-bg);    color: var(--info);    }
+.yap-summary-icon--amber  { background: var(--warning-bg); color: var(--warning); }
+.yap-summary-icon--green  { background: var(--success-bg); color: var(--success); }
+
+.yap-summary-val {
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    line-height: 1;
+}
+
+.yap-summary-label {
+    font-size: 0.68rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 600;
+}
+
+/* ─── YEAR SELECT ───────────────────────── */
+.yap-year-select {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 12px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: 8px;
+    font-size: 0.84rem;
+    color: var(--text-primary);
+}
+
+.yap-year-select select {
+    border: none;
+    outline: none;
+    background: transparent;
+    font-size: inherit;
+    font-family: inherit;
+    color: inherit;
+    cursor: pointer;
+}
+
+.yap-refresh-btn {
+    width: 34px;
+    height: 34px;
+    border: 1px solid var(--border-default);
+    border-radius: 8px;
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+
+.yap-refresh-btn:hover {
+    background: var(--primary-light, #fff0e6);
+    color: var(--primary);
+}
+
+/* ─── TABS ──────────────────────────────── */
+.yap-tabs {
+    display: flex;
+    gap: 4px;
+    border-bottom: 2px solid var(--border-default);
+    padding-bottom: 0;
+}
+
+.yap-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 10px 18px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+    border-radius: 8px 8px 0 0;
+    font-family: inherit;
+}
+
+.yap-tab:hover {
+    color: var(--text-primary);
+    background: var(--bg-muted);
+}
+
+.yap-tab--active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+    background: rgba(255, 122, 24, 0.04);
+}
+
+.yap-tab-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 100px;
+    font-size: 0.66rem;
+    font-weight: 700;
+    background: var(--bg-muted);
+    color: var(--text-secondary);
+}
+
+.yap-tab-badge--alert {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.yap-tab--active .yap-tab-badge {
+    background: rgba(255, 122, 24, 0.12);
+    color: var(--primary);
+}
+
+/* ─── CARDS GRID ────────────────────────── */
+.yap-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 16px;
+}
+
+.yap-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: 14px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    cursor: pointer;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.yap-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.09);
+    border-color: var(--primary, #ff7a18);
+}
+
+.yap-card--action-required {
+    border-left: 3px solid var(--primary, #ff7a18);
+}
+
+.yap-card-action-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.62rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--primary);
+    background: rgba(255, 122, 24, 0.1);
+    padding: 3px 10px;
+    border-radius: 100px;
+    align-self: flex-start;
+}
+
+.yap-card-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.yap-card-avatar {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: var(--primary-gradient, linear-gradient(135deg, #ff7a18, #ffb347));
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    font-weight: 700;
+    flex-shrink: 0;
+    text-transform: uppercase;
+    box-shadow: 0 2px 8px rgba(255, 122, 24, 0.25);
+}
+
+.yap-card-identity {
+    flex: 1;
+    min-width: 0;
+}
+
+.yap-card-name {
+    font-size: 0.9375rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.yap-card-sub {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    margin-top: 1px;
+}
+
+.yap-card-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.yap-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: var(--bg-muted);
+    padding: 3px 9px;
+    border-radius: 100px;
+}
+
+.yap-chip--score {
+    background: rgba(255, 122, 24, 0.1);
+    color: var(--primary);
+}
+
+/* Score strip on report cards */
+.yap-card-score-strip {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.yap-score-chip {
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 100px;
+}
+
+.yap-score-chip--ra  { background: rgba(255, 122, 24, 0.1); color: var(--primary); }
+.yap-score-chip--hrd { background: rgba(13, 148, 136, 0.1); color: #0d9488; }
+.yap-score-chip--md  { background: rgba(99, 102, 241, 0.1); color: #6366f1; }
+
+.yap-card-footer {
+    margin-top: auto;
+    padding-top: 4px;
+    border-top: 1px solid var(--border-default);
+}
+
+.yap-card-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    cursor: pointer;
+    border: none;
+    font-family: inherit;
+    transition: transform 0.15s, box-shadow 0.15s;
+    width: 100%;
+    justify-content: center;
+}
+
+.yap-card-btn--primary {
+    background: var(--primary, #ff7a18);
+    color: #fff;
+}
+
+.yap-card-btn--primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(255, 122, 24, 0.3);
+}
+
+.yap-card-btn--secondary {
+    background: var(--bg-muted);
+    color: var(--text-primary);
+    border: 1px solid var(--border-default);
+}
+
+.yap-card-btn--secondary:hover {
+    background: var(--bg-card);
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+/* ─── STATUS BADGE ──────────────────────── */
+.yap-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 100px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.yap-badge--pending    { background: var(--warning-bg, #fef3c7); color: #92400e; }
+.yap-badge--approved   { background: var(--success-bg, #dcfce7); color: #166534; }
+.yap-badge--rejected   { background: var(--error-bg,   #fee2e2); color: #991b1b; }
+.yap-badge--edited     { background: #e0e7ff; color: #3730a3; }
+.yap-badge--edited-after { background: #e0e7ff; color: #3730a3; }
+.yap-badge--ra-done    { background: rgba(255, 122, 24, 0.1); color: var(--primary); }
+.yap-badge--hrd-done   { background: rgba(13, 148, 136, 0.1); color: #0d9488; }
+.yap-badge--completed  { background: var(--info-bg, #dbeafe); color: #1d4ed8; }
+
+/* ─── EMPTY STATE ───────────────────────── */
+.yap-empty {
+    text-align: center;
+    padding: 64px 24px;
+    color: var(--text-secondary);
+}
+
+.yap-empty-icon {
+    font-size: 2.4rem;
+    opacity: 0.4;
+    margin-bottom: 12px;
+}
+
+.yap-empty h3 {
+    font-size: 1.05rem;
+    font-weight: 700;
+    margin: 0 0 6px;
+    color: var(--text-primary);
+}
+
+.yap-empty p {
+    font-size: 0.875rem;
+    margin: 0;
+}
+
+/* ─── BACK BUTTON ───────────────────────── */
+.yap-back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border-default);
+    background: var(--bg-card);
+    color: var(--text-primary);
+    font-size: 0.84rem;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.15s, color 0.15s;
+    align-self: flex-start;
+}
+
+.yap-back-btn:hover {
+    background: var(--primary-light, #fff0e6);
+    color: var(--primary);
+    border-color: var(--primary);
+}
+
+/* ─── WORKFLOW STEPPER ──────────────────── */
+.yap-stepper {
+    display: flex;
+    align-items: flex-start;
+    gap: 0;
+    padding: 16px 20px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: 12px;
+    overflow-x: auto;
+}
+
+.yap-stepper-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 90px;
+    position: relative;
+}
+
+.yap-stepper-line {
+    position: absolute;
+    top: 17px;
+    left: -50%;
+    right: 50%;
+    height: 2px;
+    background: var(--border-default);
+    z-index: 0;
+}
+
+.yap-stepper-line--done {
+    background: var(--success, #22c55e);
+}
+
+.yap-stepper-dot {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 2px solid var(--border-default);
+    background: var(--bg-muted);
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+    position: relative;
+    z-index: 1;
+    transition: all 0.2s;
+}
+
+.yap-stepper-dot--done {
+    background: var(--success, #22c55e);
+    border-color: var(--success, #22c55e);
+    color: #fff;
+}
+
+.yap-stepper-dot--active {
+    background: var(--primary, #ff7a18);
+    border-color: var(--primary, #ff7a18);
+    color: #fff;
+    box-shadow: 0 0 0 4px rgba(255, 122, 24, 0.15);
+}
+
+.yap-stepper-dot--rejected {
+    background: var(--error, #ef4444);
+    border-color: var(--error, #ef4444);
+    color: #fff;
+}
+
+.yap-stepper-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.yap-stepper-label--active {
+    color: var(--primary);
+    font-weight: 700;
+}
+
+/* ─── HERO HEADER ───────────────────────── */
+.yap-hero {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 22px 24px;
+    background: linear-gradient(135deg, #fff9f5 0%, #ffffff 70%);
+    border: 1px solid #f0ddd0;
+    border-radius: 14px;
+    flex-wrap: wrap;
+}
+
+.yap-hero-left {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    flex: 1;
+    min-width: 0;
+}
+
+.yap-hero-avatar {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: var(--primary-gradient, linear-gradient(135deg, #ff7a18, #ffb347));
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    font-weight: 800;
+    flex-shrink: 0;
+    text-transform: uppercase;
+    box-shadow: 0 3px 10px rgba(255, 122, 24, 0.3);
+}
+
+.yap-hero-info {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 0;
+}
+
+.yap-hero-name {
+    font-size: 1.3rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    line-height: 1.2;
+}
+
+.yap-hero-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+}
+
+.yap-hero-meta span {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.yap-hero-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.yap-hero-grand-score {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    background: rgba(255, 122, 24, 0.12);
+    color: var(--primary);
+    padding: 4px 10px;
+    border-radius: 100px;
+}
+
+.yap-hero-right {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.yap-hero-meta-stack {
+    display: flex;
+    gap: 20px;
+}
+
+.yap-hero-meta-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.yap-hero-meta-item span {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+}
+
+.yap-hero-meta-item strong {
+    font-size: 0.925rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+/* CTA Buttons */
+.yap-cta-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 10px 20px;
+    border-radius: 10px;
+    border: none;
+    background: var(--primary, #ff7a18);
+    color: #fff;
+    font-size: 0.875rem;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.yap-cta-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 5px 16px rgba(255, 122, 24, 0.3);
+}
+
+.yap-cta-btn--secondary {
+    background: var(--bg-muted);
+    color: var(--text-primary);
+    border: 1px solid var(--border-default);
+}
+
+.yap-cta-btn--secondary:hover {
+    background: var(--bg-card);
+    color: var(--primary);
+    border-color: var(--primary);
+}
+
+/* ─── REJECTION ALERT ───────────────────── */
+.yap-rejection-alert {
+    padding: 16px 20px;
+    background: #fff5f5;
+    border: 1px solid #fca5a5;
+    border-left: 4px solid var(--error, #ef4444);
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.yap-rejection-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.yap-rejection-icon {
+    color: var(--error, #ef4444);
+    font-size: 1.15rem;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.yap-rejection-title {
+    font-size: 0.925rem;
+    font-weight: 800;
+    color: #991b1b;
+    margin-bottom: 2px;
+}
+
+.yap-rejection-sub {
+    font-size: 0.8rem;
+    color: #b91c1c;
+}
+
+.yap-rejection-body {
+    padding: 12px;
+    background: #fee2e2;
+    border-radius: 8px;
+}
+
+.yap-rejection-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #b91c1c;
+    display: block;
+    margin-bottom: 4px;
+}
+
+.yap-rejection-text {
+    font-size: 0.875rem;
+    color: #7f1d1d;
+    margin: 0;
+    font-style: italic;
+    line-height: 1.6;
+}
+
+/* ─── DETAIL GRID ───────────────────────── */
+.yap-detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 20px;
+    align-items: start;
+}
+
+.yap-detail-left,
+.yap-detail-right {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* ─── BLOCK ─────────────────────────────── */
+.yap-block {
+    background: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    transition: box-shadow 0.2s;
+}
+
+.yap-block:hover {
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.07);
+}
+
+.yap-block-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border-default);
+    background: var(--bg-muted);
+}
+
+.yap-block-header--clickable {
+    cursor: pointer;
+    user-select: none;
+}
+
+.yap-block-header--clickable:hover {
+    background: var(--bg-card);
+}
+
+.yap-block-header h3 {
+    font-size: 0.875rem;
+    font-weight: 700;
+    margin: 0 0 2px;
+    color: var(--text-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.yap-block-header p {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+.yap-block-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+    flex-shrink: 0;
+}
+
+.yap-block-icon--blue   { background: var(--info-bg);    color: var(--info);    }
+.yap-block-icon--green  { background: var(--success-bg); color: var(--success); }
+.yap-block-icon--teal   { background: rgba(13, 148, 136, 0.1); color: #0d9488; }
+.yap-block-icon--amber  { background: var(--warning-bg); color: var(--warning); }
+.yap-block-icon--orange { background: rgba(255, 122, 24, 0.1); color: var(--primary); }
+.yap-block-icon--indigo { background: rgba(99, 102, 241, 0.1); color: #6366f1; }
+.yap-block-icon--purple { background: rgba(139, 92, 246, 0.1); color: #7c3aed; }
+
+.yap-toggle-icon {
+    margin-left: auto;
+    color: var(--text-muted);
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
+/* Text content area */
+.yap-text-content {
+    padding: 16px 18px;
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    line-height: 1.7;
+}
+
+.yap-text-content--approved {
+    background: rgba(34, 197, 94, 0.04);
+    border-left: 3px solid var(--success, #22c55e);
+}
+
+.yap-pre {
+    font-family: inherit;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin: 0;
+    font-size: 0.875rem;
+    line-height: 1.7;
+    color: var(--text-primary);
+}
+
+.yap-muted {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+/* Edit history */
+.yap-history-list {
+    list-style: none;
+    margin: 0;
+    padding: 12px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.yap-history-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.yap-history-num {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--primary-light, #fff0e6);
+    color: var(--primary);
+    font-size: 0.7rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.yap-history-note {
+    font-size: 0.84rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.yap-history-date {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    margin-top: 1px;
+}
+
+/* ─── SIDEBAR ELEMENTS ──────────────────── */
+.yap-side-stack {
+    padding: 14px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.yap-side-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-default);
+}
+
+.yap-side-row:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.yap-side-label {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.yap-side-val {
+    font-size: 0.84rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+/* ─── SCORE DASHBOARD ───────────────────── */
+.yap-score-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    padding: 14px 18px;
+}
+
+.yap-scorecard {
+    background: var(--bg-muted);
+    border: 1px solid var(--border-default);
+    border-radius: 10px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    transition: box-shadow 0.15s;
+}
+
+.yap-scorecard--highlight {
+    background: linear-gradient(135deg, #fff9f5 0%, #ffffff 100%);
+    border-color: var(--primary, #ff7a18);
+    grid-column: span 2;
+}
+
+.yap-scorecard-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.yap-scorecard-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-secondary);
+}
+
+.yap-scorecard-pct {
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: var(--text-muted);
+}
+
+.yap-scorecard-top--primary .yap-scorecard-label  { color: var(--primary); }
+.yap-scorecard-top--teal    .yap-scorecard-label  { color: #0d9488; }
+.yap-scorecard-top--indigo  .yap-scorecard-label  { color: #6366f1; }
+.yap-scorecard-top--success .yap-scorecard-label  { color: var(--success, #22c55e); }
+
+.yap-scorecard-val {
+    display: flex;
+    align-items: baseline;
+    gap: 2px;
+}
+
+.yap-scorecard-val strong {
+    font-size: 1.5rem;
+    font-weight: 800;
+    line-height: 1;
+    color: var(--text-primary);
+}
+
+.yap-scorecard--highlight .yap-scorecard-val strong {
+    font-size: 2rem;
+    color: var(--primary);
+}
+
+.yap-scorecard-val span {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+/* ─── SCORE BAR ─────────────────────────── */
+.yap-scorebar {
+    height: 5px;
+    background: var(--border-default);
+    border-radius: 100px;
+    overflow: hidden;
+}
+
+.yap-scorebar-fill {
+    height: 100%;
+    border-radius: 100px;
+    transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.yap-scorebar-fill--primary { background: var(--primary, #ff7a18); }
+.yap-scorebar-fill--teal    { background: #0d9488; }
+.yap-scorebar-fill--indigo  { background: #6366f1; }
+.yap-scorebar-fill--success { background: var(--success, #22c55e); }
+.yap-scorebar-fill--error   { background: var(--error, #ef4444); }
+
+/* ─── REMARKS STACK ─────────────────────── */
+.yap-remarks-stack {
+    padding: 14px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.yap-remark-card {
+    background: var(--bg-muted);
+    border-radius: 8px;
+    padding: 12px 14px;
+}
+
+.yap-remark-role {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+}
+
+.yap-remark-text {
+    font-size: 0.84rem;
+    color: var(--text-primary);
+    line-height: 1.65;
+    margin: 0;
+}
+
+/* ─── EVALUATION FORM ───────────────────── */
+.yap-eval-form {
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.yap-eval-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.yap-eval-field label {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.yap-eval-hint {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+}
+
+.yap-eval-field input,
+.yap-eval-field textarea {
+    padding: 9px 12px;
+    border: 1.5px solid var(--border-default);
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-family: inherit;
+    background: var(--bg-card);
+    color: var(--text-primary);
+    transition: border-color 0.15s, box-shadow 0.15s;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.yap-eval-field input:focus,
+.yap-eval-field textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(255, 122, 24, 0.1);
+}
+
+.yap-eval-field textarea {
+    resize: vertical;
+    min-height: 80px;
+    line-height: 1.6;
+}
+
+.yap-eval-total {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    background: var(--bg-muted);
+    border-radius: 8px;
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+
+.yap-eval-total strong {
+    font-size: 1.1rem;
+    color: var(--text-primary);
+}
+
+.yap-eval-total small {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.yap-eval-total--over {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.yap-eval-total--over strong {
+    color: #991b1b;
+}
+
+.yap-form-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+/* ─── CTA BLOCK (evaluation required notice) */
+.yap-cta-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 20px;
+    border: 2px dashed rgba(255, 122, 24, 0.3);
+    border-radius: 12px;
+    text-align: center;
+    background: rgba(255, 122, 24, 0.03);
+}
+
+.yap-cta-block-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: rgba(255, 122, 24, 0.1);
+    color: var(--primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+}
+
+.yap-cta-block-text strong {
+    display: block;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.yap-cta-block-text p {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    margin: 0;
+    line-height: 1.5;
+}
+
+/* ─── RESPONSIVE ────────────────────────── */
+@media (max-width: 1024px) {
+    .yap-detail-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .yap-cards-grid {
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    }
+
+    .yap-score-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .yap-topbar {
+        flex-direction: column;
+    }
+
+    .yap-hero {
+        flex-direction: column;
+    }
+
+    .yap-hero-right {
+        width: 100%;
+    }
+
+    .yap-cta-btn {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .yap-stepper {
+        padding: 12px 16px;
+    }
+
+    .yap-stepper-label {
+        display: none;
+    }
+
+    .yap-cards-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .yap-summary-panel {
+        gap: 12px;
+    }
+}
+
+@media (max-width: 480px) {
+    .yap-score-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .yap-scorecard--highlight {
+        grid-column: 1;
+    }
+}

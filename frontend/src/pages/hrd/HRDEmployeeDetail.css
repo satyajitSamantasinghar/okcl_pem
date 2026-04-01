@@ -1,0 +1,549 @@
+/* ══════════════════════════════════════════════════════
+   RA EMPLOYEE DETAIL — FINAL CSS
+
+   THE ONE ROOT CAUSE OF THE SCROLL BUG:
+   ─────────────────────────────────────
+   A flex child with overflow-y:auto ONLY scrolls when
+   it has a bounded height. flex:1 alone doesn't bound it
+   because the browser's default min-height:auto lets it
+   grow as tall as its content, making overflow never fire.
+
+   THE FIX:
+     .hed-modal-body {
+         flex: 1;
+         min-height: 0;   ← THIS IS THE FIX
+         overflow-y: auto;
+     }
+
+   Combined with an explicit height on .hed-modal and
+   flex-shrink:0 on header/stepper/footer, this creates
+   a proper bounded scroll region.
+   ══════════════════════════════════════════════════════ */
+
+:root {
+    --hed-radius:        14px;
+    --hed-radius-sm:     10px;
+    --hed-shadow-sm:     0 1px 3px rgba(0,0,0,0.06), 0 2px 8px rgba(0,0,0,0.04);
+    --hed-shadow-md:     0 4px 16px rgba(0,0,0,0.09), 0 2px 6px rgba(0,0,0,0.04);
+    --hed-shadow-lg:     0 12px 36px rgba(0,0,0,0.12), 0 4px 12px rgba(0,0,0,0.06);
+    --hed-ease:          0.22s ease;
+    --hed-spring:        0.24s cubic-bezier(0.34, 1.56, 0.64, 1);
+    --hed-primary:       #F97316;
+    --hed-primary-dark:  #EA580C;
+    --hed-primary-light: #FFF7ED;
+    --hed-primary-mid:   #FFEDD5;
+    --hed-primary-border:#FED7AA;
+}
+
+/* ─── Page ─── */
+.hed-page { display: flex; flex-direction: column; gap: 18px; padding-bottom: 48px; }
+
+/* ─── Back button ─── */
+.hed-back-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--bg-card); border: 1px solid var(--border-default);
+    color: var(--text-secondary); padding: 8px 16px; border-radius: 100px;
+    font-size: 0.8125rem; font-weight: 600; cursor: pointer;
+    width: fit-content; transition: all var(--hed-ease); box-shadow: var(--hed-shadow-sm);
+}
+.hed-back-btn:hover {
+    background: var(--hed-primary-light); color: var(--hed-primary);
+    border-color: var(--hed-primary-border); transform: translateX(-2px);
+}
+
+/* ── Profile header ── */
+.hed-profile-header {
+    background: #ffffff; border: 1px solid var(--border-default);
+    border-top: 4px solid var(--hed-primary); border-radius: var(--hed-radius);
+    padding: 22px 26px; display: flex; justify-content: space-between;
+    align-items: center; gap: 20px; box-shadow: var(--hed-shadow-md);
+    position: relative; overflow: hidden;
+}
+.hed-profile-header::after {
+    content: ''; position: absolute; width: 160px; height: 160px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(249,115,22,0.05) 0%, transparent 70%);
+    right: -20px; bottom: -40px; pointer-events: none;
+}
+.hed-avatar {
+    width: 58px; height: 58px; border-radius: 14px;
+    background: linear-gradient(135deg, var(--hed-primary), var(--hed-primary-dark));
+    color: white; display: flex; align-items: center; justify-content: center;
+    font-size: 1.35rem; font-weight: 800; flex-shrink: 0;
+    box-shadow: 0 4px 14px rgba(249,115,22,0.32); position: relative; z-index: 1;
+    transition: transform var(--hed-ease);
+}
+.hed-profile-header:hover .hed-avatar { transform: scale(1.04); }
+.hed-profile-left { display: flex; align-items: flex-start; gap: 16px; position: relative; z-index: 1; }
+.hed-profile-info { display: flex; flex-direction: column; gap: 6px; }
+.hed-profile-name { font-size: 1.45rem; font-weight: 800; color: var(--text-primary); margin: 0; letter-spacing: -0.02em; line-height: 1.2; }
+.hed-profile-meta { display: flex; align-items: center; gap: 10px; font-size: 0.8125rem; color: var(--text-secondary); flex-wrap: wrap; }
+.hed-profile-meta span { display: flex; align-items: center; gap: 4px; }
+.hed-role-tag { padding: 2px 9px; border-radius: 100px; background: rgba(249,115,22,0.1); color: var(--hed-primary); font-size: 0.625rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+.hed-header-ctx { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.hed-header-status { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 100px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+.hed-header-status--green { background: rgba(34,197,94,0.1);   color: #15803D; }
+.hed-header-status--amber { background: rgba(245,158,11,0.12); color: #B45309; }
+.hed-header-status--blue  { background: rgba(249,115,22,0.1);  color: var(--hed-primary); }
+.hed-header-meta-item { display: inline-flex; align-items: center; gap: 5px; font-size: 0.75rem; color: var(--text-muted); }
+.hed-header-stats {
+    display: flex; align-items: center; background: var(--hed-primary-light);
+    border: 1px solid var(--hed-primary-border); border-radius: 12px;
+    padding: 14px 20px; flex-shrink: 0; position: relative; z-index: 1;
+}
+.hed-header-stat { text-align: center; padding: 0 18px; }
+.hed-header-stat-value { font-size: 1.6rem; font-weight: 800; color: var(--text-primary); line-height: 1; }
+.hed-header-stat-label { font-size: 0.625rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-top: 4px; }
+.hed-header-stat-divider { width: 1px; height: 36px; background: var(--hed-primary-border); flex-shrink: 0; }
+
+/* ── KPI ── */
+.hed-kpi-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+.hed-kpi-card {
+    background: var(--bg-card); border: 1px solid var(--border-default);
+    border-radius: var(--hed-radius); padding: 16px 14px; box-shadow: var(--hed-shadow-sm);
+    position: relative; overflow: hidden; cursor: default;
+    transition: transform var(--hed-spring), box-shadow var(--hed-ease), border-color var(--hed-ease);
+}
+.hed-kpi-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, var(--hed-primary), #fb923c); opacity: 0; transition: opacity var(--hed-ease); }
+.hed-kpi-card:hover::before { opacity: 1; }
+.hed-kpi-card:hover { transform: translateY(-4px) scale(1.02); box-shadow: var(--hed-shadow-lg); border-color: var(--hed-primary-border); }
+.hed-kpi-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.hed-kpi-icon { width: 34px; height: 34px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 0.95rem; transition: transform var(--hed-ease); }
+.hed-kpi-card:hover .hed-kpi-icon { transform: scale(1.1); }
+.hed-kpi-trend { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; font-size: 0.78rem; }
+.hed-kpi-trend--up      { color: #16A34A; background: rgba(22,163,74,0.1); }
+.hed-kpi-trend--down    { color: #DC2626; background: rgba(220,38,38,0.1); }
+.hed-kpi-trend--neutral { color: #9CA3AF; background: rgba(156,163,175,0.1); }
+.hed-kpi-value { font-size: 1.5rem; font-weight: 800; color: var(--text-primary); line-height: 1; margin-bottom: 4px; }
+.hed-kpi-label { font-size: 0.68rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.045em; margin-bottom: 2px; }
+.hed-kpi-sub { font-size: 0.72rem; color: var(--text-muted); opacity: 0.8; line-height: 1.3; }
+
+/* ── Tabs ── */
+.hed-tabs-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.hed-tab-rail { display: flex; gap: 0; border-bottom: 2px solid var(--border-default); flex: 1; overflow-x: auto; scrollbar-width: none; }
+.hed-tab-rail::-webkit-scrollbar { display: none; }
+.hed-tab { display: inline-flex; align-items: center; gap: 7px; padding: 11px 18px; border: none; background: transparent; color: var(--text-muted); font-size: 0.8375rem; font-weight: 600; cursor: pointer; white-space: nowrap; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: color var(--hed-ease), border-color var(--hed-ease); }
+.hed-tab:hover { color: var(--text-primary); }
+.hed-tab--active { color: var(--hed-primary); border-bottom-color: var(--hed-primary); font-weight: 700; }
+.hed-tab-icon { font-size: 0.875rem; flex-shrink: 0; }
+.hed-tab-count { padding: 1px 7px; border-radius: 100px; font-size: 0.625rem; font-weight: 700; background: var(--bg-muted); color: var(--text-muted); transition: background var(--hed-ease), color var(--hed-ease); }
+.hed-tab-count--active { background: rgba(249,115,22,0.12); color: var(--hed-primary); }
+.hed-year-filter { display: flex; align-items: center; gap: 8px; background: var(--bg-card); border: 1px solid var(--border-default); padding: 8px 12px; border-radius: 12px; font-size: 0.8125rem; color: var(--text-muted); box-shadow: var(--hed-shadow-sm); }
+.hed-year-filter-icon { font-size: 0.875rem; }
+.hed-year-filter select { border: none; background: transparent; font-size: 0.875rem; font-weight: 600; color: var(--text-primary); cursor: pointer; outline: none; min-width: 60px; font-family: inherit; }
+
+/* ── Overview / Insights / Charts ── */
+.hed-overview-wrap { display: flex; flex-direction: column; gap: 16px; }
+.hed-insights-box { background: var(--bg-card); border: 1px solid var(--border-default); border-radius: var(--hed-radius); padding: 16px 18px; box-shadow: var(--hed-shadow-sm); }
+.hed-insights-header { display: flex; align-items: center; gap: 8px; font-size: 0.875rem; font-weight: 700; color: var(--text-primary); margin-bottom: 12px; }
+.hed-insights-icon { color: var(--hed-primary); font-size: 1rem; }
+.hed-insights-count { margin-left: auto; background: rgba(249,115,22,0.1); color: var(--hed-primary); padding: 2px 8px; border-radius: 100px; font-size: 0.7rem; font-weight: 700; }
+.hed-insights-list { display: flex; flex-direction: column; gap: 7px; }
+.hed-insight-pill { display: flex; align-items: flex-start; gap: 10px; padding: 10px 14px; border-radius: var(--hed-radius-sm); border-left: 4px solid transparent; font-size: 0.8125rem; font-weight: 500; line-height: 1.45; transition: transform var(--hed-ease); cursor: default; }
+.hed-insight-pill:hover { transform: translateX(3px); }
+.hed-insight-pill--positive { background: #F0FDF4; border-left-color: #22C55E; color: #14532D; }
+.hed-insight-pill--warning  { background: #FFFBEB; border-left-color: #F59E0B; color: #92400E; }
+.hed-insight-pill--concern  { background: #FEF2F2; border-left-color: #EF4444; color: #991B1B; }
+.hed-insight-pill--neutral  { background: var(--bg-muted); border-left-color: #94A3B8; color: var(--text-secondary); }
+.hed-insight-pill-icon { font-size: 1rem; flex-shrink: 0; margin-top: 1px; }
+.hed-charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.hed-chart-card { background: var(--bg-card); border: 1px solid var(--border-default); border-radius: var(--hed-radius); padding: 20px 20px 16px; box-shadow: var(--hed-shadow-sm); transition: box-shadow var(--hed-ease); }
+.hed-chart-card:hover { box-shadow: var(--hed-shadow-md); }
+.hed-chart-title { display: flex; align-items: center; gap: 8px; font-size: 0.9375rem; font-weight: 700; color: var(--text-primary); margin-bottom: 4px; }
+.hed-chart-sub { font-size: 0.775rem; color: var(--text-muted); margin: 0 0 14px; line-height: 1.4; }
+.hed-chart-empty { font-size: 0.8125rem; color: var(--text-muted); text-align: center; padding: 40px 20px; }
+.hed-chart-tooltip { background: var(--bg-card); border: 1px solid var(--border-default); border-radius: 12px; padding: 12px 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.12); font-size: 0.8125rem; min-width: 150px; }
+.hed-chart-tooltip-label { font-weight: 700; color: var(--text-primary); margin-bottom: 8px; font-size: 0.8rem; border-bottom: 1px solid var(--border-default); padding-bottom: 6px; }
+.hed-chart-tooltip-row { display: flex; align-items: center; gap: 7px; color: var(--text-secondary); margin-top: 5px; }
+.hed-chart-tooltip-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+/* ── Monthly table ── */
+.hed-table-card { background: var(--bg-card); border: 1px solid var(--border-default); border-radius: var(--hed-radius); overflow: hidden; box-shadow: var(--hed-shadow-sm); }
+.hed-table { width: 100%; border-collapse: collapse; }
+.hed-table thead th { padding: 12px 16px; text-align: left; font-size: 0.675rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.045em; color: var(--text-muted); background: var(--bg-muted); border-bottom: 1px solid var(--border-default); }
+.hed-table tbody td { padding: 13px 16px; font-size: 0.8125rem; color: var(--text-secondary); border-bottom: 1px solid var(--border-default); vertical-align: middle; }
+.hed-table tbody tr:last-child td { border-bottom: none; }
+.hed-table-row { cursor: pointer; transition: background var(--hed-ease); }
+.hed-table-row:hover td { background: rgba(249,115,22,0.03); }
+.hed-month-cell { display: flex; align-items: center; gap: 12px; }
+.hed-month-badge { width: 34px; height: 34px; border-radius: 9px; background: linear-gradient(135deg, var(--hed-primary), var(--hed-primary-dark)); color: white; display: flex; align-items: center; justify-content: center; font-size: 0.5625rem; font-weight: 800; text-transform: uppercase; flex-shrink: 0; }
+.hed-score-chip { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 8px; font-size: 0.875rem; font-weight: 800; }
+.hed-date-cell { color: var(--text-muted); font-size: 0.75rem; }
+.hed-detail-btn { display: inline-flex; align-items: center; gap: 4px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border-default); background: transparent; color: var(--text-secondary); font-size: 0.6875rem; font-weight: 600; cursor: pointer; transition: all var(--hed-ease); }
+.hed-detail-btn:hover { border-color: var(--hed-primary); color: var(--hed-primary); background: rgba(249,115,22,0.04); transform: translateY(-1px); }
+.hed-stepper-mini { display: flex; align-items: center; }
+.hed-step-dot-mini { width: 10px; height: 10px; border-radius: 50%; background: var(--border-default); flex-shrink: 0; }
+.hed-step-dot-mini--done { background: #22C55E; }
+.hed-step-line-mini { width: 20px; height: 2px; background: var(--border-default); }
+.hed-step-line-mini--done { background: #22C55E; }
+
+/* ── Badges ── */
+.hed-badge { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 100px; font-size: 0.5625rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; }
+.hed-badge--submitted   { background: #EFF6FF; color: #1D4ED8; }
+.hed-badge--evaluated   { background: #DCFCE7; color: #15803D; }
+.hed-badge--achievement { background: #FEF3C7; color: #B45309; }
+.hed-badge--rejected    { background: #FEE2E2; color: #B91C1C; }
+.hed-badge--approved    { background: #DCFCE7; color: #15803D; }
+.hed-badge--pending     { background: #FEF9C3; color: #854D0E; }
+.hed-badge--draft       { background: var(--bg-muted); color: var(--text-muted); }
+
+/* ── Quarterly / Yearly ── */
+.hed-qtr-list { display: flex; flex-direction: column; gap: 12px; }
+.hed-qtr-card { background: var(--bg-card); border: 1px solid var(--border-default); border-left: 4px solid var(--qclr, var(--hed-primary)); border-radius: var(--hed-radius); overflow: hidden; box-shadow: var(--hed-shadow-sm); transition: transform var(--hed-spring), box-shadow var(--hed-ease); }
+.hed-qtr-card:hover { transform: translateY(-3px); box-shadow: var(--hed-shadow-md); }
+.hed-qtr-inner { padding: 20px 22px; }
+.hed-qtr-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+.hed-qtr-label { display: flex; align-items: center; gap: 8px; font-size: 1rem; font-weight: 700; color: var(--text-primary); }
+.hed-qtr-score { font-size: 1.9rem; font-weight: 800; line-height: 1; }
+.hed-qtr-score span { font-size: 1rem; opacity: 0.5; font-weight: 600; }
+.hed-qtr-bar-track { height: 7px; background: var(--bg-muted); border-radius: 100px; overflow: hidden; margin-bottom: 14px; }
+.hed-qtr-bar-fill { height: 100%; border-radius: 100px; }
+.hed-qtr-remarks-block { background: var(--bg-muted); border-radius: 9px; padding: 12px 14px; }
+.hed-qtr-remarks-label { font-size: 0.675rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 6px; }
+.hed-qtr-remarks-text { font-size: 0.875rem; color: var(--text-secondary); line-height: 1.6; font-style: italic; }
+.hed-yearly-list { display: flex; flex-direction: column; gap: 18px; }
+.hed-yearly-section-title { display: flex; align-items: center; gap: 8px; font-size: 0.9375rem; font-weight: 700; color: var(--text-primary); margin-bottom: 10px; }
+.hed-yearly-card { background: var(--bg-card); border: 1px solid var(--border-default); border-radius: var(--hed-radius); overflow: hidden; box-shadow: var(--hed-shadow-sm); transition: transform var(--hed-ease), box-shadow var(--hed-ease); }
+.hed-yearly-card:hover { transform: translateY(-2px); box-shadow: var(--hed-shadow-md); }
+.hed-yearly-card-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: var(--bg-muted); border-bottom: 1px solid var(--border-default); }
+.hed-yearly-fy { font-size: 0.875rem; font-weight: 700; color: var(--text-primary); }
+.hed-yearly-content { padding: 16px; font-size: 0.875rem; color: var(--text-secondary); line-height: 1.65; white-space: pre-wrap; word-break: break-word; }
+.hed-yearly-total { padding: 10px 16px; border-top: 1px solid var(--border-default); font-size: 0.875rem; color: var(--text-primary); }
+.hed-yearly-total strong { color: var(--hed-primary); font-size: 1rem; }
+.hed-empty-center { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 64px 20px; text-align: center; color: var(--text-muted); font-size: 0.875rem; }
+
+
+/* ══════════════════════════════════════════════════════
+   MONTHLY REVIEW MODAL
+   ══════════════════════════════════════════════════════ */
+
+/*
+  OVERLAY
+  -------
+  • align-items: flex-start  → modal anchors at top, not mid-screen
+  • padding-top: 80px        → clears the ~64px app header
+  • overflow: hidden         → overlay ITSELF does NOT scroll
+                               (only the modal body scrolls)
+*/
+.hed-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(6px);
+    display: flex;
+    align-items: flex-start;       /* anchor at top */
+    justify-content: center;
+    padding: 80px 16px 24px;       /* 80px clears app header */
+    z-index: 9999;
+    overflow: hidden;              /* ← overlay does NOT scroll */
+    animation: redFadeIn 0.18s ease-out;
+}
+@keyframes redFadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+/*
+  MODAL CONTAINER
+  ---------------
+  Must have an explicit height (or max-height) so the
+  flex children have something to scroll against.
+  We use: height = viewport - top_padding - bottom_padding
+*/
+.hed-modal {
+    background: var(--bg-card);
+    border-radius: 16px;
+    width: 100%;
+    max-width: 600px;
+    /* EXPLICIT HEIGHT — required for inner scroll to work */
+    height: calc(100vh - 120px);   /* 80px top + 40px bottom */
+    max-height: 760px;             /* cap on very tall screens */
+    /* Flex column: fixed parts claim their height,
+       body claims the rest */
+    display: flex;
+    flex-direction: column;
+    /* overflow:hidden clips the border-radius corners cleanly */
+    overflow: hidden;
+    box-shadow: 0 20px 56px rgba(0,0,0,0.22), 0 4px 16px rgba(0,0,0,0.08);
+    animation: redScaleIn 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+    flex-shrink: 0;
+}
+@keyframes redScaleIn {
+    from { opacity: 0; transform: scale(0.94) translateY(10px); }
+    to   { opacity: 1; transform: scale(1)    translateY(0); }
+}
+
+/* ─── HEADER — flex-shrink:0, never squished ─── */
+.hed-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    background: #ffffff;
+    border-top: 4px solid var(--hed-primary);
+    border-bottom: 1px solid #E8ECF0;
+    flex-shrink: 0;                /* ← never squished */
+    gap: 12px;
+}
+.hed-modal-header-left { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
+.hed-modal-avatar {
+    width: 40px; height: 40px; border-radius: 10px;
+    background: linear-gradient(135deg, var(--hed-primary), var(--hed-primary-dark));
+    color: white; display: flex; align-items: center; justify-content: center;
+    font-size: 0.9rem; font-weight: 800;
+    box-shadow: 0 3px 8px rgba(249,115,22,0.28); flex-shrink: 0;
+}
+.hed-modal-header-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.hed-modal-title-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.hed-modal-name { margin: 0; font-size: 1rem; font-weight: 800; color: var(--text-primary); white-space: nowrap; }
+.hed-modal-sub  { margin: 0; font-size: 0.74rem; color: var(--text-muted); line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hed-modal-close-btn {
+    background: #F1F5F9; border: none;
+    width: 30px; height: 30px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1rem; color: #64748B; cursor: pointer;
+    transition: all 0.18s; flex-shrink: 0;
+}
+.hed-modal-close-btn:hover { background: #FEE2E2; color: #DC2626; transform: rotate(90deg); }
+
+/* ─── STEPPER — flex-shrink:0, never squished ─── */
+.hed-modal-stepper {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 16px 24px;
+    background: var(--hed-primary-light);
+    border-bottom: 1px solid var(--hed-primary-border);
+    flex-shrink: 0;                /* ← never squished */
+}
+.hed-modal-stepper-item {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 6px; position: relative; flex: 1;
+}
+.hed-modal-step-node {
+    width: 34px; height: 34px; border-radius: 50%;
+    background: #E2E8F0; border: 2px solid #CBD5E1;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.8125rem; color: #94A3B8;
+    transition: all 0.3s ease; position: relative; z-index: 2;
+}
+.hed-modal-step-node--done {
+    background: #22C55E; border-color: #22C55E; color: white;
+    box-shadow: 0 0 0 4px rgba(34,197,94,0.15);
+}
+.hed-modal-step-label {
+    font-size: 0.63rem; font-weight: 600; color: var(--text-muted);
+    text-align: center; white-space: nowrap;
+}
+.hed-modal-step-label--done { color: #15803D; font-weight: 700; }
+.hed-modal-step-connector {
+    position: absolute; top: 16px;
+    left: calc(50% + 18px); right: calc(-50% + 18px);
+    height: 2px; background: #CBD5E1; z-index: 1; transition: background 0.3s;
+}
+.hed-modal-step-connector--done { background: #22C55E; }
+
+/* MD rejection banner */
+.hed-status-banner {
+    padding: 10px 20px; font-size: 0.8125rem; font-weight: 600;
+    display: flex; align-items: center; gap: 8px;
+    border-bottom: 1px solid var(--border-default); flex-shrink: 0;
+}
+.hed-status-banner--rejected { background: #FEF2F2; color: #B91C1C; border-bottom-color: #FECACA; }
+
+/* ══════════════════════════════════════════════════════
+   MODAL BODY — THE SCROLL ZONE
+   
+   THE TWO REQUIRED RULES:
+     flex: 1          → claims all height left after header/stepper/footer
+     min-height: 0    → overrides the browser default min-height:auto
+                         which would let the child grow infinitely,
+                         preventing overflow-y:auto from ever firing
+   
+   Without min-height:0 the flex child expands to content
+   height and never triggers overflow. This is THE fix.
+   ══════════════════════════════════════════════════════ */
+.hed-modal-body {
+    flex: 1;
+    min-height: 0;          /* ← THE SCROLL FIX — do not remove */
+    overflow-y: auto;
+    overflow-x: hidden;
+    background: #F4F6F8;
+    /* Thin orange scrollbar */
+    scrollbar-width: thin;
+    scrollbar-color: #FED7AA #F4F6F8;
+}
+.hed-modal-body::-webkit-scrollbar       { width: 5px; }
+.hed-modal-body::-webkit-scrollbar-track { background: #F4F6F8; }
+.hed-modal-body::-webkit-scrollbar-thumb { background: #FED7AA; border-radius: 10px; }
+.hed-modal-body::-webkit-scrollbar-thumb:hover { background: var(--hed-primary-border); }
+
+/* ─── SECTION CARDS ─── */
+/*
+  Each section is a clean white card with:
+  - a coloured left-border accent (plan=blue, achievement=green, eval=orange)
+  - a grey header row with icon + title + optional date
+  - a white body with the content text
+  Sections are separated by a 6px gap via the body background
+*/
+.hed-modal-section {
+    background: #ffffff;
+    border-left: 4px solid #E2E8F0;  /* default; overridden per section */
+    margin: 0;
+}
+.hed-modal-section + .hed-modal-section {
+    margin-top: 6px;                 /* gap between sections */
+}
+.hed-modal-section--danger { border-left-color: #F87171; }
+
+/* Section header row */
+.hed-modal-section-hd {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 18px;
+    background: #F8FAFC;
+    border-bottom: 1px solid #EEF0F4;
+}
+.hed-modal-section-title {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: #1E293B;
+    flex: 1;
+}
+/* Date chip — pushed to right */
+.hed-modal-section-date {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: #94A3B8;
+    background: #EEF2F6;
+    padding: 3px 9px;
+    border-radius: 100px;
+    white-space: nowrap;
+    margin-left: auto;
+}
+
+/* Coloured icon pill */
+.hed-modal-section-icon {
+    width: 26px; height: 26px; border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.8rem; flex-shrink: 0;
+}
+.hed-modal-section-icon--blue   { background: #DBEAFE; color: #2563EB; }
+.hed-modal-section-icon--green  { background: #DCFCE7; color: #16A34A; }
+.hed-modal-section-icon--orange { background: #FFEDD5; color: var(--hed-primary); }
+.hed-modal-section-icon--danger { background: #FEE2E2; color: #DC2626; }
+
+/* Section body */
+.hed-modal-section-body {
+    padding: 16px 18px;
+}
+
+/* Body text — same scale/weight across ALL sections */
+.hed-modal-text {
+    font-size: 0.875rem;
+    font-weight: 400;
+    color: #374151;
+    line-height: 1.8;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin: 0;
+}
+.hed-modal-text--danger { color: #B91C1C; }
+
+/* Empty / not-submitted states */
+.hed-modal-empty-text { font-size: 0.875rem; color: #9CA3AF; font-style: italic; margin: 0; }
+.hed-modal-not-submitted {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 0.875rem; color: #9CA3AF; font-style: italic;
+    background: #F8FAFC; padding: 12px 14px; border-radius: 8px;
+    border: 1px dashed #CBD5E1;
+}
+
+/* ─── RA EVALUATION SCORE DISPLAY ─── */
+.hed-eval-score-block {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    padding: 14px 16px;
+    background: #F8FAFC;
+    border: 1px solid #E8ECF0;
+    border-radius: 10px;
+    margin-bottom: 14px;
+}
+.hed-eval-score-circle {
+    width: 68px; height: 68px; border-radius: 50%;
+    border: 3px solid currentColor;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    flex-shrink: 0; line-height: 1;
+}
+.hed-eval-score-num   { font-size: 1.5rem; font-weight: 800; }
+.hed-eval-score-denom { font-size: 0.625rem; font-weight: 600; opacity: 0.5; margin-top: 2px; }
+.hed-eval-score-right { flex: 1; min-width: 0; }
+.hed-eval-label-row   { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.hed-eval-label-chip  {
+    padding: 3px 10px; border-radius: 100px;
+    font-size: 0.7rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap;
+}
+.hed-eval-pct { font-size: 0.74rem; color: #9CA3AF; margin-left: auto; font-weight: 500; }
+.hed-eval-bar-track { height: 8px; background: #E2E8F0; border-radius: 100px; overflow: hidden; }
+.hed-eval-bar-fill  { height: 100%; border-radius: 100px; transition: width 0.8s cubic-bezier(0.4,0,0.2,1); }
+
+.hed-eval-remarks-wrap {
+    background: #F8FAFC; border: 1px solid #E8ECF0;
+    border-radius: 9px; padding: 13px 15px;
+}
+.hed-eval-remarks-label {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.045em; color: #9CA3AF; margin-bottom: 8px;
+}
+.hed-eval-remarks-text {
+    font-size: 0.875rem; color: #374151;
+    line-height: 1.8; margin: 0; font-style: italic;
+}
+
+/* ─── FOOTER — flex-shrink:0, never squished ─── */
+.hed-modal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 20px;
+    background: #ffffff;
+    border-top: 1px solid #E8ECF0;
+    flex-shrink: 0;                /* ← never squished */
+}
+.hed-modal-footer-hint {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 0.74rem; color: #9CA3AF;
+}
+.hed-modal-footer-close {
+    padding: 8px 22px; border-radius: 9px;
+    border: 1px solid #E2E8F0; background: #F8FAFC; color: #374151;
+    font-size: 0.8375rem; font-weight: 600; cursor: pointer;
+    transition: all var(--hed-ease);
+}
+.hed-modal-footer-close:hover {
+    background: #F1F5F9; border-color: #CBD5E1;
+    color: #111827; transform: translateY(-1px);
+}
+.hed-modal-footer-close:active { transform: translateY(0); }
+
+/* ── Responsive ── */
+@media (max-width: 1200px) { .hed-kpi-row { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 900px) {
+    .hed-charts-grid { grid-template-columns: 1fr; }
+    .hed-profile-header { flex-direction: column; align-items: flex-start; gap: 18px; }
+    .hed-header-stats { width: 100%; justify-content: center; }
+    .hed-kpi-row { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 768px) {
+    .hed-overlay { padding-top: 60px; }
+    .hed-modal { height: calc(100vh - 84px); max-height: none; }
+    .hed-table-card { overflow-x: auto; }
+    .hed-tab { padding: 10px 13px; font-size: 0.78rem; }
+    .hed-eval-score-block { flex-direction: column; align-items: flex-start; }
+    .hed-modal-stepper { padding: 12px 16px; }
+    .hed-modal-step-connector { display: none; }
+}
+@media (max-width: 480px) { .hed-kpi-row { grid-template-columns: 1fr; } }

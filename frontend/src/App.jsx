@@ -17,16 +17,26 @@ import YearlyPlanPage from './pages/employee/YearlyPlanPage';
 // RA
 import RADashboard from './pages/ra/RADashboard';
 import RAMonthlyEvaluationPage from './pages/ra/RAMonthlyEvaluationPage';
+import RAPendingEvaluationsPage from './pages/ra/RAPendingEvaluationsPage';
 import RAQuarterlyEvaluationPage from './pages/ra/RAQuarterlyEvaluationPage';
 import RAYearlyAppraisalPage from './pages/ra/RAYearlyAppraisalPage';
+import RAEmployeeListPage from './pages/ra/RAEmployeeListPage';
+import RAEmployeeDetailPage from './pages/ra/RAEmployeeDetailPage';
 
 // HRD
 import HRDDashboard from './pages/hrd/HRDDashboard';
 import HRDYearlyAppraisalPage from './pages/hrd/HRDYearlyAppraisalPage';
+import HRDEmployeeDetailPage from './pages/hrd/HRDEmployeeDetailPage';
+import HRDEmployeeListPage from './pages/hrd/HRDEmployeeListPage';
+import HRDMonthlyOverviewPage from './pages/hrd/HRDMonthlyOverviewPage';
 
 // MD
 import MDDashboard from './pages/md/MDDashboard';
 import MDApprovalPage from './pages/md/MDApprovalPage';
+import MDAuditPage from './pages/md/MDAuditPage';
+import MDMonthlyOverviewPage from './pages/md/MDMonthlyOverviewPage';
+import MDEmployeeListPage from './pages/md/MDEmployeeListPage';
+import MDEmployeeDetailPage from './pages/md/MDEmployeeDetailPage';
 
 // Smart redirect based on logged-in role
 const HomeRedirect = () => {
@@ -102,9 +112,12 @@ function App() {
             }
           >
             <Route index element={<RADashboard />} />
+            <Route path="pending-evaluations" element={<RAPendingEvaluationsPage />} />
             <Route path="monthly-evaluation" element={<RAMonthlyEvaluationPage />} />
             <Route path="quarterly-evaluation" element={<RAQuarterlyEvaluationPage />} />
             <Route path="yearly-appraisal" element={<RAYearlyAppraisalPage />} />
+            <Route path="employees" element={<RAEmployeeListPage />} />
+            <Route path="employee/:id" element={<RAEmployeeDetailPage />} />
           </Route>
 
           {/* HRD Routes */}
@@ -117,6 +130,9 @@ function App() {
             }
           >
             <Route index element={<HRDDashboard />} />
+            <Route path="employees" element={<HRDEmployeeListPage />} />
+            <Route path="monthly-overview" element={<HRDMonthlyOverviewPage />} />
+            <Route path="employee/:id" element={<HRDEmployeeDetailPage />} />
             <Route path="yearly-appraisal" element={<HRDYearlyAppraisalPage />} />
           </Route>
 
@@ -131,6 +147,10 @@ function App() {
           >
             <Route index element={<MDDashboard />} />
             <Route path="approvals" element={<MDApprovalPage />} />
+            <Route path="audit" element={<MDAuditPage />} />
+            <Route path="monthly-overview" element={<MDMonthlyOverviewPage />} />
+            <Route path="employees" element={<MDEmployeeListPage />} />
+            <Route path="employee/:id" element={<MDEmployeeDetailPage />} />
           </Route>
 
           {/* Catch all */}

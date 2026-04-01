@@ -33,6 +33,20 @@ router.post(
   employeeController.submitYearlyPlan
 );
 
+router.put(
+  "/yearly-plan/:id",
+  verifyToken,
+  authorizeRoles("EMPLOYEE"),
+  employeeController.editYearlyPlan
+);
+
+router.post(
+  "/yearly-plan/:id/resubmit",
+  verifyToken,
+  authorizeRoles("EMPLOYEE"),
+  employeeController.resubmitYearlyPlan
+);
+
 router.get(
   "/monthly-plans",
   verifyToken,
@@ -47,20 +61,25 @@ router.get(
   employeeController.getMonthlyAchievements
 );
 
-router.post(
-  "/yearly-achievement",
-  verifyToken,
-  authorizeRoles("EMPLOYEE"),
-  employeeController.submitYearlyAchievement
-);
-
 router.get(
   "/yearly-plans",
   verifyToken,
-  authorizeRoles("EMPLOYEE"),
+  authorizeRoles("EMPLOYEE", "RA", "HRD", "MD"),
   employeeController.getYearlyPlans
 );
 
+router.post(
+  "/yearly-appraisal-report",
+  verifyToken,
+  authorizeRoles("EMPLOYEE"),
+  employeeController.submitYearlyAppraisalReport
+);
 
+router.get(
+  "/yearly-appraisal-reports",
+  verifyToken,
+  authorizeRoles("EMPLOYEE", "RA", "HRD", "MD"),
+  employeeController.getYearlyAppraisalReports
+);
 
 module.exports = router;

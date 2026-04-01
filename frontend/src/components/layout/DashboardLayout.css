@@ -1,14 +1,19 @@
 .dashboard-layout {
     display: flex;
     min-height: 100vh;
+    overflow-x: hidden;
+    max-width: 100vw;
 }
 
 .dashboard-main {
     flex: 1;
+    min-width: 0;
+    max-width: 100%;
     margin-left: var(--sidebar-width);
     display: flex;
     flex-direction: column;
     min-height: 100vh;
+    overflow-x: hidden;
 }
 
 /* ===== Top Bar ===== */
@@ -22,6 +27,7 @@
     position: sticky;
     top: 0;
     z-index: 50;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02);
 }
 
 .topbar-menu-btn {
@@ -45,32 +51,152 @@
     color: var(--text-primary);
 }
 
-.topbar-logout {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 16px;
-    background: none;
-    border: 1.5px solid var(--border-default);
-    border-radius: var(--radius-md);
-    color: var(--text-secondary);
-    font-size: 0.875rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all var(--transition-fast);
-    font-family: 'Inter', sans-serif;
+/* ===== Profile Dropdown Component ===== */
+.profile-dropdown-container {
+    position: relative;
 }
 
-.topbar-logout:hover {
+.profile-trigger {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: transparent;
+    border: 1px solid transparent;
+    padding: 6px 14px 6px 6px;
+    border-radius: 30px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.profile-trigger:hover, .profile-trigger.active {
+    background: var(--bg-muted);
+    border-color: var(--border-default);
+}
+
+.profile-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--primary-gradient);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.95rem;
+    font-weight: 700;
+}
+
+.profile-info-compact {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    text-align: left;
+}
+
+.profile-name {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    line-height: 1.2;
+}
+
+.profile-role {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.profile-chevron {
+    color: var(--text-muted);
+    transition: transform 0.2s ease;
+}
+.profile-trigger.active .profile-chevron {
+    transform: rotate(180deg);
+}
+
+.profile-dropdown-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    width: 240px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    padding: 8px 0;
+    animation: fadeInDown 0.2s ease forwards;
+    transform-origin: top right;
+}
+
+@keyframes fadeInDown {
+    from { opacity: 0; transform: scale(0.95) translateY(-10px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.dropdown-header {
+    padding: 12px 20px;
+    display: flex;
+    flex-direction: column;
+}
+
+.dropdown-header strong {
+    font-size: 0.95rem;
+    color: var(--text-primary);
+}
+
+.dropdown-header span {
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+    margin-top: 2px;
+}
+
+.dropdown-divider {
+    height: 1px;
+    background: var(--border-default);
+    margin: 4px 0;
+}
+
+.dropdown-item {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 20px;
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: left;
+}
+
+.dropdown-item svg {
+    font-size: 1.1rem;
+}
+
+.dropdown-item:hover {
+    background: var(--bg-muted);
+    color: var(--primary);
+}
+
+.dropdown-item.logout {
     color: var(--error);
-    border-color: var(--error);
-    background: var(--error-bg);
+}
+.dropdown-item.logout:hover {
+    background: #FEF2F2;
+    color: #DC2626;
 }
 
 /* ===== Content ===== */
 .dashboard-content {
     flex: 1;
     padding: 32px;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: hidden;
+    box-sizing: border-box;
 }
 
 /* ===== Mobile ===== */
@@ -91,7 +217,12 @@
         padding: 20px 16px;
     }
 
-    .topbar-logout span {
+    .profile-info-compact, .profile-chevron {
         display: none;
+    }
+    
+    .profile-trigger {
+        padding: 0;
+        border-radius: 50%;
     }
 }

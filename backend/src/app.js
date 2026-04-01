@@ -35,10 +35,12 @@ app.get('/', (req, res) => {
 app.get("/test-db", (req, res) => {
     res.json({ message: "MongoDB connected and API working" });
 });
+const notificationRoutes = require("./routes/notificationRoutes");
 app.use("/api/auth", authRoutes);
 app.use("/api/employee", employeeRoutes);
 app.use("/api/ra", raRoutes);
 app.use("/api/hrd", hrdRoutes);
 app.use("/api/md", mdRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 module.exports = app;

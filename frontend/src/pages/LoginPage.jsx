@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+// import logo from "../assets/logo.png";
+
 import toast from 'react-hot-toast';
 import './LoginPage.css';
 
@@ -41,7 +43,7 @@ const LoginPage = () => {
 
             <div className="login-card">
                 <div className="login-logo">
-                    <img src="../assets/logo.png" alt="Company Logo" className="login-logo-img" />
+                    <img src="/logo.png" alt="Company Logo" className="login-logo-img" />
                 </div>
 
                 <h1 className="login-title">

@@ -12,18 +12,26 @@ const yearlyPlanSchema = new mongoose.Schema({
     required: true
   },
 
-  planDetails: {
+  planAndObjectives: {
     type: String,
     required: true
   },
 
   status: {
     type: String,
-    enum: ["PENDING", "APPROVED", "REJECTED"],
+    enum: ["PENDING", "APPROVED", "REJECTED", "EDITED", "EDITED_AFTER_APPROVAL"],
     default: "PENDING"
   },
 
   mdRemarks: String,
+
+  editHistory: [
+    {
+      editedAt: { type: Date, default: Date.now },
+      previousStatus: String,
+      note: String
+    }
+  ],
 
   version: {
     type: Number,
@@ -35,5 +43,7 @@ const yearlyPlanSchema = new mongoose.Schema({
     default: Date.now
   }
 });
+
+yearlyPlanSchema.index({ employeeId: 1, financialYear: 1 }, { unique: true });
 
 module.exports = mongoose.model("YearlyPlan", yearlyPlanSchema);

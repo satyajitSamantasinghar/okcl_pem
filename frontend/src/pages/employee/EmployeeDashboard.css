@@ -1,71 +1,651 @@
-.action-card {
+/* =====================================================
+   EMPLOYEE DASHBOARD — DESIGN SYSTEM v2
+   Prefix: emp-dash-
+   8px spacing system · CSS vars from index.css
+   Enterprise SaaS aesthetic (Workday / Zoho standard)
+===================================================== */
+
+/* ── PAGE WRAPPER ── */
+.emp-dash-page {
     display: flex;
     flex-direction: column;
-    background: var(--bg-card);
-    border: 1px solid var(--border-default);
-    border-radius: var(--radius-lg);
-    padding: 28px;
-    text-decoration: none;
-    color: inherit;
-    transition: all var(--transition-normal);
-    box-shadow: var(--shadow-card);
+    gap: 24px;
+    padding-bottom: 40px;
 }
 
-.action-card:hover {
-    transform: translateY(-4px);
-    box-shadow: var(--shadow-md);
-    border-color: var(--primary-light);
+/* ── HERO HEADER ── */
+.emp-dash-hero {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 24px 30px;
+    background: linear-gradient(135deg, #fff9f5 0%, #ffffff 70%);
+    border: 1px solid #f0ddd0;
+    border-radius: var(--radius-xl, 14px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    gap: 20px;
+    flex-wrap: wrap;
 }
 
-.action-card-icon {
-    width: 52px;
-    height: 52px;
-    border-radius: var(--radius-md);
+.emp-dash-hero-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.emp-dash-avatar {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: var(--primary-gradient, linear-gradient(135deg, #ff7a18, #ffb347));
+    color: #fff;
     display: flex;
     align-items: center;
     justify-content: center;
+    font-size: 1.25rem;
+    font-weight: 800;
+}
+
+.emp-dash-greeting {
     font-size: 1.5rem;
-    margin-bottom: 16px;
-}
-
-.action-card-icon.orange {
-    background: var(--primary-light);
-    color: var(--primary);
-}
-
-.action-card-icon.blue {
-    background: var(--info-bg);
-    color: var(--info);
-}
-
-.action-card-icon.yellow {
-    background: var(--warning-bg);
-    color: var(--warning);
-}
-
-.action-card-icon.green {
-    background: var(--success-bg);
-    color: var(--success);
-}
-
-.action-card h3 {
-    font-size: 1.1rem;
-    font-weight: 700;
-    margin-bottom: 8px;
+    font-weight: 800;
+    margin: 0 0 4px 0;
     color: var(--text-primary);
 }
 
-.action-card p {
-    font-size: 0.875rem;
+.emp-dash-subtitle {
+    font-size: 0.9rem;
     color: var(--text-secondary);
-    flex: 1;
-    line-height: 1.5;
+    margin: 0;
 }
 
-.action-card-link {
-    display: inline-block;
-    margin-top: 16px;
-    font-size: 0.875rem;
-    font-weight: 600;
+/* Pending Task Badge (Clickable) */
+.emp-dash-task-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: #fef2f2;
+    border: 1px solid #fca5a5;
+    color: #dc2626;
+    padding: 8px 16px;
+    border-radius: 100px;
+    font-weight: 700;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all var(--transition-short, 0.15s) ease;
+    box-shadow: 0 2px 6px rgba(220, 38, 38, 0.15);
+}
+
+.emp-dash-task-badge:hover {
+    background: #fee2e2;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(220, 38, 38, 0.2);
+}
+
+.emp-dash-task-icon {
+    font-size: 1.1rem;
+    animation: ring 2s infinite ease-in-out;
+}
+
+@keyframes ring {
+
+    0%,
+    100% {
+        transform: rotate(0deg);
+    }
+
+    25% {
+        transform: rotate(15deg);
+    }
+
+    75% {
+        transform: rotate(-15deg);
+    }
+}
+
+/* ── STATS GRID (Existing Layout, Improved Style) ── */
+.emp-dash-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+}
+
+.emp-dash-stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-lg, 12px);
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.emp-dash-stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+.emp-dash-stat-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+    flex-shrink: 0;
+}
+
+.emp-dash-stat-icon.orange {
+    background: rgba(255, 122, 24, 0.1);
     color: var(--primary);
+}
+
+.emp-dash-stat-icon.green {
+    background: rgba(34, 197, 94, 0.1);
+    color: var(--success);
+}
+
+.emp-dash-stat-icon.blue {
+    background: rgba(59, 130, 246, 0.1);
+    color: var(--info);
+}
+
+.emp-dash-stat-icon.yellow {
+    background: rgba(234, 179, 8, 0.1);
+    color: var(--warning);
+}
+
+.emp-dash-stat-info h4 {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+    margin: 0 0 4px 0;
+    font-weight: 700;
+}
+
+.emp-dash-stat-val {
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    line-height: 1;
+}
+
+/* ── QUICK LINKS GRID (Existing Layout, Improved Style) ── */
+.emp-dash-quicklinks-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+}
+
+.emp-dash-link-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-lg, 12px);
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    text-decoration: none;
+    color: inherit;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+    transition: all 0.2s ease;
+}
+
+.emp-dash-link-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+    border-color: var(--primary);
+}
+
+.emp-dash-link-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+    margin-bottom: 16px;
+}
+
+.emp-dash-link-icon.orange {
+    background: rgba(255, 122, 24, 0.1);
+    color: var(--primary);
+}
+
+.emp-dash-link-icon.blue {
+    background: rgba(59, 130, 246, 0.1);
+    color: var(--info);
+}
+
+.emp-dash-link-icon.yellow {
+    background: rgba(234, 179, 8, 0.1);
+    color: var(--warning);
+}
+
+.emp-dash-link-card h3 {
+    font-size: 1.1rem;
+    font-weight: 800;
+    margin: 0 0 8px 0;
+    color: var(--text-primary);
+}
+
+.emp-dash-link-card p {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    margin: 0 0 16px 0;
+    flex: 1;
+}
+
+.emp-dash-link-cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--primary);
+}
+
+.emp-dash-link-card:hover .emp-dash-link-cta {
+    text-decoration: underline;
+}
+
+/* ── MAIN WORKFLOW GRID ── */
+.emp-dash-main-grid {
+    display: grid;
+    grid-template-columns: 1fr 360px;
+    gap: 24px;
+    align-items: start;
+}
+
+.emp-dash-col-main,
+.emp-dash-col-side {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+/* ── UI SECTIONS ── */
+.emp-dash-section {
+    background: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-lg, 12px);
+    padding: 24px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+}
+
+.emp-dash-section-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.emp-dash-section-header h2 {
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.emp-dash-section-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    background: rgba(255, 122, 24, 0.1);
+    color: var(--primary);
+}
+
+.emp-dash-section-icon.blue {
+    background: rgba(59, 130, 246, 0.1);
+    color: var(--info);
+}
+
+.emp-dash-section-icon.yellow {
+    background: rgba(234, 179, 8, 0.1);
+    color: var(--warning);
+}
+
+.emp-dash-section-icon.purple {
+    background: rgba(168, 85, 247, 0.1);
+    color: #a855f7;
+}
+
+.emp-dash-empty {
+    text-align: center;
+    padding: 32px 16px;
+    color: var(--text-muted);
+}
+
+.emp-dash-empty-icon {
+    font-size: 2.5rem;
+    opacity: 0.5;
+    margin-bottom: 12px;
+}
+
+.emp-dash-empty p {
+    margin: 0;
+    font-size: 0.9rem;
+}
+
+.emp-dash-muted {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    font-style: italic;
+}
+
+/* ── ACTION CENTER ── */
+.emp-dash-action-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.emp-dash-action-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 16px;
+    border-radius: 10px;
+    background: var(--bg-muted);
+    border: 1px solid var(--border-default);
+    transition: all 0.2s;
+}
+
+.emp-dash-action-item:hover {
+    background: var(--bg-card);
+    transform: translateX(4px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.emp-dash-action-content {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.emp-dash-action-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+
+.emp-dash-action--danger {
+    border-left: 4px solid #ef4444;
+}
+
+.emp-dash-action--danger .emp-dash-action-icon {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+.emp-dash-action--danger h4 {
+    color: #b91c1c;
+}
+
+.emp-dash-action--warning {
+    border-left: 4px solid #f59e0b;
+}
+
+.emp-dash-action--warning .emp-dash-action-icon {
+    background: #fef3c7;
+    color: #d97706;
+}
+
+.emp-dash-action--primary {
+    border-left: 4px solid var(--primary);
+}
+
+.emp-dash-action--primary .emp-dash-action-icon {
+    background: rgba(255, 122, 24, 0.1);
+    color: var(--primary);
+}
+
+.emp-dash-action-content h4 {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0 0 4px 0;
+}
+
+.emp-dash-action-content p {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+/* Custom Btn overrides for action center */
+.emp-dash-action-item .btn {
+    white-space: nowrap;
+    padding: 8px 16px;
+    font-size: 0.82rem;
+}
+
+/* ── RECENT ACTIVITY TIMELINE ── */
+.emp-dash-timeline {
+    position: relative;
+    padding-left: 12px;
+}
+
+.emp-dash-timeline::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 26px;
+    width: 2px;
+    background: var(--border-default);
+}
+
+.emp-dash-timeline-item {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 24px;
+    position: relative;
+}
+
+.emp-dash-timeline-item:last-child {
+    margin-bottom: 0;
+}
+
+.emp-dash-timeline-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: #f1f5f9;
+    border: 2px solid #fff;
+    color: #475569;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    position: relative;
+    z-index: 1;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.emp-dash-timeline-content {
+    flex: 1;
+    padding-top: 4px;
+}
+
+.emp-dash-timeline-content strong {
+    display: block;
+    font-size: 0.85rem;
+    color: var(--text-primary);
+    margin-bottom: 2px;
+}
+
+.emp-dash-timeline-content p {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin: 0 0 4px 0;
+}
+
+.emp-dash-timeline-content span {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+}
+
+/* ── DEADLINES ── */
+.emp-dash-deadlines {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.emp-dash-dl-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: var(--bg-muted);
+    border: 1px solid var(--border-default);
+    border-radius: 8px;
+}
+
+.emp-dash-dl-card.emp-dash-dl--critical {
+    background: #fff5f5;
+    border-color: #fca5a5;
+}
+
+.emp-dash-dl-info strong {
+    display: block;
+    font-size: 0.85rem;
+    color: var(--text-primary);
+    margin-bottom: 2px;
+}
+
+.emp-dash-dl-info span {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.emp-dash-dl-days {
+    font-size: 0.85rem;
+    font-weight: 800;
+    color: var(--text-secondary);
+}
+
+.emp-dash-dl--critical .emp-dash-dl-days {
+    color: #dc2626;
+}
+
+/* ── LATEST REMARKS ── */
+.emp-dash-remarks-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.emp-dash-remark-card {
+    background: var(--bg-muted);
+    border: 1px solid var(--border-default);
+    border-radius: 10px;
+    padding: 16px;
+    position: relative;
+}
+
+.emp-dash-remark-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.emp-dash-remark-source {
+    font-size: 0.7rem;
+    font-weight: 800;
+    padding: 2px 8px;
+    border-radius: 100px;
+    background: #e2e8f0;
+    color: #334155;
+    text-transform: uppercase;
+}
+
+.emp-dash-remark-source.source-md {
+    background: #ede9fe;
+    color: #6d28d9;
+}
+
+.emp-dash-remark-source.source-ra {
+    background: rgba(255, 122, 24, 0.15);
+    color: #c2410c;
+}
+
+.emp-dash-remark-source.source-hrd {
+    background: #dcfce7;
+    color: #15803d;
+}
+
+.emp-dash-remark-date {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+}
+
+.emp-dash-remark-text {
+    font-size: 0.85rem;
+    color: var(--text-primary);
+    font-style: italic;
+    line-height: 1.5;
+    margin: 0 0 10px 0;
+}
+
+.emp-dash-remark-context {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+
+/* ── SPINNER ── */
+.emp-dash-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 50vh;
+    color: var(--text-secondary);
+}
+
+.emp-dash-spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid rgba(255, 122, 24, 0.2);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 16px;
+}
+
+/* ── RESPONSIVE ── */
+@media (max-width: 1024px) {
+    .emp-dash-main-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .emp-dash-hero {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .emp-dash-action-item {
+        flex-direction: column;
+        align-items: stretch;
+    }
 }
