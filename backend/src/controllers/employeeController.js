@@ -149,7 +149,7 @@ exports.submitMonthlyPlan = async (req, res) => {
 // 2. Submit Monthly Achievement
 exports.submitMonthlyAchievement = async (req, res) => {
   try {
-    const { monthlyPlanId, achievementDetails, status } = req.body;
+    const { monthlyPlanId, achievementDetails, planAchievements, additionalAchievement, status } = req.body;
     const achStatus = status === "DRAFT" ? "DRAFT" : "SUBMITTED";
 
     const plan = await MonthlyPlan.findOne({
@@ -191,6 +191,8 @@ exports.submitMonthlyAchievement = async (req, res) => {
       }
       // Update the draft
       existingAchievement.achievementDetails = achievementDetails;
+      if (planAchievements !== undefined) existingAchievement.planAchievements = planAchievements;
+      if (additionalAchievement !== undefined) existingAchievement.additionalAchievement = additionalAchievement;
       existingAchievement.status = achStatus;
       if (achStatus === "SUBMITTED") existingAchievement.submittedAt = new Date();
       await existingAchievement.save();
@@ -210,6 +212,8 @@ exports.submitMonthlyAchievement = async (req, res) => {
       employeeId: req.user.userId,
       monthlyPlanId,
       achievementDetails,
+      planAchievements,
+      additionalAchievement,
       status: achStatus
     });
 

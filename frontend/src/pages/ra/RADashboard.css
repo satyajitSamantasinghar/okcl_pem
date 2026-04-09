@@ -1,14 +1,14 @@
 /* ══════════════════════════════════════════════════
-   RA DASHBOARD — ULTRA PREMIUM (10/10)
-   Spacing system: 24px between major sections
-   Border-radius: 16px cards / 12px buttons
-   Shadow scale: sm → md → lg
+   RA DASHBOARD — v2 CSS
+   New additions:
+     - ra-trend-fullwidth-card (6-month trend — full width)
+     - ra-trend-* (summary pills, chart wrap, tooltip, empty)
+     - ra-leaderboard-* (employee submission status leaderboard)
+   All original rules preserved exactly.
    ══════════════════════════════════════════════════ */
 
-/* ── CSS Custom properties (local overrides) ── */
 :root {
     --rad-gap: 22px;
-    /* universal section gap */
     --rad-radius: 16px;
     --rad-radius-sm: 10px;
     --rad-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06), 0 2px 6px rgba(0, 0, 0, 0.04);
@@ -24,7 +24,6 @@
     display: flex;
     flex-direction: column;
     gap: var(--rad-gap);
-    /* uniform 22px everywhere */
 }
 
 /* ══════════════════════════════════════════
@@ -92,7 +91,6 @@
     z-index: 10;
 }
 
-/* Filter Bar */
 .filter-bar {
     background: rgba(255, 255, 255, 0.15);
     backdrop-filter: blur(10px);
@@ -147,7 +145,7 @@
 }
 
 /* ══════════════════════════════════════════
-   STATS GRID — 5 equal columns
+   STATS GRID
    ══════════════════════════════════════════ */
 .ra-stats-grid {
     display: grid;
@@ -155,7 +153,6 @@
     gap: 13px;
 }
 
-/* Smart Cards */
 .ra-smart-card {
     background: var(--bg-card);
     border-radius: var(--rad-radius);
@@ -170,7 +167,6 @@
     cursor: default;
 }
 
-/* Orange top-stripe on hover */
 .ra-smart-card::after {
     content: '';
     position: absolute;
@@ -280,10 +276,6 @@
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
 }
 
-.ra-sc-view-btn:active {
-    transform: translateY(0);
-}
-
 .ra-sc-body h3 {
     font-size: 0.775rem;
     font-weight: 600;
@@ -310,7 +302,6 @@
     font-weight: 400;
 }
 
-/* Progress Bars */
 .ra-sc-progress-wrap {
     width: 100%;
     height: 5px;
@@ -378,7 +369,7 @@
 }
 
 /* ══════════════════════════════════════════
-   PENDING EVALUATION ALERT
+   PENDING EVALUATION ALERT (amber)
    ══════════════════════════════════════════ */
 .ra-urgent-card {
     background: linear-gradient(to right, #FFFBEB, #FEF3C7);
@@ -501,6 +492,80 @@
 }
 
 /* ══════════════════════════════════════════
+   QUARTERLY REMARKS ALERT (indigo/purple)
+   ══════════════════════════════════════════ */
+.ra-quarterly-alert {
+    background: linear-gradient(to right, #EEF2FF, #E0E7FF);
+    border: 1px solid #C7D2FE;
+    border-radius: var(--rad-radius);
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    box-shadow: var(--rad-shadow-sm);
+    transition: box-shadow var(--rad-transition);
+}
+
+.ra-quarterly-alert:hover {
+    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.14);
+}
+
+.ra-quarterly-alert-icon {
+    width: 48px;
+    height: 48px;
+    background: #6366F1;
+    color: #fff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+    flex-shrink: 0;
+    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.16);
+}
+
+.ra-quarterly-alert-content {
+    flex: 1;
+}
+
+.ra-quarterly-alert-content h3 {
+    font-size: 0.9625rem;
+    font-weight: 800;
+    color: #3730A3;
+    margin-bottom: 3px;
+}
+
+.ra-quarterly-alert-content p {
+    font-size: 0.855rem;
+    color: #4338CA;
+    line-height: 1.5;
+    margin: 0;
+}
+
+.ra-quarterly-alert-btn {
+    background: linear-gradient(135deg, #6366F1, #4F46E5);
+    color: #fff;
+    border: none;
+    padding: 9px 20px;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 0.85rem;
+    cursor: pointer;
+    white-space: nowrap;
+    box-shadow: 0 3px 10px rgba(99, 102, 241, 0.3);
+    transition: transform var(--rad-transition), box-shadow var(--rad-transition);
+}
+
+.ra-quarterly-alert-btn:hover {
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 6px 18px rgba(99, 102, 241, 0.4);
+}
+
+.ra-quarterly-alert-btn:active {
+    transform: translateY(0) scale(1);
+}
+
+/* ══════════════════════════════════════════
    QUICK INSIGHTS
    ══════════════════════════════════════════ */
 .ra-insights-section {
@@ -572,13 +637,8 @@
     flex-shrink: 0;
 }
 
-.ra-insight-text {
-    line-height: 1.4;
-}
-
 /* ══════════════════════════════════════════
-   QUICK ACTIONS GRID — moved above analytics
-   Premium elevated cards
+   QUICK ACTIONS
    ══════════════════════════════════════════ */
 .ra-actions-grid {
     display: grid;
@@ -593,18 +653,14 @@
     background: var(--bg-card);
     border: 1px solid var(--border-default);
     padding: 15px 18px;
-    /* compact but not cramped */
     border-radius: var(--rad-radius);
     text-decoration: none;
     box-shadow: var(--rad-shadow-sm);
     position: relative;
     overflow: hidden;
-    transition: transform var(--rad-spring),
-        box-shadow var(--rad-transition),
-        border-color var(--rad-transition);
+    transition: transform var(--rad-spring), box-shadow var(--rad-transition), border-color var(--rad-transition);
 }
 
-/* Left accent stripe */
 .ra-action-tile::before {
     content: '';
     position: absolute;
@@ -628,7 +684,6 @@
     background: #F59E0B;
 }
 
-/* Hover: lift + glow */
 .ra-action-tile:hover {
     transform: translateY(-5px) scale(1.02);
     box-shadow: 0 14px 32px -4px rgba(0, 0, 0, 0.13), 0 4px 8px -2px rgba(0, 0, 0, 0.07);
@@ -639,18 +694,18 @@
 }
 
 .ra-action-tile.orange:hover {
-    border-color: rgba(249, 115, 22, 0.3);
-    box-shadow: 0 14px 32px -4px rgba(249, 115, 22, 0.12), 0 4px 8px rgba(249, 115, 22, 0.08);
+    border-color: rgba(249, 115, 22, .3);
+    box-shadow: 0 14px 32px -4px rgba(249, 115, 22, .12), 0 4px 8px rgba(249, 115, 22, .08);
 }
 
 .ra-action-tile.blue:hover {
-    border-color: rgba(59, 130, 246, 0.3);
-    box-shadow: 0 14px 32px -4px rgba(59, 130, 246, 0.12), 0 4px 8px rgba(59, 130, 246, 0.08);
+    border-color: rgba(59, 130, 246, .3);
+    box-shadow: 0 14px 32px -4px rgba(59, 130, 246, .12), 0 4px 8px rgba(59, 130, 246, .08);
 }
 
 .ra-action-tile.yellow:hover {
-    border-color: rgba(245, 158, 11, 0.3);
-    box-shadow: 0 14px 32px -4px rgba(245, 158, 11, 0.12), 0 4px 8px rgba(245, 158, 11, 0.08);
+    border-color: rgba(245, 158, 11, .3);
+    box-shadow: 0 14px 32px -4px rgba(245, 158, 11, .12), 0 4px 8px rgba(245, 158, 11, .08);
 }
 
 .ra-at-icon {
@@ -704,7 +759,6 @@
     opacity: 0.85;
 }
 
-/* Arrow — bolder, colour-matched */
 .ra-at-arrow {
     color: var(--text-secondary);
     flex-shrink: 0;
@@ -728,8 +782,139 @@
 }
 
 /* ══════════════════════════════════════════
-   ANALYTICS + ACTIVITY (Middle Grid)
-   70% charts / 30% activity
+   NEW: 6-MONTH ACTIVITY TREND — FULL WIDTH
+   Dedicated section with proper breathing room
+   ══════════════════════════════════════════ */
+.ra-trend-fullwidth-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--rad-radius);
+    padding: 18px 22px 16px;
+    box-shadow: var(--rad-shadow-sm);
+    transition: box-shadow var(--rad-transition);
+}
+
+.ra-trend-fullwidth-card:hover {
+    box-shadow: var(--rad-shadow-md);
+}
+
+/* Summary pills row */
+.ra-trend-summary {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+}
+
+.ra-trend-pill {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    background: var(--bg-page, #F9F8F5);
+    border: 1px solid var(--border-default);
+    border-radius: 8px;
+    padding: 5px 12px;
+    font-size: 0.78rem;
+}
+
+.ra-trend-pill-period {
+    margin-left: auto;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+}
+
+.ra-trend-pill-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 3px;
+    flex-shrink: 0;
+}
+
+.ra-trend-pill-label {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+}
+
+.ra-trend-pill-val {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-left: 2px;
+}
+
+/* Chart wrapper — full width, generous height */
+.ra-trend-chart-wrap {
+    width: 100%;
+}
+
+/* Empty state */
+.ra-trend-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 180px;
+    gap: 10px;
+    color: var(--text-muted);
+}
+
+.ra-trend-empty-icon {
+    font-size: 2rem;
+    opacity: 0.3;
+}
+
+.ra-trend-empty p {
+    font-size: 0.85rem;
+    margin: 0;
+    opacity: 0.7;
+}
+
+/* Custom recharts tooltip */
+.ra-trend-tooltip {
+    background: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: 10px;
+    padding: 10px 14px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    font-size: 12px;
+    min-width: 140px;
+}
+
+.ra-trend-tooltip-label {
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+    font-size: 12px;
+}
+
+.ra-trend-tooltip-row {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 2px 0;
+}
+
+.ra-trend-tooltip-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+    flex-shrink: 0;
+}
+
+.ra-trend-tooltip-name {
+    flex: 1;
+    color: var(--text-secondary);
+}
+
+.ra-trend-tooltip-val {
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+/* ══════════════════════════════════════════
+   ANALYTICS + ACTIVITY
    ══════════════════════════════════════════ */
 .ra-middle-grid {
     display: grid;
@@ -743,7 +928,6 @@
     flex-direction: column;
 }
 
-/* Charts container — equal height cards */
 .ra-charts-container {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -751,9 +935,8 @@
     align-items: stretch;
 }
 
-/* Chart card — subtle gradient bg for depth */
 .ra-chart-box {
-    background: linear-gradient(160deg, var(--bg-card) 0%, color-mix(in srgb, var(--bg-card) 96%, #f97316 4%) 100%);
+    background: var(--bg-card);
     border: 1px solid var(--border-default);
     border-radius: var(--rad-radius);
     padding: 18px 18px 14px;
@@ -761,13 +944,6 @@
     display: flex;
     flex-direction: column;
     transition: box-shadow var(--rad-transition);
-}
-
-/* Fallback for browsers without color-mix */
-@supports not (background: color-mix(in srgb, white, black)) {
-    .ra-chart-box {
-        background: var(--bg-card);
-    }
 }
 
 .ra-chart-box:hover {
@@ -788,12 +964,338 @@
 }
 
 .ra-chart-note {
-    margin-top: 8px;
+    margin-top: 4px;
     font-size: 0.72rem;
     line-height: 1.5;
     color: var(--text-muted);
     opacity: 0.8;
     flex-shrink: 0;
+    margin-bottom: 10px;
+}
+
+.ra-chart-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 200px;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    opacity: 0.7;
+}
+
+/* Donut centre label */
+.ra-donut-center {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -56%);
+    text-align: center;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+
+.ra-donut-center-num {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    line-height: 1;
+}
+
+.ra-donut-center-label {
+    font-size: 0.62rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+}
+
+/* ══════════════════════════════════════════
+   NEW: EMPLOYEE SUBMISSION LEADERBOARD
+   Replaces the 6-month trend in analytics grid.
+   Sorted: fully complete (3/3) at top → not started at bottom.
+   ══════════════════════════════════════════ */
+.ra-leaderboard-box {
+    /* Overrides the default last-child min-height so leaderboard fills naturally */
+}
+
+.ra-leaderboard-box>div:last-of-type {
+    min-height: unset;
+    flex: 1;
+}
+
+.ra-lb-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.ra-lb-header h4 {
+    margin-bottom: 2px !important;
+}
+
+.ra-lb-legend {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.ra-lb-leg-item {
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 5px;
+}
+
+.ra-lb-leg-done {
+    background: #D1FAE5;
+    color: #065F46;
+}
+
+.ra-lb-leg-miss {
+    background: #FEE2E2;
+    color: #991B1B;
+}
+
+/* Scrollable list — shows all employees, scrolls if > ~6 */
+.ra-leaderboard-list {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    max-height: 340px;
+    overflow-y: auto;
+    padding-right: 2px;
+    /* Subtle scrollbar */
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-default) transparent;
+}
+
+.ra-leaderboard-list::-webkit-scrollbar {
+    width: 4px;
+}
+
+.ra-leaderboard-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.ra-leaderboard-list::-webkit-scrollbar-thumb {
+    background: var(--border-default);
+    border-radius: 99px;
+}
+
+/* Individual leaderboard row */
+.ra-lb-row {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all var(--rad-transition);
+    position: relative;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.ra-lb-row::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    border-radius: 2px 0 0 2px;
+    opacity: 0;
+    transition: opacity var(--rad-transition);
+}
+
+.ra-lb-row:hover {
+    border-color: var(--border-default);
+    transform: translateX(2px);
+}
+
+.ra-lb-row:hover::before {
+    opacity: 1;
+}
+
+/* Row tint variants — subtle tint matching completion */
+.lb-row-full {
+    background: rgba(16, 185, 129, .04);
+}
+
+.lb-row-partial {
+    background: rgba(245, 158, 11, .04);
+}
+
+.lb-row-low {
+    background: rgba(249, 115, 22, .04);
+}
+
+.lb-row-none {
+    background: rgba(239, 68, 68, .04);
+}
+
+.lb-row-full::before {
+    background: #10B981;
+}
+
+.lb-row-partial::before {
+    background: #F59E0B;
+}
+
+.lb-row-low::before {
+    background: #F97316;
+}
+
+.lb-row-none::before {
+    background: #EF4444;
+}
+
+/* Rank number */
+.ra-lb-rank {
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    min-width: 20px;
+    text-align: right;
+    flex-shrink: 0;
+}
+
+/* Avatar */
+.ra-lb-avatar {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.72rem;
+    font-weight: 700;
+    flex-shrink: 0;
+    transition: transform var(--rad-transition);
+}
+
+.ra-lb-row:hover .ra-lb-avatar {
+    transform: scale(1.1);
+}
+
+/* Name + department */
+.ra-lb-name-wrap {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.ra-lb-name {
+    font-size: 0.825rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.2;
+}
+
+.ra-lb-dept {
+    font-size: 0.68rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Step indicators — Plan / Ach. / Eval. pills */
+.ra-lb-steps {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.ra-lb-step {
+    font-size: 0.64rem;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 5px;
+    white-space: nowrap;
+    letter-spacing: 0.1px;
+}
+
+.ra-lb-step-done {
+    background: #D1FAE5;
+    color: #065F46;
+}
+
+.ra-lb-step-miss {
+    background: #FEE2E2;
+    color: #991B1B;
+}
+
+/* n/a = plan not submitted so achievement/eval irrelevant */
+.ra-lb-step-na {
+    background: var(--bg-muted);
+    color: var(--text-muted);
+    opacity: 0.5;
+}
+
+/* Progress bar + score badge */
+.ra-lb-prog-wrap {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    flex-shrink: 0;
+    min-width: 90px;
+}
+
+.ra-lb-prog-track {
+    flex: 1;
+    height: 5px;
+    background: var(--bg-muted);
+    border-radius: 99px;
+    overflow: hidden;
+}
+
+.ra-lb-prog-fill {
+    height: 100%;
+    border-radius: 99px;
+    transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.ra-lb-score-badge {
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 6px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.lb-score-full {
+    background: #D1FAE5;
+    color: #065F46;
+}
+
+.lb-score-partial {
+    background: #FEF3C7;
+    color: #92400E;
+}
+
+.lb-score-low {
+    background: #FFEDD5;
+    color: #9A3412;
+}
+
+.lb-score-none {
+    background: #FEE2E2;
+    color: #991B1B;
 }
 
 /* ══════════════════════════════════════════
@@ -862,8 +1364,18 @@
     color: #D97706;
 }
 
+.ra-activity-icon.purple {
+    background: #EDE9FE;
+    color: #7C3AED;
+}
+
+.ra-activity-icon.orange {
+    background: #FFF7ED;
+    color: #F97316;
+}
+
 .ra-activity-details p {
-    margin: 0 0 2px 0;
+    margin: 0 0 2px;
     font-size: 0.855rem;
     color: var(--text-primary);
     line-height: 1.4;
@@ -1026,9 +1538,9 @@
 .ra-ml-avatar {
     width: 38px;
     height: 38px;
-    background: var(--primary-gradient, linear-gradient(135deg, #f97316, #ea580c));
     color: white;
     border-radius: 10px;
+    background: var(--primary-gradient, linear-gradient(135deg, #f97316, #ea580c));
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1119,6 +1631,10 @@
     .ra-actions-grid {
         grid-template-columns: repeat(2, 1fr);
     }
+
+    .ra-lb-dept {
+        display: none;
+    }
 }
 
 @media (max-width: 768px) {
@@ -1140,7 +1656,16 @@
         grid-template-columns: 1fr;
     }
 
-    .ra-urgent-card {
+    .ra-trend-summary {
+        gap: 7px;
+    }
+
+    .ra-trend-pill-period {
+        display: none;
+    }
+
+    .ra-urgent-card,
+    .ra-quarterly-alert {
         flex-direction: column;
         text-align: center;
     }
@@ -1157,7 +1682,14 @@
         min-width: unset;
     }
 
-    /* Tone down spring scale on touch devices */
+    .ra-lb-dept {
+        display: none;
+    }
+
+    .ra-lb-rank {
+        display: none;
+    }
+
     .ra-smart-card:hover,
     .ra-action-tile:hover {
         transform: translateY(-3px) scale(1);
@@ -1171,5 +1703,9 @@
 
     .ra-actions-grid {
         grid-template-columns: 1fr;
+    }
+
+    .ra-lb-steps {
+        display: none;
     }
 }

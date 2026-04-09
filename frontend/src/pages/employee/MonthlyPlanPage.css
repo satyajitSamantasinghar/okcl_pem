@@ -369,8 +369,8 @@
 }
 
 .mp-plan-seq-num--amber {
-    background: rgba(186,117,23,.08);
-    border-color: rgba(186,117,23,.35);
+    background: rgba(186, 117, 23, .08);
+    border-color: rgba(186, 117, 23, .35);
     color: #854F0B;
 }
 
@@ -456,6 +456,12 @@
     outline: none;
     border-color: #BA7517;
     box-shadow: 0 0 0 3px rgba(186, 117, 23, .1);
+}
+
+/* Compact textarea inside modals */
+.mp-ach-modal .mp-plan-box-textarea {
+    min-height: 72px;
+    resize: none;
 }
 
 .mp-plan-add-btn {
@@ -1313,8 +1319,6 @@
 }
 
 /* ── Simple plan item (Case A — no achievement yet) ── */
-.dmod-plan-simple-item {}
-
 .dmod-plan-simple-wrap {
     display: flex;
     align-items: flex-start;
@@ -2522,7 +2526,7 @@
     border-radius: 50%;
     background: var(--thumb-color, #E85523);
     border: 3px solid #fff;
-    box-shadow: 0 1px 4px rgba(0,0,0,.2);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, .2);
     cursor: grab;
     margin-top: -6px;
     transition: box-shadow 0.15s;
@@ -2530,7 +2534,7 @@
 
 .mp-ach-range::-webkit-slider-thumb:active {
     cursor: grabbing;
-    box-shadow: 0 2px 8px rgba(0,0,0,.3);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, .3);
 }
 
 .mp-ach-range::-moz-range-thumb {
@@ -2539,7 +2543,7 @@
     border-radius: 50%;
     background: var(--thumb-color, #E85523);
     border: 3px solid #fff;
-    box-shadow: 0 1px 4px rgba(0,0,0,.2);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, .2);
     cursor: grab;
 }
 
@@ -2962,13 +2966,63 @@
     }
 }
 
-/* Button overrides for text content */
-.mp-plan-add-btn--amber {
-    width: auto !important;
-    padding: 0 16px !important;
-    gap: 8px !important;
-    font-size: 0.75rem !important;
-    font-weight: 600 !important;
-    display: inline-flex !important;
-    align-items: center !important;
+/* ── Extra achievements on plan cards ── */
+.mp-card-extras-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 8px;
+    padding: 8px 10px;
+    background: linear-gradient(135deg, #FAEEDA 0%, #FFF7EE 100%);
+    border-radius: 8px;
+    border: 1px solid #F0D9B4;
+    color: #854F0B;
+    font-size: 0.6875rem;
+    font-weight: 600;
+}
+
+.mp-card-extras-row>span {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    color: #633806;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.mp-card-extras-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.mp-card-extra-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 3px 0;
+    border-top: 1px dashed rgba(186, 117, 23, 0.25);
+}
+
+.mp-card-extra-item:first-child {
+    border-top: none;
+}
+
+.mp-card-extra-text {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mp-card-extra-pct {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    flex-shrink: 0;
 }

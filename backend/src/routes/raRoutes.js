@@ -47,6 +47,12 @@ router.get(
 );
 
 router.get(
+  "/monthly-trend",
+  verifyToken,
+  authorizeRoles("RA"),
+  raController.getMonthlyTrend
+);
+router.get(
   "/my-employees",
   verifyToken,
   authorizeRoles("RA"),
@@ -104,5 +110,13 @@ router.get(
   authorizeRoles("RA"),
   raController.getYearlyReports
 );
+
+
+
+
+router.get("/quarterly-evaluations/:id/full-detail",
+  verifyToken,
+  authorizeRoles("RA", "HRD", "MD"),
+  raController.getQuarterlyFullDetail);
 
 module.exports = router;

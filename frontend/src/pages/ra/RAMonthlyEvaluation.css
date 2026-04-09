@@ -726,6 +726,12 @@
     animation: mevalFadeIn 0.18s ease forwards;
 }
 
+@media (min-width: 960px) {
+    .meval-overlay {
+        padding-left: 270px;
+    }
+}
+
 @keyframes mevalFadeIn {
     from {
         opacity: 0;
@@ -1138,6 +1144,7 @@
     color: var(--text-primary);
     transition: border-color 0.15s, box-shadow 0.15s, color 0.15s, background 0.15s;
     -moz-appearance: textfield;
+    appearance: textfield;
 }
 
 .meval-score-field::-webkit-outer-spin-button,
@@ -1327,5 +1334,923 @@
 
     .meval-kpi-value {
         font-size: 1.5rem;
+    }
+}
+
+/* ============================================================
+   TABLE v2 — 7-column grid (adds Plans + Achievement cols)
+============================================================ */
+.meval-table-head--v2 {
+    grid-template-columns:
+        minmax(180px, 2fr)
+        minmax(130px, 1fr)
+        minmax(90px, 0.65fr)
+        minmax(110px, 0.8fr)
+        minmax(130px, 1fr)
+        minmax(105px, 0.8fr)
+        minmax(160px, 1fr);
+}
+
+.meval-table-row--v2 {
+    grid-template-columns:
+        minmax(180px, 2fr)
+        minmax(130px, 1fr)
+        minmax(90px, 0.65fr)
+        minmax(110px, 0.8fr)
+        minmax(130px, 1fr)
+        minmax(105px, 0.8fr)
+        minmax(160px, 1fr);
+}
+
+/* Plans count pill */
+.meval-plans-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 9px;
+    border-radius: 100px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    background: rgba(83, 74, 183, 0.1);
+    color: #534AB7;
+    border: 1px solid rgba(83, 74, 183, 0.2);
+    white-space: nowrap;
+}
+
+/* Achievement status badges */
+.meval-ach-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 9px;
+    border-radius: 100px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.meval-ach-badge--submitted {
+    background: #EAF3DE;
+    color: #27500A;
+    border: 1px solid rgba(59, 109, 17, 0.25);
+}
+
+.meval-ach-badge--pending {
+    background: #F1EFE8;
+    color: #5F5E5A;
+    border: 1px solid rgba(164, 163, 155, 0.3);
+}
+
+@media (max-width: 1200px) {
+    .meval-table-head--v2,
+    .meval-table-row--v2 {
+        grid-template-columns:
+            minmax(160px, 2fr)
+            minmax(110px, 1fr)
+            minmax(75px, 0.55fr)
+            minmax(95px, 0.7fr)
+            minmax(110px, 0.9fr)
+            minmax(95px, 0.7fr)
+            minmax(140px, 1fr);
+    }
+}
+
+@media (max-width: 960px) {
+    .meval-table-head--v2 { display: none; }
+    .meval-table-row--v2 {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+        padding: 14px 20px;
+    }
+    .meval-cell--actions { justify-content: flex-start; }
+}
+
+/* ============================================================
+   VIEW MODAL  (meval-vmodal-*)
+   max-width 680px, sticky header/stepper/footer, scrollable body
+============================================================ */
+.meval-vmodal {
+    background: var(--bg-card);
+    border-radius: 16px;
+    width: 100%;
+    max-width: 680px;
+    height: 85vh;
+    max-height: 800px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 4px 6px rgba(0,0,0,.05), 0 20px 48px rgba(0,0,0,.2), 0 0 0 1px rgba(0,0,0,.06);
+    animation: mevalSlideUp 0.26s cubic-bezier(0.22,1,0.36,1) forwards;
+}
+
+/* Header */
+.meval-vmodal-hdr {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 18px 24px 14px;
+    border-bottom: 1px solid var(--border-default);
+    background: linear-gradient(135deg, rgba(255,107,53,.05) 0%, var(--bg-card) 60%);
+    flex-shrink: 0;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.meval-vmodal-hdr-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+
+.meval-vmodal-title {
+    font-size: 1.05rem;
+    font-weight: 800;
+    margin: 0 0 4px;
+    color: var(--text-primary);
+}
+
+.meval-vmodal-meta {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    flex-wrap: wrap;
+}
+
+.meval-vmodal-sep {
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    flex-shrink: 0;
+}
+
+.meval-vmodal-month {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* Stepper */
+.meval-stepper {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    padding: 10px 24px;
+    background: var(--bg-page);
+    border-bottom: 1px solid var(--border-default);
+    flex-shrink: 0;
+}
+
+.meval-step {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    flex-shrink: 0;
+}
+
+.meval-step-dot {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 0.75rem;
+    transition: all 0.2s;
+}
+
+.meval-step-dot--done {
+    background: #3B6D11;
+    color: #fff;
+    box-shadow: 0 2px 6px rgba(59, 109, 17, 0.35);
+}
+
+.meval-step-dot--active {
+    background: rgba(255,107,53,.12);
+    border: 2px solid var(--primary);
+    color: var(--primary);
+}
+
+.meval-step-dot--idle {
+    background: var(--bg-muted);
+    border: 1.5px solid var(--border-default);
+    color: var(--text-muted);
+}
+
+.meval-step-lbl {
+    font-size: 0.75rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.meval-step-lbl--done  { color: #3B6D11; }
+.meval-step-lbl--active { color: var(--primary); }
+.meval-step-lbl--idle  { color: var(--text-muted); }
+
+.meval-step-line {
+    flex: 1;
+    height: 2px;
+    border-radius: 99px;
+    margin: 0 8px;
+    transition: background 0.3s;
+}
+
+.meval-step-line--filled { background: #3B6D11; }
+.meval-step-line--empty  { background: var(--border-default); }
+
+/* Scrollable body */
+.meval-vmodal-body {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 16px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+/* Footer */
+.meval-vmodal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 12px 24px;
+    border-top: 1px solid var(--border-default);
+    background: var(--bg-card);
+    flex-shrink: 0;
+}
+
+.meval-vmodal-ftr-state {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+/* RA box inside detail modal */
+.meval-ra-box {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 16px;
+    background: var(--bg-page);
+    border: 1px solid var(--border-default);
+    border-left: 3px solid var(--primary);
+    border-radius: 10px;
+    flex-shrink: 0;
+}
+
+.meval-ra-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: rgba(255,107,53,.1);
+    color: var(--primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.meval-ra-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.meval-ra-lbl {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+}
+
+.meval-ra-pending {
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.meval-ra-done {
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    line-height: 1.55;
+}
+
+.meval-ra-score-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+    font-weight: 600;
+    margin-top: 2px;
+}
+
+.meval-ra-score-row strong {
+    color: var(--text-primary);
+}
+
+.meval-score-chip {
+    flex-shrink: 0;
+    display: flex;
+    align-items: baseline;
+    gap: 2px;
+    font-size: 1.25rem;
+    font-weight: 800;
+    padding: 6px 10px;
+    border-radius: 10px;
+    line-height: 1;
+}
+
+.meval-score-chip--score-high  { background: #EAF3DE; color: #3B6D11; }
+.meval-score-chip--score-mid   { background: #FAEEDA; color: #BA7517; }
+.meval-score-chip--score-low   { background: #FCEBEB; color: #A32D2D; }
+
+/* ============================================================
+   PLAN CONTEXT PANEL  (meval-ctx-*)
+   Used inside both View and Evaluate modals
+============================================================ */
+.meval-ctx {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* Overall progress strip */
+.meval-ctx-overall {
+    padding: 12px 14px;
+    background: linear-gradient(135deg, #F8FFF3 0%, #FAFFF8 100%);
+    border: 1px solid rgba(59,109,17,.2);
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.meval-ctx-overall-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.meval-ctx-overall-lbl {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #3B6D11;
+}
+
+.meval-ctx-overall-val {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #3B6D11;
+}
+
+.meval-ctx-prog-track {
+    height: 6px;
+    background: var(--border-default);
+    border-radius: 99px;
+    overflow: hidden;
+}
+
+.meval-ctx-prog-track--sm { height: 4px; }
+
+.meval-ctx-prog-fill {
+    height: 100%;
+    border-radius: 99px;
+    background: #3B6D11;
+    transition: width 0.4s ease;
+}
+
+.meval-ctx-ts-row {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.meval-ctx-ts {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.6875rem;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+/* Section label */
+.meval-ctx-sec-lbl {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--border-default);
+}
+
+.meval-ctx-sec-count {
+    margin-left: auto;
+    font-size: 0.625rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 100px;
+    background: var(--bg-page);
+    border: 0.5px solid var(--border-default);
+    color: var(--text-secondary);
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+/* Plan list */
+.meval-ctx-plan-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.meval-ctx-plan-card {
+    border: 1px solid var(--border-default);
+    border-left: 4px solid #3B6D11;
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--bg-card);
+}
+
+.meval-ctx-plan-card--idle {
+    border-left-color: var(--border-default);
+    background: var(--bg-page);
+}
+
+.meval-ctx-plan-top {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 13px 8px;
+}
+
+.meval-ctx-plan-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.meval-ctx-plan-name-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.meval-ctx-plan-idx {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 5px;
+    background: var(--bg-page);
+    border: 1.5px solid var(--border-default);
+    font-size: 0.5625rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+
+.meval-ctx-plan-name {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+/* Plan status badges */
+.meval-ctx-plan-badge {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.6rem;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 100px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-left: auto;
+}
+
+.meval-ctx-plan-badge--done    { background: #EAF3DE; color: #27500A; }
+.meval-ctx-plan-badge--partial { background: #FFF0EB; color: #993C1D; }
+.meval-ctx-plan-badge--none    { background: #FCEBEB; color: #791F1F; }
+.meval-ctx-plan-badge--idle    { background: #F1EFE8; color: #5F5E5A; }
+
+.meval-ctx-plan-text {
+    font-size: 0.8125rem;
+    color: var(--text-primary);
+    line-height: 1.55;
+    margin: 2px 0 0;
+}
+
+/* Progress section */
+.meval-ctx-prog-section {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 0 13px 10px;
+}
+
+.meval-ctx-prog-labels {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.meval-ctx-prog-markers {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.5875rem;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+/* Achievement section */
+.meval-ctx-ach-section {
+    padding: 8px 13px 12px;
+    background: var(--bg-page);
+    border-top: 1px solid var(--border-default);
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.meval-ctx-ach-lbl {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+}
+
+.meval-ctx-ach-text {
+    font-size: 0.8125rem;
+    color: var(--text-primary);
+    line-height: 1.6;
+}
+
+.meval-ctx-ach-empty {
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+/* No achievement notice */
+.meval-ctx-no-ach {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 14px;
+    background: var(--bg-page);
+    border: 1.5px dashed var(--border-default);
+    border-radius: 10px;
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+/* Additional achievements */
+.meval-ctx-extras {
+    padding: 10px 12px;
+    background: linear-gradient(135deg, #FAEEDA 0%, #FFF7EE 100%);
+    border: 1px solid rgba(186,117,23,.25);
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.meval-ctx-extras-hdr {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    color: #633806;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.meval-ctx-extras-badge {
+    margin-left: auto;
+    font-size: 0.6rem;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 100px;
+    background: rgba(186,117,23,.15);
+    color: #633806;
+    text-transform: none;
+}
+
+.meval-ctx-extra-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding-top: 6px;
+    border-top: 1px dashed rgba(186,117,23,.2);
+}
+
+.meval-ctx-extra-item:first-of-type { border-top: none; }
+
+.meval-ctx-extra-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 5px;
+    background: rgba(186,117,23,.12);
+    border: 1px solid rgba(186,117,23,.3);
+    font-size: 0.5625rem;
+    font-weight: 700;
+    color: #633806;
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+
+.meval-ctx-extra-body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.meval-ctx-extra-text {
+    font-size: 0.8125rem;
+    color: var(--text-primary);
+    line-height: 1.5;
+}
+
+.meval-ctx-extra-prog {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.meval-ctx-extra-prog .meval-ctx-prog-track {
+    flex: 1;
+}
+
+/* ============================================================
+   EVALUATE MODAL  (meval-emodal-*)
+   max-width 900px, two-column layout (desktop)
+============================================================ */
+.meval-emodal {
+    background: var(--bg-card);
+    border-radius: 16px;
+    width: 100%;
+    max-width: 1100px;
+    height: 85vh;
+    max-height: 800px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 4px 6px rgba(0,0,0,.05), 0 24px 56px rgba(0,0,0,.22), 0 0 0 1px rgba(0,0,0,.06);
+    animation: mevalSlideUp 0.26s cubic-bezier(0.22,1,0.36,1) forwards;
+}
+
+/* Sticky header */
+.meval-emodal-hdr {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--border-default);
+    background: linear-gradient(135deg, rgba(255,107,53,.06) 0%, var(--bg-card) 60%);
+    flex-shrink: 0;
+}
+
+/* Two-column body */
+.meval-emodal-body {
+    display: grid;
+    grid-template-columns: 1fr 460px;
+    flex: 1 1 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* LEFT: context panel */
+.meval-emodal-ctx-wrap {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    border-right: 1px solid var(--border-default);
+    background: var(--bg-page);
+}
+
+.meval-emodal-ctx-title {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 12px 16px 10px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border-default);
+    background: var(--bg-muted);
+    flex-shrink: 0;
+}
+
+.meval-emodal-ctx-inner {
+    padding: 14px 16px;
+    flex: 1;
+}
+
+/* RIGHT: scoring form */
+.meval-emodal-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 18px 20px;
+    overflow-y: auto;
+}
+
+/* Score readout */
+.meval-score-display {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 12px 14px;
+    background: var(--bg-page);
+    border-radius: 10px;
+    border: 1px solid var(--border-default);
+    flex-shrink: 0;
+}
+
+.meval-score-display-num {
+    font-size: 3rem;
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: -0.04em;
+    color: var(--text-muted);
+    transition: color 0.2s;
+}
+
+.meval-score-display-denom {
+    font-size: 1.25rem;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.meval-score-display-lbl {
+    margin-left: 4px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 100px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+/* Score button grid */
+.meval-form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.meval-score-btns {
+    display: flex;
+    gap: 5px;
+    flex-wrap: nowrap;
+}
+
+.meval-score-btn {
+    flex: 1;
+    min-width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    border: 1.5px solid var(--border-default);
+    background: var(--bg-page);
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+    font-family: inherit;
+    flex-shrink: 0;
+}
+
+.meval-score-btn:hover:not(.meval-score-btn--selected) {
+    border-color: var(--primary);
+    color: var(--primary);
+    background: rgba(255,107,53,.06);
+}
+
+.meval-score-btn--selected {
+    font-size: 0.9375rem;
+}
+
+/* Score range labels */
+.meval-score-range-labels {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    text-align: center;
+    font-size: 0.6rem;
+    font-weight: 600;
+    line-height: 1.3;
+    margin-top: 2px;
+    gap: 2px;
+}
+
+/* Evaluate form actions */
+.meval-emodal-form-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: auto;
+    padding-top: 8px;
+    border-top: 1px solid var(--border-default);
+}
+
+/* Mobile: stack layout */
+@media (max-width: 768px) {
+    .meval-emodal {
+        max-width: 100%;
+        max-height: 92vh;
+        border-radius: 12px;
+    }
+
+    .meval-emodal-body {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto 1fr;
+        overflow-y: auto;
+    }
+
+    .meval-emodal-ctx-wrap {
+        border-right: none;
+        border-bottom: 1px solid var(--border-default);
+        max-height: 40vh;
+    }
+
+    .meval-emodal-form {
+        flex-shrink: 0;
+    }
+
+    .meval-score-btns {
+        flex-wrap: wrap;
+    }
+
+    .meval-score-btn {
+        flex: 0 0 calc(10% - 4px);
+        min-width: 36px;
+        height: 36px;
+    }
+
+    .meval-score-range-labels {
+        grid-template-columns: 1fr 1fr;
+        text-align: left;
+    }
+
+    .meval-vmodal {
+        max-width: 100%;
+        border-radius: 12px;
+        max-height: 92vh;
+    }
+
+    .meval-vmodal-hdr,
+    .meval-vmodal-body,
+    .meval-vmodal-footer {
+        padding-left: 16px;
+        padding-right: 16px;
+    }
+
+    .meval-stepper {
+        padding: 8px 16px;
     }
 }

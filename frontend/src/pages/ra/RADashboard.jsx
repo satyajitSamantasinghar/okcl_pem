@@ -1,35 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
-    FiUsers,
-    FiFileText,
-    FiTrendingUp,
-    FiCheckCircle,
-    FiClipboard,
-    FiBarChart2,
-    FiAward,
-    FiAlertCircle,
-    FiCalendar,
-    FiUserX,
-    FiX,
-    FiEye,
-    FiActivity,
-    FiAlertTriangle,
-    FiInfo,
+    FiUsers, FiFileText, FiTrendingUp, FiCheckCircle, FiClipboard,
+    FiBarChart2, FiAward, FiAlertCircle, FiCalendar, FiUserX, FiX,
+    FiEye, FiActivity, FiAlertTriangle, FiInfo, FiMessageSquare,
 } from 'react-icons/fi';
 import {
-    PieChart,
-    Pie,
-    Cell,
-    LineChart,
-    Line,
-    XAxis,
-    YAxis,
-    CartesianGrid,
+    PieChart, Pie, Cell,
+    BarChart, Bar,
+    XAxis, YAxis, CartesianGrid,
     Tooltip as RechartsTooltip,
-    ResponsiveContainer,
-    Legend,
+    ResponsiveContainer, Legend,
 } from 'recharts';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
@@ -37,18 +19,9 @@ import './RADashboard.css';
 
 /* ── Arrow icon ── */
 const ArrowRightIcon = ({ className }) => (
-    <svg
-        className={className}
-        xmlns="http://www.w3.org/2000/svg"
-        width="18"
-        height="18"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-    >
+    <svg className={className} xmlns="http://www.w3.org/2000/svg" width="18" height="18"
+        viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+        strokeLinecap="round" strokeLinejoin="round">
         <line x1="5" y1="12" x2="19" y2="12" />
         <polyline points="12 5 19 12 12 19" />
     </svg>
@@ -62,27 +35,35 @@ const InsightCard = ({ icon, text, variant }) => (
     </div>
 );
 
-/* ── Pure helpers (no state/hooks — safe to keep outside component) ── */
+/* ── Custom tooltip for trend chart ── */
+const TrendTooltip = ({ active, payload, label }) => {
+    if (!active || !payload?.length) return null;
+    return (
+        <div className="ra-trend-tooltip">
+            <div className="ra-trend-tooltip-label">{label}</div>
+            {payload.map((entry) => (
+                <div key={entry.dataKey} className="ra-trend-tooltip-row">
+                    <span className="ra-trend-tooltip-dot" style={{ background: entry.fill }} />
+                    <span className="ra-trend-tooltip-name">{entry.name}</span>
+                    <span className="ra-trend-tooltip-val">{entry.value}</span>
+                </div>
+            ))}
+        </div>
+    );
+};
+
+/* ── Helpers ── */
 const formatMonth = (monthStr) => {
     if (!monthStr) return '';
     const [year, month] = monthStr.split('-');
-    return new Date(year, parseInt(month, 10) - 1).toLocaleDateString('en-US', {
-        month: 'long',
-        year: 'numeric',
-    });
+    return new Date(year, parseInt(month, 10) - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 };
 
 const formatActivityTimestamp = (dateValue) => {
     if (!dateValue) return 'Timestamp unavailable';
     const date = new Date(dateValue);
     if (Number.isNaN(date.getTime())) return 'Timestamp unavailable';
-    return date.toLocaleString('en-US', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-    });
+    return date.toLocaleString('en-US', { day: '2-digit', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' });
 };
 
 const getInitials = (name) => {
@@ -93,9 +74,40 @@ const getInitials = (name) => {
 const uniqueIds = (items = []) =>
     [...new Set(items.map((id) => id?.toString()).filter(Boolean))];
 
-const getWeekBucketIndex = (dateValue) => {
+/* ── Progress bar colour ── */
+const progressColor = (rate, invert = false) => {
+    if (invert) {
+        if (rate >= 60) return 'red';
+        if (rate >= 30) return 'yellow';
+        return 'green';
+    }
+    if (rate >= 75) return 'green';
+    if (rate >= 40) return 'yellow';
+    return 'red';
+};
+
+/* ── Weekly trend helpers ── */
+const getVisibleWeekCount = (selectedMonthStr) => {
+    if (!selectedMonthStr) return 4;
+    const now = new Date();
+    const [y, m] = selectedMonthStr.split('-');
+    const selYear = parseInt(y, 10);
+    const selMonth = parseInt(m, 10) - 1;
+    if (selYear < now.getFullYear() || (selYear === now.getFullYear() && selMonth < now.getMonth())) return 4;
+    if (selYear > now.getFullYear() || (selYear === now.getFullYear() && selMonth > now.getMonth())) return 0;
+    return Math.min(4, Math.floor((now.getDate() - 1) / 7) + 1);
+};
+
+const getWeekBucketIndex = (dateValue, selectedMonthStr) => {
     const date = new Date(dateValue);
     if (Number.isNaN(date.getTime())) return 0;
+    if (selectedMonthStr) {
+        const [year, month] = selectedMonthStr.split('-');
+        const start = new Date(parseInt(year, 10), parseInt(month, 10) - 1, 1);
+        const end = new Date(parseInt(year, 10), parseInt(month, 10), 0, 23, 59, 59);
+        if (date < start) return 0;
+        if (date > end) return 3;
+    }
     return Math.min(3, Math.floor((date.getDate() - 1) / 7));
 };
 
@@ -106,8 +118,16 @@ const createEmptyTrendData = () => ([
     { name: 'Week 4', submitted: 0, evaluated: 0 },
 ]);
 
+/* ── Leaderboard completion config ── */
+const lbScoreConfig = (score) => {
+    if (score === 3) return { label: 'Complete', cls: 'lb-score-full', barColor: '#10B981', bgCls: 'lb-row-full' };
+    if (score === 2) return { label: '2/3 done', cls: 'lb-score-partial', barColor: '#F59E0B', bgCls: 'lb-row-partial' };
+    if (score === 1) return { label: '1/3 done', cls: 'lb-score-low', barColor: '#F97316', bgCls: 'lb-row-low' };
+    return { label: 'Not started', cls: 'lb-score-none', barColor: '#EF4444', bgCls: 'lb-row-none' };
+};
+
 /* ════════════════════════════════════════════════════════════
-   RADashboard — main component
+   RADashboard
    ════════════════════════════════════════════════════════════ */
 const RADashboard = () => {
     const { user } = useAuth();
@@ -121,12 +141,8 @@ const RADashboard = () => {
         pendingEvaluation: 0,
         notYetSubmitted: 0,
         pendingYearly: 0,
-        lists: {
-            submitted: [],
-            achievements: [],
-            evaluated: [],
-            notSubmitted: [],
-        },
+        pendingQuarterlyRemarks: 0,
+        lists: { submitted: [], achievements: [], evaluated: [], notSubmitted: [] },
     });
     const [employeesList, setEmployeesList] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -138,8 +154,10 @@ const RADashboard = () => {
     const [modalConfig, setModalConfig] = useState({ isOpen: false, title: '', type: null });
     const [activityFeed, setActivityFeed] = useState([]);
     const [weeklyTrendData, setWeeklyTrendData] = useState(createEmptyTrendData());
+    const [monthlyTrendData, setMonthlyTrendData] = useState([]);
+    const [trendLoading, setTrendLoading] = useState(false);
 
-    /* ── Primary data fetch (UNCHANGED) ── */
+    /* ── Primary data fetch ── */
     useEffect(() => {
         const fetchDashboardData = async () => {
             setLoading(true);
@@ -150,7 +168,7 @@ const RADashboard = () => {
                 ]);
                 setStats(dashRes.data);
                 setEmployeesList(Array.isArray(empRes.data) ? empRes.data : []);
-            } catch (error) {
+            } catch {
                 toast.error('Failed to load dashboard data');
             } finally {
                 setLoading(false);
@@ -159,7 +177,23 @@ const RADashboard = () => {
         fetchDashboardData();
     }, [selectedMonth]);
 
-    /* ── Timeline / activity fetch (UNCHANGED) ── */
+    /* ── 6-month trend fetch (once on mount) ── */
+    useEffect(() => {
+        const fetchTrend = async () => {
+            setTrendLoading(true);
+            try {
+                const res = await api.get('/ra/monthly-trend');
+                setMonthlyTrendData(Array.isArray(res.data) ? res.data : []);
+            } catch {
+                setMonthlyTrendData([]);
+            } finally {
+                setTrendLoading(false);
+            }
+        };
+        fetchTrend();
+    }, []);
+
+    /* ── Timeline / activity fetch ── */
     useEffect(() => {
         const relevantEmployeeIds = uniqueIds([
             ...(stats.lists?.submitted || []),
@@ -200,7 +234,7 @@ const RADashboard = () => {
                             icon: <FiFileText />,
                             color: 'blue',
                         });
-                        nextTrendData[getWeekBucketIndex(monthlyPlan.submittedAt)].submitted += 1;
+                        nextTrendData[getWeekBucketIndex(monthlyPlan.submittedAt, selectedMonth)].submitted += 1;
                     }
 
                     const monthlyAchievement = (payload.monthlyAchievements || []).find((a) => {
@@ -233,10 +267,12 @@ const RADashboard = () => {
                             icon: <FiCheckCircle />,
                             color: 'yellow',
                         });
-                        nextTrendData[getWeekBucketIndex(evaluationTime)].evaluated += 1;
+                        nextTrendData[getWeekBucketIndex(evaluationTime, selectedMonth)].evaluated += 1;
                     }
 
-                    const yearlyPlan = (payload.yearlyPlans || []).find(p => p.submittedAt && p.submittedAt.toString().startsWith(selectedMonth));
+                    const yearlyPlan = (payload.yearlyPlans || []).find(
+                        p => p.submittedAt && p.submittedAt.toString().startsWith(selectedMonth)
+                    );
                     if (yearlyPlan) {
                         nextActivities.push({
                             id: `yearly-plan-${employee._id}`,
@@ -249,7 +285,9 @@ const RADashboard = () => {
                         });
                     }
 
-                    const yearlyReport = (payload.yearlyReports || []).find(r => r.submittedAt && r.submittedAt.toString().startsWith(selectedMonth));
+                    const yearlyReport = (payload.yearlyReports || []).find(
+                        r => r.submittedAt && r.submittedAt.toString().startsWith(selectedMonth)
+                    );
                     if (yearlyReport) {
                         nextActivities.push({
                             id: `yearly-report-${employee._id}`,
@@ -277,7 +315,26 @@ const RADashboard = () => {
         fetchTimelineData();
     }, [selectedMonth, stats.lists]);
 
-    /* ── Modal helpers (UNCHANGED) ── */
+    /* ── Employee Submission Leaderboard — derived from existing data ── */
+    const leaderboardData = useMemo(() => {
+        const submittedSet = new Set((stats.lists?.submitted || []).map(id => id?.toString()));
+        const achievementsSet = new Set((stats.lists?.achievements || []).map(id => id?.toString()));
+        const evaluatedSet = new Set((stats.lists?.evaluated || []).map(id => id?.toString()));
+
+        return employeesList
+            .map(emp => {
+                const empId = emp._id?.toString();
+                const submitted = submittedSet.has(empId);
+                const hasAchievement = achievementsSet.has(empId);
+                /* Achievement only relevant if plan submitted */
+                const evaluated = evaluatedSet.has(empId);
+                const score = [submitted, hasAchievement, evaluated].filter(Boolean).length;
+                return { ...emp, submitted, hasAchievement, evaluated, score };
+            })
+            .sort((a, b) => b.score - a.score);
+    }, [employeesList, stats.lists]);
+
+    /* ── Modal helpers ── */
     const openModal = (title, type) => setModalConfig({ isOpen: true, title, type });
     const closeModal = () => setModalConfig({ isOpen: false, title: '', type: null });
 
@@ -293,7 +350,6 @@ const RADashboard = () => {
         return employeesList.filter((emp) => targetIds.includes(emp._id.toString()));
     };
 
-    /* ── Loading state ── */
     if (loading) {
         return (
             <div className="loading-container">
@@ -303,7 +359,7 @@ const RADashboard = () => {
         );
     }
 
-    /* ── Derived metrics (UNCHANGED) ── */
+    /* ── Derived metrics ── */
     const total = stats.totalEmployees || 1;
     const submittedPlansRate = Math.round((stats.plansSubmittedThisMonth / total) * 100);
     const achievementsRate = stats.plansSubmittedThisMonth > 0
@@ -312,7 +368,7 @@ const RADashboard = () => {
         ? Math.round((stats.evaluatedThisMonth / stats.plansSubmittedThisMonth) * 100) : 0;
     const pendingRate = Math.round((stats.notYetSubmitted / total) * 100);
 
-    /* ── Charts data (UNCHANGED) ── */
+    /* ── Donut data ── */
     const pieData = [
         { name: 'Evaluated', value: stats.evaluatedThisMonth, color: '#10B981' },
         { name: 'Pending Review', value: stats.pendingEvaluation, color: '#F59E0B' },
@@ -320,54 +376,33 @@ const RADashboard = () => {
     ].filter((item) => item.value > 0);
     if (pieData.length === 0) pieData.push({ name: 'No Data', value: 1, color: '#E5E7EB' });
 
-    /* ── Activity feed (UNCHANGED) ── */
+    /* ── Activity feed ── */
     const activities = activityFeed.length > 0
         ? activityFeed
         : (stats.pendingEvaluation > 0 || stats.pendingYearly > 0)
             ? [{
                 id: 'pending-summary',
                 user: 'Evaluation Queue',
-                action: `${stats.pendingEvaluation} monthly and ${stats.pendingYearly || 0} yearly evaluation(s) pending review`,
-                time: `${formatMonth(selectedMonth)} - live queue`,
+                action: `${stats.pendingEvaluation} monthly and ${stats.pendingYearly || 0} yearly evaluation(s) pending`,
+                time: `${formatMonth(selectedMonth)} — live queue`,
                 icon: <FiAlertTriangle />,
                 color: 'yellow',
             }]
             : [];
 
-    const maxWeeklyValue = Math.max(
-        4,
-        ...weeklyTrendData.flatMap((entry) => [entry.submitted, entry.evaluated])
-    );
-
-    /* ── Insights (UNCHANGED logic) ── */
+    /* ── Insights ── */
     const insights = [];
     if (pendingRate >= 50) {
-        insights.push({
-            icon: '⚠️',
-            text: `${pendingRate}% of employees have not submitted their plan this month`,
-            variant: 'warn',
-        });
+        insights.push({ icon: '⚠️', text: `${pendingRate}% of employees have not submitted their plan this month`, variant: 'warn' });
     }
     if (stats.evaluatedThisMonth <= 1 && stats.plansSubmittedThisMonth > 0) {
-        insights.push({
-            icon: 'ℹ️',
-            text: `Only ${stats.evaluatedThisMonth} evaluation${stats.evaluatedThisMonth !== 1 ? 's' : ''} completed. ${stats.pendingEvaluation} still need review.`,
-            variant: 'info',
-        });
+        insights.push({ icon: 'ℹ️', text: `Only ${stats.evaluatedThisMonth} evaluation${stats.evaluatedThisMonth !== 1 ? 's' : ''} completed. ${stats.pendingEvaluation} still need review.`, variant: 'info' });
     }
     if (achievementsRate < 50 && stats.plansSubmittedThisMonth > 0) {
-        insights.push({
-            icon: '📋',
-            text: `${100 - achievementsRate}% of submitted plans are missing achievement uploads`,
-            variant: 'warn',
-        });
+        insights.push({ icon: '📋', text: `${100 - achievementsRate}% of submitted plans are missing achievement uploads`, variant: 'warn' });
     }
     if (evaluationRate === 100 && stats.plansSubmittedThisMonth > 0) {
-        insights.push({
-            icon: '🎉',
-            text: 'All submitted plans have been evaluated. Great job!',
-            variant: 'success',
-        });
+        insights.push({ icon: '🎉', text: 'All submitted plans have been evaluated. Great job!', variant: 'success' });
     }
 
     const displayEmployees = getFilteredEmployees();
@@ -376,7 +411,7 @@ const RADashboard = () => {
     return (
         <div className="fade-in ra-dashboard-container">
 
-            {/* ── Modal (UNCHANGED) ── */}
+            {/* ── Modal ── */}
             {modalConfig.isOpen && (
                 <div className="ra-modal-overlay" onClick={closeModal}>
                     <div className="ra-modal-content" onClick={(e) => e.stopPropagation()}>
@@ -442,7 +477,7 @@ const RADashboard = () => {
                 <p>Key metrics for the selected month</p>
             </div>
             <div className="ra-stats-grid">
-                {/* Card 1 — My Employees */}
+
                 <div className="ra-smart-card clickable" onClick={() => navigate('/ra/employees')}>
                     <div className="ra-sc-header">
                         <div className="ra-sc-icon orange"><FiUsers /></div>
@@ -458,12 +493,10 @@ const RADashboard = () => {
                     </div>
                 </div>
 
-                {/* Card 2 — Plans Submitted */}
                 <div className="ra-smart-card">
                     <div className="ra-sc-header">
                         <div className="ra-sc-icon blue"><FiFileText /></div>
-                        <button className="ra-sc-view-btn"
-                            onClick={() => openModal('Plans Submitted', 'PLANS')}>
+                        <button className="ra-sc-view-btn" onClick={() => openModal('Plans Submitted', 'PLANS')}>
                             <FiEye /> View Plans
                         </button>
                     </div>
@@ -474,18 +507,17 @@ const RADashboard = () => {
                             <span className="ra-sc-ratio">/ {stats.totalEmployees}</span>
                         </div>
                         <div className="ra-sc-progress-wrap">
-                            <div className="ra-sc-progress-fill blue" style={{ width: `${submittedPlansRate}%` }} />
+                            <div className={`ra-sc-progress-fill ${progressColor(submittedPlansRate)}`}
+                                style={{ width: `${submittedPlansRate}%` }} />
                         </div>
                         <p>{submittedPlansRate}% of team submitted plans</p>
                     </div>
                 </div>
 
-                {/* Card 3 — Achievements */}
                 <div className="ra-smart-card">
                     <div className="ra-sc-header">
                         <div className="ra-sc-icon green"><FiTrendingUp /></div>
-                        <button className="ra-sc-view-btn"
-                            onClick={() => openModal('Achievements Uploaded', 'ACHIEVEMENTS')}>
+                        <button className="ra-sc-view-btn" onClick={() => openModal('Achievements Uploaded', 'ACHIEVEMENTS')}>
                             <FiEye /> View Achievements
                         </button>
                     </div>
@@ -496,18 +528,17 @@ const RADashboard = () => {
                             <span className="ra-sc-ratio">/ {stats.plansSubmittedThisMonth}</span>
                         </div>
                         <div className="ra-sc-progress-wrap">
-                            <div className="ra-sc-progress-fill green" style={{ width: `${achievementsRate}%` }} />
+                            <div className={`ra-sc-progress-fill ${progressColor(achievementsRate)}`}
+                                style={{ width: `${achievementsRate}%` }} />
                         </div>
                         <p>{achievementsRate}% of plans have achievements</p>
                     </div>
                 </div>
 
-                {/* Card 4 — Evaluated */}
                 <div className="ra-smart-card">
                     <div className="ra-sc-header">
                         <div className="ra-sc-icon yellow"><FiCheckCircle /></div>
-                        <button className="ra-sc-view-btn"
-                            onClick={() => openModal('Evaluated Plans', 'EVALUATED')}>
+                        <button className="ra-sc-view-btn" onClick={() => openModal('Evaluated Plans', 'EVALUATED')}>
                             <FiEye /> View Evaluations
                         </button>
                     </div>
@@ -518,18 +549,17 @@ const RADashboard = () => {
                             <span className="ra-sc-ratio">/ {stats.plansSubmittedThisMonth}</span>
                         </div>
                         <div className="ra-sc-progress-wrap">
-                            <div className="ra-sc-progress-fill yellow" style={{ width: `${evaluationRate}%` }} />
+                            <div className={`ra-sc-progress-fill ${progressColor(evaluationRate)}`}
+                                style={{ width: `${evaluationRate}%` }} />
                         </div>
                         <p>{evaluationRate}% of submitted plans evaluated</p>
                     </div>
                 </div>
 
-                {/* Card 5 — Yet to Submit */}
                 <div className="ra-smart-card">
                     <div className="ra-sc-header">
                         <div className="ra-sc-icon red"><FiUserX /></div>
-                        <button className="ra-sc-view-btn"
-                            onClick={() => openModal('Yet To Submit', 'NOT_SUBMITTED')}>
+                        <button className="ra-sc-view-btn" onClick={() => openModal('Yet To Submit', 'NOT_SUBMITTED')}>
                             <FiEye /> View
                         </button>
                     </div>
@@ -540,21 +570,23 @@ const RADashboard = () => {
                             <span className="ra-sc-ratio">/ {stats.totalEmployees}</span>
                         </div>
                         <div className="ra-sc-progress-wrap">
-                            <div className="ra-sc-progress-fill red" style={{ width: `${pendingRate}%` }} />
+                            <div className={`ra-sc-progress-fill ${progressColor(pendingRate, true)}`}
+                                style={{ width: `${pendingRate}%` }} />
                         </div>
                         <p>{pendingRate}% of team yet to submit</p>
                     </div>
                 </div>
             </div>
 
-            {/* ── 3. Pending Evaluation Alert ── */}
+            {/* ── 3a. Pending Evaluation Alert ── */}
             {(stats.pendingEvaluation > 0 || stats.pendingYearly > 0) && (
                 <div className="ra-urgent-card">
                     <div className="ra-urgent-icon pulse"><FiAlertCircle /></div>
                     <div className="ra-urgent-content">
                         <h3>Pending Evaluations Required</h3>
                         <p>
-                            You have <strong>{stats.pendingEvaluation}</strong> monthly evaluation{stats.pendingEvaluation !== 1 ? 's' : ''} and <strong>{stats.pendingYearly || 0}</strong> yearly appraisal evaluation{(stats.pendingYearly || 0) !== 1 ? 's' : ''} pending review.
+                            You have <strong>{stats.pendingEvaluation}</strong> monthly evaluation{stats.pendingEvaluation !== 1 ? 's' : ''} and{' '}
+                            <strong>{stats.pendingYearly || 0}</strong> yearly appraisal evaluation{(stats.pendingYearly || 0) !== 1 ? 's' : ''} pending review.
                         </p>
                         {stats.pendingEvaluation > 0 && (
                             <div className="ra-urgent-progress">
@@ -569,6 +601,24 @@ const RADashboard = () => {
                     </div>
                     <button className="ra-urgent-btn" onClick={() => navigate('/ra/monthly-evaluation')}>
                         Evaluate Now
+                    </button>
+                </div>
+            )}
+
+            {/* ── 3b. Quarterly Remarks Alert ── */}
+            {stats.pendingQuarterlyRemarks > 0 && (
+                <div className="ra-quarterly-alert">
+                    <div className="ra-quarterly-alert-icon">
+                        <FiMessageSquare />
+                    </div>
+                    <div className="ra-quarterly-alert-content">
+                        <h3>Quarterly Remarks Pending</h3>
+                        <p>
+                            You have <strong>{stats.pendingQuarterlyRemarks}</strong> quarterly evaluation{stats.pendingQuarterlyRemarks !== 1 ? 's' : ''} with scores submitted but <strong>remarks not yet added</strong>. Adding remarks helps employees understand their quarterly performance better.
+                        </p>
+                    </div>
+                    <button className="ra-quarterly-alert-btn" onClick={() => navigate('/ra/quarterly-evaluation')}>
+                        Add Remarks
                     </button>
                 </div>
             )}
@@ -588,7 +638,7 @@ const RADashboard = () => {
                 </div>
             )}
 
-            {/* ── 5. QUICK ACTIONS — moved here (above Analytics) ── */}
+            {/* ── 5. Quick Actions ── */}
             <div className="ra-section-header">
                 <h2>Quick Actions</h2>
                 <p>Jump into your evaluation workflows</p>
@@ -620,18 +670,107 @@ const RADashboard = () => {
                 </Link>
             </div>
 
-            {/* ── 6. Analytics + Activity (70/30) — now at the bottom ── */}
+            {/* ════════════════════════════════════════════════
+                ── 6. NEW: 6-Month Activity Trend — full width ──
+                Dedicated section between Quick Actions and Analytics.
+                Full width gives the bar chart proper breathing room.
+            ════════════════════════════════════════════════ */}
+            <div>
+                <div className="ra-section-header">
+                    <h2>6-Month Activity Trend</h2>
+                    <p>Plans submitted, achievements &amp; evaluations across the last 6 months</p>
+                </div>
+                <div className="ra-trend-fullwidth-card">
+                    {trendLoading ? (
+                        <div className="ra-chart-loading">Loading trend data…</div>
+                    ) : monthlyTrendData.length === 0 ? (
+                        <div className="ra-trend-empty">
+                            <FiBarChart2 className="ra-trend-empty-icon" />
+                            <p>No trend data available yet</p>
+                        </div>
+                    ) : (
+                        <>
+                            {/* Summary pills above chart */}
+                            <div className="ra-trend-summary">
+                                {['plans', 'achievements', 'evaluations'].map((key, i) => {
+                                    const colors = ['#3B82F6', '#10B981', '#F97316'];
+                                    const labels = ['Total plans', 'Total achievements', 'Total evaluations'];
+                                    const total = monthlyTrendData.reduce((s, d) => s + (d[key] || 0), 0);
+                                    return (
+                                        <div key={key} className="ra-trend-pill">
+                                            <span className="ra-trend-pill-dot" style={{ background: colors[i] }} />
+                                            <span className="ra-trend-pill-label">{labels[i]}</span>
+                                            <span className="ra-trend-pill-val">{total}</span>
+                                        </div>
+                                    );
+                                })}
+                                <div className="ra-trend-pill ra-trend-pill-period">
+                                    <FiCalendar size={12} />
+                                    <span className="ra-trend-pill-label">
+                                        {monthlyTrendData[0]?.shortMonth} – {monthlyTrendData[monthlyTrendData.length - 1]?.shortMonth}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div className="ra-trend-chart-wrap">
+                                <ResponsiveContainer width="100%" height={220}>
+                                    <BarChart
+                                        data={monthlyTrendData}
+                                        margin={{ top: 4, right: 16, left: -10, bottom: 0 }}
+                                        barCategoryGap="32%"
+                                        barGap={4}
+                                    >
+                                        <CartesianGrid
+                                            strokeDasharray="3 3"
+                                            vertical={false}
+                                            stroke="var(--border-default, #E5E7EB)"
+                                        />
+                                        <XAxis
+                                            dataKey="shortMonth"
+                                            axisLine={false}
+                                            tickLine={false}
+                                            tick={{ fontSize: 12, fill: 'var(--text-muted, #6B7280)', dy: 8 }}
+                                        />
+                                        <YAxis
+                                            axisLine={false}
+                                            tickLine={false}
+                                            tick={{ fontSize: 11, fill: 'var(--text-muted, #6B7280)' }}
+                                            allowDecimals={false}
+                                            width={28}
+                                        />
+                                        <RechartsTooltip content={<TrendTooltip />} cursor={{ fill: 'rgba(0,0,0,0.04)', radius: 6 }} />
+                                        <Legend
+                                            verticalAlign="top"
+                                            align="right"
+                                            height={32}
+                                            iconType="square"
+                                            iconSize={9}
+                                            wrapperStyle={{ fontSize: '12px', paddingBottom: '8px' }}
+                                        />
+                                        <Bar dataKey="plans" name="Plans" fill="#3B82F6" radius={[4, 4, 0, 0]} maxBarSize={22} />
+                                        <Bar dataKey="achievements" name="Achievements" fill="#10B981" radius={[4, 4, 0, 0]} maxBarSize={22} />
+                                        <Bar dataKey="evaluations" name="Evaluations" fill="#F97316" radius={[4, 4, 0, 0]} maxBarSize={22} />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </>
+                    )}
+                </div>
+            </div>
+
+            {/* ── 7. Performance Analytics + Recent Activity ── */}
             <div className="ra-middle-grid">
-                {/* Performance Analytics */}
                 <div className="ra-chart-section">
                     <div className="ra-section-header">
                         <h2>Performance Analytics</h2>
-                        <p>Overview of the evaluation cycle</p>
+                        <p>Evaluation cycle overview for {formatMonth(selectedMonth)}</p>
                     </div>
                     <div className="ra-charts-container">
+
+                        {/* Chart 1 — Donut */}
                         <div className="ra-chart-box">
                             <h4>Evaluation Status Overview</h4>
-                            <div style={{ height: 230 }}>
+                            <div style={{ height: 290, position: 'relative' }}>
                                 <ResponsiveContainer width="100%" height="100%">
                                     <PieChart>
                                         <Pie
@@ -640,7 +779,6 @@ const RADashboard = () => {
                                             innerRadius={52} outerRadius={78}
                                             paddingAngle={4}
                                             dataKey="value"
-                                            label={({ percent }) => percent > 0.05 ? `${Math.round(percent * 100)}%` : ''}
                                             labelLine={false}
                                         >
                                             {pieData.map((entry, index) => (
@@ -649,56 +787,99 @@ const RADashboard = () => {
                                         </Pie>
                                         <RechartsTooltip
                                             contentStyle={{
-                                                borderRadius: '12px',
-                                                border: 'none',
-                                                boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-                                                fontSize: '13px',
+                                                borderRadius: '12px', border: 'none',
+                                                boxShadow: '0 8px 24px rgba(0,0,0,0.12)', fontSize: '13px',
                                             }}
                                         />
                                         <Legend verticalAlign="bottom" height={36} iconType="circle"
                                             wrapperStyle={{ fontSize: '12px' }} />
                                     </PieChart>
                                 </ResponsiveContainer>
+                                <div className="ra-donut-center">
+                                    <span className="ra-donut-center-num">{stats.totalEmployees}</span>
+                                    <span className="ra-donut-center-label">employees</span>
+                                </div>
                             </div>
                         </div>
 
-                        <div className="ra-chart-box">
-                            <h4>Weekly Progress</h4>
-                            <div style={{ height: 230 }}>
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <LineChart data={weeklyTrendData}
-                                        margin={{ top: 14, right: 12, left: -20, bottom: 0 }}>
-                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-                                        <XAxis dataKey="name" axisLine={false} tickLine={false}
-                                            tick={{ fontSize: 11, fill: '#6B7280', dy: 8 }} />
-                                        <YAxis axisLine={false} tickLine={false}
-                                            tick={{ fontSize: 11, fill: '#6B7280' }}
-                                            allowDecimals={false}
-                                            domain={[0, maxWeeklyValue]} />
-                                        <RechartsTooltip
-                                            cursor={{ stroke: 'rgba(243,244,246,0.8)', strokeWidth: 2 }}
-                                            contentStyle={{
-                                                borderRadius: '12px',
-                                                border: 'none',
-                                                boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-                                                fontSize: '13px',
-                                            }}
-                                        />
-                                        <Legend verticalAlign="top" height={30} iconType="circle"
-                                            wrapperStyle={{ fontSize: '12px' }} />
-                                        <Line type="monotone" dataKey="submitted" name="Submitted"
-                                            stroke="#3B82F6" strokeWidth={2.5}
-                                            dot={{ r: 4, strokeWidth: 2 }} activeDot={{ r: 6 }} />
-                                        <Line type="monotone" dataKey="evaluated" name="Evaluated"
-                                            stroke="#10B981" strokeWidth={2.5}
-                                            dot={{ r: 4, strokeWidth: 2 }} activeDot={{ r: 6 }} />
-                                    </LineChart>
-                                </ResponsiveContainer>
+                        {/* Chart 2 — Employee Submission Leaderboard */}
+                        <div className="ra-chart-box ra-leaderboard-box">
+                            <div className="ra-lb-header">
+                                <div>
+                                    <h4>Employee Submission Status</h4>
+                                    <p className="ra-chart-note">Plan → Achievement → Evaluation for {formatMonth(selectedMonth)}</p>
+                                </div>
+                                <div className="ra-lb-legend">
+                                    <span className="ra-lb-leg-item ra-lb-leg-done">Done</span>
+                                    <span className="ra-lb-leg-item ra-lb-leg-miss">Missing</span>
+                                </div>
                             </div>
-                            <p className="ra-chart-note">
-                                Built from actual submission and evaluation timestamps for this month.
-                            </p>
+
+                            {leaderboardData.length === 0 ? (
+                                <div className="ra-chart-loading">No employee data available</div>
+                            ) : (
+                                <div className="ra-leaderboard-list">
+                                    {leaderboardData.map((emp, idx) => {
+                                        const cfg = lbScoreConfig(emp.score);
+                                        const pct = Math.round((emp.score / 3) * 100);
+                                        return (
+                                            <div
+                                                key={emp._id}
+                                                className={`ra-lb-row ${cfg.bgCls}`}
+                                                onClick={() => navigate(`/ra/employee/${emp._id}`)}
+                                                title={`View ${emp.name}'s details`}
+                                            >
+                                                {/* Rank */}
+                                                <span className="ra-lb-rank">#{idx + 1}</span>
+
+                                                {/* Avatar */}
+                                                <div className="ra-lb-avatar" style={{
+                                                    background: emp.score === 3 ? '#D1FAE5' : emp.score === 2 ? '#FEF3C7' : emp.score === 1 ? '#FFEDD5' : '#FEE2E2',
+                                                    color: emp.score === 3 ? '#065F46' : emp.score === 2 ? '#92400E' : emp.score === 1 ? '#9A3412' : '#991B1B',
+                                                }}>
+                                                    {getInitials(emp.name)}
+                                                </div>
+
+                                                {/* Name + dept */}
+                                                <div className="ra-lb-name-wrap">
+                                                    <span className="ra-lb-name">{emp.name}</span>
+                                                    {emp.department && (
+                                                        <span className="ra-lb-dept">{emp.department}</span>
+                                                    )}
+                                                </div>
+
+                                                {/* Step indicators */}
+                                                <div className="ra-lb-steps">
+                                                    <span className={`ra-lb-step ${emp.submitted ? 'ra-lb-step-done' : 'ra-lb-step-miss'}`}>
+                                                        Plan
+                                                    </span>
+                                                    <span className={`ra-lb-step ${emp.hasAchievement ? 'ra-lb-step-done' : emp.submitted ? 'ra-lb-step-miss' : 'ra-lb-step-na'}`}>
+                                                        Ach.
+                                                    </span>
+                                                    <span className={`ra-lb-step ${emp.evaluated ? 'ra-lb-step-done' : emp.submitted ? 'ra-lb-step-miss' : 'ra-lb-step-na'}`}>
+                                                        Eval.
+                                                    </span>
+                                                </div>
+
+                                                {/* Mini progress bar */}
+                                                <div className="ra-lb-prog-wrap">
+                                                    <div className="ra-lb-prog-track">
+                                                        <div
+                                                            className="ra-lb-prog-fill"
+                                                            style={{ width: `${pct}%`, background: cfg.barColor }}
+                                                        />
+                                                    </div>
+                                                    <span className={`ra-lb-score-badge ${cfg.cls}`}>
+                                                        {emp.score}/3
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
                         </div>
+
                     </div>
                 </div>
 
@@ -706,9 +887,7 @@ const RADashboard = () => {
                 <div className="ra-activity-section">
                     <div className="ra-section-header">
                         <h2>Recent Activity</h2>
-                        <p>{timelineLoading
-                            ? 'Loading activity...'
-                            : 'Live feed from actual dashboard records'}</p>
+                        <p>{timelineLoading ? 'Loading activity…' : 'Live feed from actual dashboard records'}</p>
                     </div>
                     <div className="ra-activity-list">
                         {activities.length > 0 ? activities.map((activity) => (
@@ -725,8 +904,7 @@ const RADashboard = () => {
                                 <p>No recent activity available.</p>
                             </div>
                         )}
-                        <button className="ra-activity-view-all"
-                            onClick={() => navigate('/ra/monthly-evaluation')}>
+                        <button className="ra-activity-view-all" onClick={() => navigate('/ra/monthly-evaluation')}>
                             View Evaluation Queue &rarr;
                         </button>
                     </div>

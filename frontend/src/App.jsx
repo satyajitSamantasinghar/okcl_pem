@@ -22,6 +22,7 @@ import RAQuarterlyEvaluationPage from './pages/ra/RAQuarterlyEvaluationPage';
 import RAYearlyAppraisalPage from './pages/ra/RAYearlyAppraisalPage';
 import RAEmployeeListPage from './pages/ra/RAEmployeeListPage';
 import RAEmployeeDetailPage from './pages/ra/RAEmployeeDetailPage';
+import RAQuarterlyDetailPage from './pages/ra/RAQuarterlyDetailPage';
 
 // HRD
 import HRDDashboard from './pages/hrd/HRDDashboard';
@@ -118,6 +119,7 @@ function App() {
             <Route path="yearly-appraisal" element={<RAYearlyAppraisalPage />} />
             <Route path="employees" element={<RAEmployeeListPage />} />
             <Route path="employee/:id" element={<RAEmployeeDetailPage />} />
+            <Route path="/ra/quarterly-evaluation/:id" element={<RAQuarterlyDetailPage />} />
           </Route>
 
           {/* HRD Routes */}

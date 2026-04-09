@@ -14,6 +14,7 @@ import {
     Tooltip as RechartsTooltip, ResponsiveContainer, Cell,
 } from 'recharts';
 import './MDEmployeeDetail.css';
+import '../ra/RAEmployeeDetail.css';
 
 /* ════════════════════════════════════════════════════
    PURE HELPERS
@@ -25,6 +26,7 @@ function getInitials(name) {
 function formatMonth(m) {
     if (!m) return '';
     const [year, month] = m.split('-');
+    if (!year || !month || isNaN(year) || isNaN(month)) return m;
     return new Date(year, parseInt(month) - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 }
 function shortMonth(m) {
@@ -43,6 +45,118 @@ function getScoreLabel(score) {
     if (score >= 6) return 'Good';
     if (score >= 4) return 'Average';
     return 'Below Avg';
+}
+function shortYear(m) {
+    if (!m) return '';
+    return m.split('-')[0].slice(2);
+}
+function formatDateShort(dateStr) {
+    if (!dateStr) return '—';
+    return new Date(dateStr).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+function getProgressTokens(p) {
+    const v = Math.min(100, Math.max(0, p || 0));
+    if (v === 100) return { label: 'Completed', ringColor: '#3B6D11', barColor: '#3B6D11', badgeBg: '#EAF3DE', badgeText: '#27500A', borderColor: '#3B6D11', pctClass: 'pp-green', markerActive: 4 };
+    if (v >= 75)  return { label: 'Almost done', ringColor: '#BA7517', barColor: '#BA7517', badgeBg: '#FAEEDA', badgeText: '#633806', borderColor: '#BA7517', pctClass: 'pp-amber', markerActive: 3 };
+    if (v >= 50)  return { label: 'Halfway', ringColor: '#E85523', barColor: '#E85523', badgeBg: '#FFF0EB', badgeText: '#993C1D', borderColor: '#E85523', pctClass: 'pp-orange', markerActive: 2 };
+    if (v >= 25)  return { label: 'Just started', ringColor: '#BA7517', barColor: '#BA7517', badgeBg: '#FAEEDA', badgeText: '#633806', borderColor: '#BA7517', pctClass: 'pp-amber', markerActive: 1 };
+    return { label: 'Not started', ringColor: '#A32D2D', barColor: '#A32D2D', badgeBg: '#FCEBEB', badgeText: '#791F1F', borderColor: '#A32D2D', pctClass: 'pp-red', markerActive: 0 };
+}
+function getPlanItems(plan) {
+    if (!plan) return [];
+    if (Array.isArray(plan.planItems) && plan.planItems.filter(Boolean).length > 0)
+        return plan.planItems.filter(Boolean);
+    if (plan.planDetails)
+        return plan.planDetails.split('\n').map(s => s.trim()).filter(Boolean);
+    return [];
+}
+function parseLegacyPlanAch(legacyText, planCount) {
+    const result = Array.from({ length: planCount }, () => ({ achievementDetails: '', progress: 0 }));
+    if (!legacyText) return result;
+    const lines = legacyText.split('\n');
+    let currentIdx = -1;
+    lines.forEach(line => {
+        const withPct = line.match(/^Plan\s+(\d+)\s*\[(\d+)%\]:\s*(.*)/i);
+        const withoutPct = !withPct && line.match(/^Plan\s+(\d+):\s*(.*)/i);
+        if (withPct) {
+            const idx = parseInt(withPct[1]) - 1;
+            if (idx >= 0 && idx < planCount) { currentIdx = idx; result[idx].progress = Math.min(100, parseInt(withPct[2]) || 0); result[idx].achievementDetails = withPct[3].trim(); }
+        } else if (withoutPct) {
+            const idx = parseInt(withoutPct[1]) - 1;
+            if (idx >= 0 && idx < planCount) { currentIdx = idx; result[idx].achievementDetails = withoutPct[2].trim(); }
+        } else if (currentIdx >= 0 && line.trim() && !line.match(/^Additional:/i)) {
+            result[currentIdx].achievementDetails += (result[currentIdx].achievementDetails ? ' ' : '') + line.trim();
+        }
+    });
+    return result;
+}
+function getEffectivePlanAch(ach, planCount) {
+    if (!ach) return null;
+    const pa = ach.planAchievements;
+    if (Array.isArray(pa) && pa.length > 0) {
+        const hasRealData = pa.some(a => (a.achievementDetails || '').trim() || (a.progress || 0) > 0);
+        if (hasRealData) return pa;
+    }
+    if (ach.achievementDetails) {
+        const parsed = parseLegacyPlanAch(ach.achievementDetails, planCount);
+        const hasParsedData = parsed.some(a => (a.achievementDetails || '').trim() || (a.progress || 0) > 0);
+        if (hasParsedData) return parsed;
+    }
+    return null;
+}
+function parseAdditionalAch(raw) {
+    if (!raw) return [];
+    try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed.filter(a => (a.text || '').trim());
+    } catch { /* fall through */ }
+    const match = raw.match(/Additional:\s*([\s\S]+)/i);
+    if (match) {
+        try {
+            const p = JSON.parse(match[1].trim());
+            if (Array.isArray(p)) return p.filter(a => (a.text || '').trim());
+        } catch { /* fall through */ }
+        return [{ text: match[1].trim(), progress: 100 }];
+    }
+    return raw.split('\n').filter(l => l.trim() && !l.trim().startsWith('Additional:')).map(t => ({ text: t.trim(), progress: 100 }));
+}
+const MONTH_PALETTES = [
+    { bg: '#E6F1FB', color: '#0C447C' }, { bg: '#EAF3DE', color: '#27500A' },
+    { bg: '#FAEEDA', color: '#633806' }, { bg: '#FCEBEB', color: '#791F1F' },
+    { bg: '#EEEDFE', color: '#3C3489' }, { bg: '#E1F5EE', color: '#085041' },
+    { bg: '#FAECE7', color: '#712B13' }, { bg: '#FFF0EB', color: '#993C1D' },
+    { bg: '#E6F1FB', color: '#0C447C' }, { bg: '#EAF3DE', color: '#27500A' },
+    { bg: '#FAEEDA', color: '#633806' }, { bg: '#EEEDFE', color: '#3C3489' },
+];
+function getMonthChipStyle(monthStr) {
+    if (!monthStr) return MONTH_PALETTES[0];
+    const m = parseInt(monthStr.split('-')[1]) - 1;
+    return MONTH_PALETTES[m] || MONTH_PALETTES[0];
+}
+function CircularProgressMod({ progress, size = 46 }) {
+    const p = Math.min(100, Math.max(0, progress || 0));
+    const r = (size - 6) / 2;
+    const circ = 2 * Math.PI * r;
+    const dash = (p / 100) * circ;
+    const tk = getProgressTokens(p);
+    return (
+        <svg width={size} height={size} style={{ transform: 'rotate(-90deg)', flexShrink: 0 }}>
+            <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--border-default)" strokeWidth={4.5} />
+            <circle cx={size / 2} cy={size / 2} r={r} fill="none"
+                stroke={tk.ringColor} strokeWidth={4.5}
+                strokeDasharray={`${dash} ${circ}`} strokeLinecap="round"
+                style={{ transition: 'stroke-dasharray 0.35s ease' }} />
+            <text x={size / 2} y={size / 2} textAnchor="middle" dominantBaseline="middle"
+                style={{
+                    transform: `rotate(90deg)`,
+                    transformOrigin: `${size / 2}px ${size / 2}px`,
+                    fontSize: 9.5, fontWeight: 700,
+                    fill: 'var(--text-primary)', fontFamily: 'inherit'
+                }}>
+                {p}%
+            </text>
+        </svg>
+    );
 }
 
 /* ════════════════════════════════════════════════════
@@ -331,173 +445,358 @@ const MDEmployeeDetailPage = () => {
         const isRejected = plan.status === 'REJECTED';
         const canReject  = !isEval && !isRejected; // MD can reject if not evaluated and not already rejected
 
-        const modalStatusCls = isRejected ? 'rejected'
-            : isEval ? 'evaluated'
-            : plan.hasAchievement ? 'achievement'
-            : 'submitted';
-        const modalStatusLabel = isRejected ? 'Rejected'
-            : isEval ? 'Evaluated'
-            : plan.hasAchievement ? 'Achievement Submitted'
-            : 'Plan Submitted';
+        const chipStyle  = getMonthChipStyle(plan.month);
+        const planItemsList = getPlanItems(plan);
 
-        const steps = [
-            { label: 'Plan Submitted', icon: <FiFileText />,    done: true },
-            { label: 'Achievement',    icon: <FiTrendingUp />,  done: plan.hasAchievement },
-            { label: 'Evaluated',      icon: <FiCheckCircle />, done: isEval },
-        ];
+        // Derive achievement data
+        const effectivePlanAch = getEffectivePlanAch(ach, planItemsList.length);
+        const hasStructuredAch = !!effectivePlanAch;
+
+        // Additional achievements
+        let additionalItems = parseAdditionalAch(ach?.additionalAchievement || '');
+        if (additionalItems.length === 0 && ach?.achievementDetails) {
+            const addlMatch = ach.achievementDetails.match(/Additional:\s*([\s\S]+)/i);
+            if (addlMatch) {
+                const captured = addlMatch[1].trim();
+                try {
+                    const parsed = JSON.parse(captured);
+                    additionalItems = Array.isArray(parsed) ? parsed.filter(a => (a.text || '').trim()) : [{ text: captured, progress: 100 }];
+                } catch { additionalItems = [{ text: captured, progress: 100 }]; }
+            }
+        }
+
+        // Overall progress
+        const achOverall = hasStructuredAch
+            ? Math.round(effectivePlanAch.reduce((s, a) => s + Math.min(100, a.progress || 0), 0) / effectivePlanAch.length)
+            : null;
+        const achCompleted = hasStructuredAch
+            ? effectivePlanAch.filter(a => (a.progress || 0) >= 100).length : 0;
+
+        // Stepper
+        const stepperPlan = 'done';
+        const stepperAch  = plan.hasAchievement ? 'done' : 'active';
+        const stepperEval = isEval ? 'done' : plan.hasAchievement ? 'active' : 'idle';
+        const line1 = plan.hasAchievement ? 'filled' : 'empty';
+        const line2 = isEval ? 'filled' : 'empty';
+
+        // Status pill
+        const stLabel = isRejected ? 'Rejected' : isEval ? 'Evaluated' : plan.hasAchievement ? 'Achievement added' : 'Plan submitted';
+        const stCls   = isRejected ? 'sp-rejected' : isEval ? 'sp-eval' : plan.hasAchievement ? 'sp-ach' : 'sp-plan';
 
         return (
-            <div className="med-overlay" onClick={() => setSelectedMonthDetail(null)}>
-                <div className="med-modal" onClick={e => e.stopPropagation()}>
-                    <div className="med-modal-header">
-                        <div className="med-modal-header-left">
-                            <div className="med-modal-avatar">{getInitials(employee.name)}</div>
-                            <div className="med-modal-header-info">
-                                <div className="med-modal-title-row">
-                                    <h2 className="med-modal-name">Monthly Review</h2>
-                                    <span className={`med-badge med-badge--${modalStatusCls}`}>
-                                        {modalStatusLabel}
-                                    </span>
+            <div className="mp-overlay" onClick={() => setSelectedMonthDetail(null)}>
+                <div className="dmod dmod--wide" onClick={e => e.stopPropagation()}>
+
+                    {/* ── HEADER ── */}
+                    <div className="dmod-hdr">
+                        <div className="dmod-hdr-left">
+                            <div className="dmod-month-chip" style={{ background: chipStyle.bg, color: chipStyle.color }}>
+                                <span className="dmod-mc-mon">{shortMonth(plan.month).toUpperCase()}</span>
+                                <span className="dmod-mc-yr">{shortYear(plan.month)}</span>
+                            </div>
+                            <div>
+                                <div className="dmod-title">{formatMonth(plan.month)}</div>
+                                <div className="dmod-meta">
+                                    <FiClock size={11} />
+                                    <span>Submitted {formatDateShort(plan.submittedAt)}</span>
+                                    <span className="dmod-meta-sep" />
+                                    <span>{planItemsList.length} plan{planItemsList.length !== 1 ? 's' : ''}</span>
+                                    <span className="dmod-meta-sep" />
+                                    <span className={`dmod-status-pill ${stCls}`}>{stLabel}</span>
                                 </div>
-                                <p className="med-modal-sub">
-                                    {employee.name}&nbsp;·&nbsp;{employee.employeeCode}&nbsp;·&nbsp;{formatMonth(plan.month)}
-                                </p>
                             </div>
                         </div>
                         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                             {canReject && (
                                 <button
-                                    className="med-detail-btn"
-                                    style={{ color: '#DC2626', borderColor: '#FECACA', background: '#FEF2F2' }}
+                                    style={{
+                                        color: '#DC2626', borderColor: '#FECACA', background: '#FEF2F2',
+                                        padding: '6px 14px', borderRadius: '6px', fontSize: '13px',
+                                        fontWeight: '600', display: 'flex', alignItems: 'center',
+                                        gap: '6px', cursor: 'pointer', border: '1px solid #FECACA'
+                                    }}
+                                    className="dmod-btn-hover"
                                     onClick={() => { setSelectedMonthDetail(null); setRejectTarget(plan); setRejectRemarks(''); }}
                                 >
                                     <FiXCircle /> Reject Plan
                                 </button>
                             )}
-                            <button className="med-modal-close-btn" onClick={() => setSelectedMonthDetail(null)} aria-label="Close">
-                                <FiX />
+                            <button className="dmod-close" onClick={() => setSelectedMonthDetail(null)}>
+                                <FiX size={16} />
                             </button>
                         </div>
                     </div>
 
-                    <div className="med-modal-stepper">
-                        {steps.map((step, i) => (
-                            <div key={i} className="med-modal-stepper-item">
-                                <div className={`med-modal-step-node ${step.done ? 'med-modal-step-node--done' : ''}`}>
-                                    {step.icon}
-                                </div>
-                                <span className={`med-modal-step-label ${step.done ? 'med-modal-step-label--done' : ''}`}>
-                                    {step.label}
-                                </span>
-                                {i < steps.length - 1 && (
-                                    <div className={`med-modal-step-connector ${steps[i + 1].done ? 'med-modal-step-connector--done' : ''}`} />
-                                )}
+                    {/* ── STEPPER ── */}
+                    <div className="dmod-stepper">
+                        <div className="dmod-step">
+                            <div className={`dmod-snum dmod-snum--${stepperPlan}`}>
+                                <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" /></svg>
                             </div>
-                        ))}
+                            <span className={`dmod-slbl dmod-slbl--${stepperPlan}`}>Plan</span>
+                        </div>
+                        <div className={`dmod-sline dmod-sline--${line1}`} />
+                        <div className="dmod-step">
+                            <div className={`dmod-snum dmod-snum--${stepperAch}`}>
+                                {stepperAch === 'done'
+                                    ? <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" /></svg>
+                                    : <FiTrendingUp size={12} />}
+                            </div>
+                            <span className={`dmod-slbl dmod-slbl--${stepperAch}`}>Achievement</span>
+                        </div>
+                        <div className={`dmod-sline dmod-sline--${line2}`} />
+                        <div className="dmod-step">
+                            <div className={`dmod-snum dmod-snum--${stepperEval}`}>
+                                {stepperEval === 'done'
+                                    ? <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" /></svg>
+                                    : <FiCheckCircle size={12} />}
+                            </div>
+                            <span className={`dmod-slbl dmod-slbl--${stepperEval}`}>Evaluated</span>
+                        </div>
                     </div>
 
-                    {isRejected && (
-                        <div className="med-status-banner med-status-banner--rejected">
-                            <FiAlertCircle /> This plan has been rejected by MD
-                        </div>
-                    )}
-                    {isEval && (
-                        <div className="med-status-banner" style={{ background: '#F0FDF4', color: '#16A34A', borderBottomColor: '#BBF7D0' }}>
-                            <FiCheckCircle /> Evaluated by RA — cannot be rejected
-                        </div>
-                    )}
+                    {/* ── BODY ── */}
+                    <div className="dmod-body">
 
-                    <div className="med-modal-body">
-                        <div className="med-modal-section">
-                            <div className="med-modal-section-hd">
-                                <div className="med-modal-section-icon med-modal-section-icon--blue"><FiFileText /></div>
-                                <span>Monthly Plan</span>
-                                <span className="med-modal-section-meta-inline" style={{ marginLeft: 'auto', fontSize: '0.75rem', color: '#94A3B8' }}>
-                                    <FiClock /> Submitted {new Date(plan.submittedAt).toLocaleDateString()}
-                                </span>
+                        {/* MD rejection banner */}
+                        {isRejected && (
+                            <div className="red-status-banner red-status-banner--rejected" style={{ marginBottom: 12 }}>
+                                <FiAlertCircle /> This plan has been rejected by MD
                             </div>
-                            <div className="med-modal-section-body">
-                                {plan.planDetails
-                                    ? <p className="med-modal-text">{plan.planDetails}</p>
-                                    : <p className="med-modal-empty-text">No plan details provided.</p>
-                                }
+                        )}
+                        {isEval && (
+                            <div className="med-status-banner" style={{ background: '#F0FDF4', color: '#16A34A', borderBottomColor: '#BBF7D0', marginBottom: 16 }}>
+                                <FiCheckCircle /> Evaluated by RA — cannot be rejected
                             </div>
-                        </div>
+                        )}
 
-                        <div className="med-modal-section">
-                            <div className="med-modal-section-hd">
-                                <div className="med-modal-section-icon med-modal-section-icon--green"><FiTrendingUp /></div>
-                                <span>Achievement</span>
-                                {plan.hasAchievement && ach && (
-                                    <span className="med-modal-section-meta-inline" style={{ marginLeft: 'auto', fontSize: '0.75rem', color: '#94A3B8' }}>
-                                        <FiClock /> Submitted {new Date(ach.submittedAt).toLocaleDateString()}
+                        {/* Overall progress bar — only when achievement exists & structured */}
+                        {ach && ach.status !== 'DRAFT' && achOverall !== null && (
+                            <div className="dmod-op-bar">
+                                <div className="dmod-op-row">
+                                    <span className="dmod-op-lbl">Overall progress</span>
+                                    <span className="dmod-op-val">
+                                        {achCompleted}/{effectivePlanAch.length} plans done
+                                        <span> · {achOverall}%</span>
                                     </span>
-                                )}
-                            </div>
-                            <div className="med-modal-section-body">
-                                {plan.hasAchievement && ach
-                                    ? <p className="med-modal-text">{ach.achievementDetails || '—'}</p>
-                                    : <div className="med-modal-not-submitted"><FiClock /> Achievement not yet submitted</div>
-                                }
-                            </div>
-                        </div>
-
-                        <div className="med-modal-section med-modal-section--last">
-                            <div className="med-modal-section-hd">
-                                <div className="med-modal-section-icon med-modal-section-icon--orange"><FiMessageSquare /></div>
-                                <span>RA Evaluation</span>
-                            </div>
-                            <div className="med-modal-section-body">
-                                {isEval ? (
-                                    <>
-                                        <div className="med-eval-score-block">
-                                            <div className="med-eval-score-circle" style={{ borderColor: getScoreColor(ev.score), color: getScoreColor(ev.score) }}>
-                                                <span className="med-eval-score-num">{ev.score}</span>
-                                                <span className="med-eval-score-denom">/10</span>
-                                            </div>
-                                            <div className="med-eval-score-right">
-                                                <div className="med-eval-label-row">
-                                                    <span className="med-eval-label-chip" style={{ background: `${getScoreColor(ev.score)}18`, color: getScoreColor(ev.score) }}>
-                                                        {getScoreLabel(ev.score)}
-                                                    </span>
-                                                    <span className="med-eval-pct">{ev.score * 10}% of max</span>
-                                                </div>
-                                                <div className="med-eval-bar-track">
-                                                    <div className="med-eval-bar-fill" style={{ width: `${ev.score * 10}%`, background: getScoreColor(ev.score) }} />
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className="med-eval-remarks-wrap">
-                                            <div className="med-eval-remarks-label"><FiMessageSquare /> Remarks</div>
-                                            {ev.remarks
-                                                ? <p className="med-eval-remarks-text">{ev.remarks}</p>
-                                                : <p className="med-modal-empty-text" style={{ margin: 0 }}>No remarks provided.</p>
-                                            }
-                                        </div>
-                                    </>
-                                ) : (
-                                    <div className="med-modal-not-submitted"><FiClock /> This month has not been evaluated yet by RA.</div>
-                                )}
-                            </div>
-                        </div>
-
-                        {isRejected && plan.mdRemarks && (
-                            <div className="med-modal-section med-modal-section--danger med-modal-section--last">
-                                <div className="med-modal-section-hd">
-                                    <div className="med-modal-section-icon med-modal-section-icon--danger"><FiAlertCircle /></div>
-                                    <span>MD Rejection Remarks</span>
                                 </div>
-                                <div className="med-modal-section-body">
-                                    <p className="med-modal-text med-modal-text--danger">{plan.mdRemarks}</p>
+                                <div className="dmod-pt">
+                                    <div className="dmod-pf" style={{ width: `${achOverall}%` }} />
+                                </div>
+                                <div className="dmod-ts-row">
+                                    <span className="dmod-ts-item">
+                                        <FiFileText size={10} />
+                                        Plan submitted {formatDateShort(plan.submittedAt)}
+                                    </span>
+                                    {ach?.submittedAt && (
+                                        <span className="dmod-ts-item">
+                                            <FiTrendingUp size={10} />
+                                            Achievement submitted {formatDateShort(ach.submittedAt)}
+                                        </span>
+                                    )}
                                 </div>
                             </div>
                         )}
+
+                        {/* Plans & Achievements section */}
+                        <div>
+                            <div className="dmod-sec-lbl">
+                                <FiFileText size={13} />
+                                {ach && ach.status !== 'DRAFT' ? 'Plans & achievements' : 'Plan details'}
+                                <span className="dmod-sec-count-pill">{planItemsList.length} plan{planItemsList.length !== 1 ? 's' : ''}</span>
+                            </div>
+
+                            {/* Case A — no achievement yet: simple plan list */}
+                            {(!ach || ach.status === 'DRAFT') && (
+                                <div className="dmod-plan-list">
+                                    {planItemsList.map((p, i) => (
+                                        <div key={i} className="dmod-plan-simple-item">
+                                            <div className="dmod-plan-simple-wrap">
+                                                <span className="dmod-plan-idx-pill">{i + 1}</span>
+                                                <div className="dmod-pinfo">
+                                                    <div className="dmod-pname-row">
+                                                        <span className="dmod-pname">Plan {i + 1}</span>
+                                                        <span className="dmod-pstatus dmod-pstatus--idle">Pending</span>
+                                                    </div>
+                                                    <div className="dmod-pdesc">{p}</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* Case B — achievement submitted with structured per-plan data */}
+                            {ach && ach.status !== 'DRAFT' && hasStructuredAch && (
+                                <div className="dmod-plan-list">
+                                    {planItemsList.map((planText, i) => {
+                                        const pa = effectivePlanAch[i] || { achievementDetails: '', progress: 0 };
+                                        const p = Math.min(100, pa.progress || 0);
+                                        const tk = getProgressTokens(p);
+                                        const pStatusLabel = p === 100 ? 'Completed' : p > 0 ? 'In progress' : 'Not started';
+                                        const pStatusCls = p === 100 ? 'dmod-pstatus--done' : p > 0 ? 'dmod-pstatus--partial' : 'dmod-pstatus--none';
+                                        return (
+                                            <div key={i} className="dmod-pcard-wrap">
+                                                <div className="dmod-pcard" style={{ borderLeftColor: tk.borderColor }}>
+                                                    <div className="dmod-ptop">
+                                                        <div className="dmod-pring-wrap">
+                                                            <span className="dmod-plan-idx-pill" style={{ background: tk.badgeBg, color: tk.badgeText }}>{i + 1}</span>
+                                                            <CircularProgressMod progress={p} size={44} />
+                                                        </div>
+                                                        <div className="dmod-pinfo">
+                                                            <div className="dmod-pname-row">
+                                                                <span className="dmod-pname">Plan {i + 1}</span>
+                                                                <span className={`dmod-pstatus ${pStatusCls}`}>{pStatusLabel}</span>
+                                                            </div>
+                                                            <div className="dmod-pdesc">{planText}</div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="dmod-prog-section">
+                                                        <div className="dmod-prog-labels">
+                                                            <span className="dmod-prog-title">Progress</span>
+                                                            <span className={`dmod-prog-pct ${tk.pctClass}`}>
+                                                                {p}% {p === 100 ? '— Done' : p > 0 ? '— In progress' : '— Not started'}
+                                                            </span>
+                                                        </div>
+                                                        <div className="dmod-prog-bar">
+                                                            <div className="dmod-pb-fill" style={{ width: `${p}%`, background: tk.barColor }} />
+                                                        </div>
+                                                        <div className="dmod-prog-markers">
+                                                            {[0, 25, 50, 75].map((m, mi) => (
+                                                                <span key={m} style={p >= m && mi <= tk.markerActive ? { color: tk.barColor, fontWeight: 600 } : {}}>{m}%</span>
+                                                            ))}
+                                                            <span style={p === 100 ? { color: tk.barColor, fontWeight: 600 } : {}}>Done</span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="dmod-ach-section">
+                                                        <div className="dmod-ach-lbl">
+                                                            <FiTrendingUp size={11} /> Achievement details
+                                                        </div>
+                                                        {pa.achievementDetails
+                                                            ? <div className="dmod-ach-text">{pa.achievementDetails}</div>
+                                                            : <div className="dmod-ach-empty">No details provided</div>
+                                                        }
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+
+                            {/* Case C — achievement submitted but fully legacy text only */}
+                            {ach && ach.status !== 'DRAFT' && !hasStructuredAch && ach.achievementDetails && (
+                                <div className="dmod-legacy-ach">
+                                    <div className="dmod-ach-lbl"><FiTrendingUp size={11} /> Achievement</div>
+                                    <div className="dmod-ach-text">{ach.achievementDetails}</div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* No achievement yet block */}
+                        {(!ach || ach.status === 'DRAFT') && (
+                            <div className="dmod-no-ach-block">
+                                <div className="dmod-no-ach-icon"><FiTrendingUp size={16} /></div>
+                                <div className="dmod-no-ach-text">
+                                    {ach?.status === 'DRAFT'
+                                        ? 'Achievement draft saved — not yet submitted.'
+                                        : 'Achievement not submitted yet.'}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Additional achievements */}
+                        {additionalItems.length > 0 && (
+                            <div className="dmod-extras-card">
+                                <div className="dmod-extras-hdr">
+                                    <div className="dmod-extras-title"><FiStar size={13} /> Additional achievements</div>
+                                    <span className="dmod-extras-badge">{additionalItems.length} extra{additionalItems.length !== 1 ? 's' : ''}</span>
+                                </div>
+                                {additionalItems.map((item, i) => {
+                                    const text = typeof item === 'string' ? item : (item.text || '');
+                                    const iprog = typeof item === 'string' ? 100 : Math.min(100, item.progress || 100);
+                                    const tk = getProgressTokens(iprog);
+                                    return (
+                                        <div key={i} className="dmod-extra-item">
+                                            <div className="dmod-extra-num">{i + 1}</div>
+                                            <div className="dmod-extra-content">
+                                                <div className="dmod-extra-text">{text}</div>
+                                                <div className="dmod-extra-prog-row">
+                                                    <div className="dmod-extra-bar">
+                                                        <div className="dmod-extra-bar-fill" style={{ width: `${iprog}%`, background: tk.barColor }} />
+                                                    </div>
+                                                    <span className="dmod-extra-pct-lbl" style={{ color: tk.badgeText }}>{iprog}% — {tk.label}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        {/* RA evaluation section */}
+                        <div className="dmod-ra-box">
+                            <div className="dmod-ra-icon"><FiMessageSquare size={13} color="#185FA5" /></div>
+                            <div className="dmod-ra-info">
+                                <div className="dmod-ra-lbl">RA evaluation</div>
+                                {isEval ? (
+                                    <div>
+                                        <div className="dmod-ra-done">{ev.remarks || 'Evaluation completed.'}</div>
+                                        {ev.score != null && (
+                                            <div className="dmod-ra-score">Score: <strong>{ev.score}/10</strong></div>
+                                        )}
+                                        {ev.evaluatedAt && (
+                                            <div className="dmod-ra-date">
+                                                <FiClock size={10} /> Evaluated {formatDateShort(ev.evaluatedAt)}
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div className="dmod-ra-pending">Awaiting evaluation</div>
+                                )}
+                            </div>
+                            {isEval && ev.score != null && (
+                                <div className="dmod-score-chip">{ev.score}/10</div>
+                            )}
+                        </div>
+
+                        {/* MD rejection remarks */}
+                        {isRejected && plan.mdRemarks && (
+                            <div className="red-modal-section red-modal-section--danger" style={{ marginTop: 12 }}>
+                                <div className="red-modal-section-hd">
+                                    <div className="red-modal-section-icon red-modal-section-icon--danger"><FiAlertCircle /></div>
+                                    <span>MD Rejection Remarks</span>
+                                </div>
+                                <div className="red-modal-section-body">
+                                    <p className="red-modal-text red-modal-text--danger">{plan.mdRemarks}</p>
+                                </div>
+                            </div>
+                        )}
+
                     </div>
 
-                    <div className="med-modal-footer">
-                        <span className="med-modal-footer-hint"><FiEye /> Detailed view of {formatMonth(plan.month)}</span>
-                        <button className="med-modal-footer-close" onClick={() => setSelectedMonthDetail(null)}>Close</button>
+                    {/* ── FOOTER ── */}
+                    <div className="dmod-footer">
+                        <span className="dmod-ftr-state">
+                            {isEval ? 'Evaluated' : plan.hasAchievement ? 'Awaiting RA review' : 'Achievement pending'}
+                        </span>
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                            {canReject && (
+                                <button
+                                    onClick={() => { setSelectedMonthDetail(null); setRejectTarget(plan); setRejectRemarks(''); }}
+                                    style={{
+                                        color: '#DC2626', background: 'transparent',
+                                        padding: '6px 14px', borderRadius: '6px', fontSize: '13px',
+                                        fontWeight: '600', display: 'flex', alignItems: 'center', cursor: 'pointer', border: 'none'
+                                    }}
+                                >
+                                    Reject
+                                </button>
+                            )}
+                            <button className="dmod-btn-close" onClick={() => setSelectedMonthDetail(null)}>Close</button>
+                        </div>
                     </div>
+
                 </div>
             </div>
         );

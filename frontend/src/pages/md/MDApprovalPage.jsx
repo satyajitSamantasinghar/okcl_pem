@@ -7,7 +7,7 @@ import {
     FiFileText, FiPenTool, FiPlus, FiStar, FiTarget, FiXCircle,
     FiRefreshCw, FiAlertTriangle
 } from 'react-icons/fi';
-import './MDApprovalPage.css';
+import '../ra/RAYearlyAppraisalPage.css';
 
 /* ══════════════════════════════════════════════════════════
    CONSTANTS & HELPERS
@@ -30,7 +30,7 @@ const getStatusInfo = (status) => {
         SUBMITTED: { label: 'Submitted', cls: 'pending', icon: <FiClock /> },
         APPROVED: { label: 'MD Approved', cls: 'approved', icon: <FiCheckCircle /> },
         REJECTED: { label: 'MD Rejected', cls: 'rejected', icon: <FiXCircle /> },
-        EDITED: { label: 'Edited', cls: 'edited', icon: <FiEdit3 /> },
+        EDITED: { label: 'Edited Before Approval', cls: 'edited', icon: <FiEdit3 /> },
         EDITED_AFTER_APPROVAL: { label: 'Edited After Approval', cls: 'edited', icon: <FiEdit3 /> },
         RA_EVALUATED: { label: 'RA Evaluated', cls: 'ra-done', icon: <FiCheckCircle /> },
         HRD_EVALUATED: { label: 'HRD Evaluated (Ready)', cls: 'hrd-done', icon: <FiCheckCircle /> },
@@ -374,162 +374,194 @@ export default function MDApprovalPage() {
     const canEvaluateReport = !isPlan && item.status === 'HRD_EVALUATED';
 
     return (
-        <div className="yap-page fade-in">
-            {/* CTA Toolbar */}
-            <div>
-                <button className="yap-back-btn" onClick={() => { setSelectedView(null); resetContext(); }}>
-                    <FiArrowLeft /> Back to List
-                </button>
-            </div>
+        <div className="yap-detail-page fade-in">
 
-            {/* Hero Header */}
-            <div className="yap-hero">
-                <div className="yap-hero-left">
-                    <div className="yap-hero-avatar">{getInitials(emp?.name)}</div>
-                    <div className="yap-hero-info">
-                        <div className="yap-hero-name">{emp?.name}</div>
-                        <div className="yap-hero-meta">
-                            <span><FiStar style={{ color: 'var(--warning)' }} /> {emp?.employeeCode}</span>
-                            <span><FiBriefcase /> {emp?.department || 'N/A'}</span>
-                            <span><FiCalendar /> FY {year}</span>
-                        </div>
-                        <div className="yap-hero-badges" style={{ marginTop: '6px' }}>
-                            <StatusBadge status={item.status} />
-                            {!isPlan && item.grandTotal != null && (
-                                <span className="yap-hero-grand-score">
-                                    Grand Total: {item.grandTotal}/100
-                                </span>
-                            )}
+            {/* ══ FIXED HEADER CHROME ══ */}
+            <div className="yap-detail-header">
+                {/* Back */}
+                <button className="yap-back-btn" onClick={() => { setSelectedView(null); resetContext(); }}>
+                    <FiArrowLeft size={14} /> Back to List
+                </button>
+
+                {/* Workflow Stepper */}
+                <WorkflowStepper status={item.status} isReport={!isPlan} />
+
+                {/* Hero Header */}
+                <div className="yap-hero">
+                    <div className="yap-hero-left">
+                        <div className="yap-hero-avatar">{getInitials(emp?.name)}</div>
+                        <div className="yap-hero-info">
+                            <div className="yap-hero-name">{emp?.name}</div>
+                            <div className="yap-hero-meta">
+                                <span><FiUsers size={12} /> {emp?.employeeCode}</span>
+                                <span><FiBriefcase size={12} /> {emp?.department || 'N/A'}</span>
+                                <span><FiCalendar size={12} /> FY {year}</span>
+                            </div>
+                            <div className="yap-hero-badges">
+                                <StatusBadge status={item.status} />
+                                {!isPlan && item.grandTotal != null && (
+                                    <span className="yap-hero-grand-score">
+                                        <FiAward size={12} /> Grand Total: {item.grandTotal}/100
+                                    </span>
+                                )}
+                            </div>
                         </div>
                     </div>
+                    <div className="yap-hero-right">
+                        {isPlan ? (
+                            <div className="yap-hero-meta-stack">
+                                <div className="yap-hero-meta-item">
+                                    <span>Submitted</span>
+                                    <strong>{formatDate(item.submittedAt)}</strong>
+                                </div>
+                                <div className="yap-hero-meta-item">
+                                    <span>Version</span>
+                                    <strong>v{item.version || 1}</strong>
+                                </div>
+                            </div>
+                        ) : (
+                            isCompleted ? (
+                                <span className="yap-locked-badge">
+                                    <FiCheckCircle size={13} /> Finalized — Read Only
+                                </span>
+                            ) : canEvaluateReport ? (
+                                <button className="yap-cta-btn" onClick={() => { setIsEvaluating(true); setMdScore(item.mdFinalScore || ''); setMdRemarks(item.mdRemarks || ''); }}>
+                                    <FiAward size={14} /> Evaluate Report
+                                </button>
+                            ) : null
+                        )}
+                    </div>
                 </div>
+
+                {/* MD Rejection Alert */}
+                {item.status === 'REJECTED' && (
+                    <div className="yap-rejection-alert">
+                        <div className="yap-rejection-header">
+                            <FiAlertTriangle className="yap-rejection-icon" />
+                            <div>
+                                <div className="yap-rejection-title">Plan Rejected by MD</div>
+                                <div className="yap-rejection-sub">The employee needs to revise and resubmit</div>
+                            </div>
+                        </div>
+                        {item.mdRemarks && (
+                            <div className="yap-rejection-body">
+                                <span className="yap-rejection-label">MD's Reason:</span>
+                                <p className="yap-rejection-text">"{item.mdRemarks}"</p>
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
 
-            {/* Stepper */}
-            <WorkflowStepper status={item.status} isReport={!isPlan} />
-
-            {/* Main Detail Grid */}
-            <div className="yap-detail-grid">
-                {/* LEFT CONTENT */}
+            {/* ══ SCROLLABLE SPLIT-PANE BODY ══ */}
+            <div className="yap-detail-body">
+                {/* LEFT — independently scrollable */}
                 <div className="yap-detail-left">
-                    {/* Rejection Alert */}
-                    {item.status === 'REJECTED' && (
-                        <div className="yap-rejection-alert">
-                            <div className="yap-rejection-header">
-                                <FiAlertTriangle className="yap-rejection-icon" />
-                                <div>
-                                    <div className="yap-rejection-title">Plan Rejected by MD</div>
-                                    <div className="yap-rejection-sub">The employee needs to revise and resubmit</div>
-                                </div>
-                            </div>
-                            {item.mdRemarks && (
-                                <div className="yap-rejection-body">
-                                    <span className="yap-rejection-label">MD's Reason:</span>
-                                    <p className="yap-rejection-text">"{item.mdRemarks}"</p>
-                                </div>
-                            )}
-                        </div>
-                    )}
-
                     {isPlan ? (
                         <>
-                            <div className="yap-block">
-                                <div className="yap-block-header">
-                                    <div className="yap-block-icon yap-block-bg-primary"><FiTarget /></div>
+                            {/* Plan Objectives */}
+                            <div className="yap-section">
+                                <div className="yap-section-hd yap-section-hd--blue">
+                                    <div className="yap-section-hd-icon"><FiTarget /></div>
                                     <div>
-                                        <h3 className="yap-block-title">Yearly Plan Objectives</h3>
-                                        <p className="yap-block-desc">Stated goals and objectives for the financial year</p>
+                                        <div className="yap-section-hd-title">Yearly Plan Objectives</div>
+                                        <div className="yap-section-hd-sub">Stated goals and objectives for the financial year</div>
                                     </div>
                                 </div>
-                                <div className="yap-block-body">
-                                    <div className="yap-text-content">{item.planAndObjectives || 'No objectives provided.'}</div>
+                                <div className="yap-section-body">
+                                    {item.planAndObjectives
+                                        ? <pre className="yap-pre">{item.planAndObjectives}</pre>
+                                        : <span className="yap-muted">No objectives provided.</span>}
                                 </div>
                             </div>
-                            
+
+                            {/* Edit History */}
                             {item.editHistory?.length > 0 && (
-                                <div className="yap-block">
-                                    <div className="yap-block-header" style={{ cursor: 'pointer' }} onClick={() => setShowHistory(!showHistory)}>
-                                        <div className="yap-block-icon yap-block-bg-secondary"><FiPenTool /></div>
-                                        <div>
-                                            <h3 className="yap-block-title">Edit History (v{item.version})</h3>
-                                            <p className="yap-block-desc">{item.editHistory.length} registered modifications</p>
+                                <div className="yap-section">
+                                    <div
+                                        className="yap-section-hd yap-section-hd--amber"
+                                        style={{ cursor: 'pointer' }}
+                                        onClick={() => setShowHistory(!showHistory)}
+                                    >
+                                        <div className="yap-section-hd-icon"><FiPenTool /></div>
+                                        <div style={{ flex: 1 }}>
+                                            <div className="yap-section-hd-title">Edit History (v{item.version})</div>
+                                            <div className="yap-section-hd-sub">{item.editHistory.length} registered modifications</div>
+                                        </div>
+                                        <div style={{ marginLeft: 'auto', color: 'var(--text-muted)' }}>
+                                            {showHistory ? <FiChevronUp /> : <FiChevronDown />}
                                         </div>
                                     </div>
                                     {showHistory && (
-                                        <div className="yap-block-body">
-                                            <ul className="yap-history-list" style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                                                {item.editHistory.map((edit, idx) => (
-                                                    <li key={idx} style={{ padding: '12px', background: 'var(--bg-muted)', borderRadius: '8px' }}>
-                                                        <strong style={{ fontSize: '0.85rem' }}><FiEdit3 /> Note:</strong> <span style={{ fontSize: '0.85rem' }}>{edit.note}</span><br/>
-                                                        <small style={{ color: 'var(--text-muted)' }}>{new Date(edit.editedAt).toLocaleString()}</small>
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                        </div>
+                                        <ul className="yap-history-list">
+                                            {item.editHistory.map((edit, idx) => (
+                                                <li key={idx} className="yap-history-item">
+                                                    <div className="yap-history-num">{idx + 1}</div>
+                                                    <div>
+                                                        <div className="yap-history-note">{edit.note || 'Plan updated'}</div>
+                                                        <div className="yap-history-date">{formatDate(edit.editedAt)}</div>
+                                                    </div>
+                                                </li>
+                                            ))}
+                                        </ul>
                                     )}
                                 </div>
                             )}
                         </>
                     ) : (
                         <>
-                            <div className="yap-block">
-                                <div className="yap-block-header">
-                                    <div className="yap-block-icon yap-block-bg-primary"><FiBriefcase /></div>
+                            {/* Work KRA */}
+                            <div className="yap-section">
+                                <div className="yap-section-hd yap-section-hd--blue">
+                                    <div className="yap-section-hd-icon"><FiBriefcase /></div>
                                     <div>
-                                        <h3 className="yap-block-title">Works as per KRA</h3>
-                                        <p className="yap-block-desc">Self-assessment against mapped KRA goals</p>
+                                        <div className="yap-section-hd-title">Works as per KRA</div>
+                                        <div className="yap-section-hd-sub">Self-assessment against mapped KRA goals</div>
                                     </div>
                                 </div>
-                                <div className="yap-block-body">
-                                    <div className="yap-text-content">{item.workKRA || 'No data provided.'}</div>
+                                <div className="yap-section-body">
+                                    {item.workKRA
+                                        ? <pre className="yap-pre">{item.workKRA}</pre>
+                                        : <span className="yap-muted">No data provided.</span>}
                                 </div>
                             </div>
 
+                            {/* Additional Assignments */}
                             {item.additionalAssignments && (
-                                <div className="yap-block">
-                                    <div className="yap-block-header">
-                                        <div className="yap-block-icon yap-block-bg-success"><FiPlus /></div>
+                                <div className="yap-section">
+                                    <div className="yap-section-hd yap-section-hd--teal">
+                                        <div className="yap-section-hd-icon"><FiPlus /></div>
                                         <div>
-                                            <h3 className="yap-block-title">Additional Assignments</h3>
-                                            <p className="yap-block-desc">Extracurricular work beyond KRA</p>
+                                            <div className="yap-section-hd-title">Additional Assignments</div>
+                                            <div className="yap-section-hd-sub">Extracurricular work beyond KRA</div>
                                         </div>
                                     </div>
-                                    <div className="yap-block-body">
-                                        <div className="yap-text-content">{item.additionalAssignments}</div>
+                                    <div className="yap-section-body">
+                                        <pre className="yap-pre">{item.additionalAssignments}</pre>
                                     </div>
                                 </div>
                             )}
-                            
+
                             {/* Evaluator Remarks */}
-                            {(item.raRemarks || item.hrdRemarks || item.mdRemarks) && (
-                                <div className="yap-block">
-                                    <div className="yap-block-header">
-                                        <div className="yap-block-icon yap-block-bg-accent"><FiFileText /></div>
+                            {(item.raRemarks || item.hrdRemarks || (item.mdRemarks && !isPlan)) && (
+                                <div className="yap-section">
+                                    <div className="yap-section-hd yap-section-hd--purple">
+                                        <div className="yap-section-hd-icon"><FiFileText /></div>
                                         <div>
-                                            <h3 className="yap-block-title">Evaluator Remarks</h3>
-                                            <p className="yap-block-desc">Notes left by authorities</p>
+                                            <div className="yap-section-hd-title">Evaluator Remarks</div>
+                                            <div className="yap-section-hd-sub">Notes left by authorities</div>
                                         </div>
                                     </div>
-                                    <div className="yap-block-body" style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '16px' }}>
-                                         {item.raRemarks && (
-                                             <div style={{ padding: '12px', background: 'rgba(255, 122, 24, 0.05)', borderRadius: '8px', borderLeft: '3px solid var(--primary)' }}>
-                                                <strong style={{ fontSize: '0.8rem', color: 'var(--primary)', textTransform: 'uppercase' }}>RA Remarks:</strong> 
-                                                <p style={{ margin: '4px 0 0', fontSize: '0.9rem' }}>{item.raRemarks}</p>
-                                            </div>
-                                         )}
-                                         {item.hrdRemarks && (
-                                             <div style={{ padding: '12px', background: 'rgba(13, 148, 136, 0.05)', borderRadius: '8px', borderLeft: '3px solid #0d9488' }}>
-                                                <strong style={{ fontSize: '0.8rem', color: '#0d9488', textTransform: 'uppercase' }}>HRD Remarks:</strong> 
-                                                <p style={{ margin: '4px 0 0', fontSize: '0.9rem' }}>{item.hrdRemarks}</p>
-                                            </div>
-                                         )}
-                                         {item.mdRemarks && !isPlan && (
-                                             <div style={{ padding: '12px', background: 'rgba(99, 102, 241, 0.05)', borderRadius: '8px', borderLeft: '3px solid #6366f1' }}>
-                                                <strong style={{ fontSize: '0.8rem', color: '#6366f1', textTransform: 'uppercase' }}>MD Remarks:</strong> 
-                                                <p style={{ margin: '4px 0 0', fontSize: '0.9rem' }}>{item.mdRemarks}</p>
-                                            </div>
-                                         )}
-                                    </div>
+                                    {[
+                                        { role: 'RA Remarks', cls: 'ra', text: item.raRemarks },
+                                        { role: 'HRD Remarks', cls: 'hrd', text: item.hrdRemarks },
+                                        { role: 'MD Remarks', cls: 'md', text: !isPlan ? item.mdRemarks : null },
+                                    ].filter(r => r.text).map(({ role, cls, text }) => (
+                                        <div key={cls} className={`yap-remark-item yap-remark-item--${cls}`}>
+                                            <div className="yap-remark-item-hd">{role}</div>
+                                            <div className="yap-remark-item-body">{text}</div>
+                                        </div>
+                                    ))}
                                 </div>
                             )}
                         </>

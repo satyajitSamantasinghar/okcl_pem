@@ -1,0 +1,1061 @@
+/* ============================================================
+   RA QUARTERLY DETAIL PAGE — RAQuarterlyDetailPage.css
+
+   KEY FIXES IN THIS VERSION:
+   1. Timeline line now spans full height between months
+      → .qd-tl-row uses align-items: stretch so spine
+        matches body height, letting flex:1 on .qd-tl-line
+        fill all remaining space between dot and next month.
+   2. Full 3-level background hierarchy for visual depth.
+   3. High-contrast text, badges, and borders.
+   4. Professional enterprise HR dashboard appearance.
+
+   SCROLL SETUP:
+   height: calc(100vh - var(--app-navbar-height, 65px))
+   If your navbar differs, add to index.css:
+       :root { --app-navbar-height: 64px; }
+============================================================ */
+
+/* ── Page wrapper ── */
+.qd-page {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - var(--app-navbar-height, 65px));
+    overflow: hidden;
+    background: #F8FAFC;
+    /* Level 1 — page background */
+}
+
+/* ============================================================
+   STICKY HEADER
+============================================================ */
+.qd-sticky-header {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid #E2E8F0;
+    background: #FFFFFF;
+    z-index: 10;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.qd-back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 7px 14px;
+    border: 1.5px solid #CBD5E1;
+    border-radius: 8px;
+    background: #FFFFFF;
+    color: #475569;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: all 0.15s ease;
+}
+
+.qd-back-btn:hover {
+    border-color: #3B82F6;
+    color: #2563EB;
+    background: #EFF6FF;
+}
+
+.qd-header-divider {
+    width: 1px;
+    height: 28px;
+    background: #E2E8F0;
+    flex-shrink: 0;
+}
+
+.qd-header-avatar {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #F97316, #E85523);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.875rem;
+    font-weight: 700;
+    flex-shrink: 0;
+    box-shadow: 0 2px 4px rgba(232, 85, 35, 0.25);
+}
+
+.qd-header-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.qd-header-name {
+    font-size: 0.9375rem;
+    font-weight: 700;
+    color: #1E293B;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.qd-header-meta {
+    font-size: 0.6875rem;
+    color: #64748B;
+    white-space: nowrap;
+}
+
+.qd-quarter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 11px;
+    border-radius: 8px;
+    border: 1.5px solid #BFDBFE;
+    background: #EFF6FF;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    color: #1D4ED8;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.qd-status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 100px;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.qd-pill-green {
+    background: #DCFCE7;
+    color: #166534;
+    border: 1px solid #86EFAC;
+}
+
+.qd-pill-amber {
+    background: #FEF3C7;
+    color: #92400E;
+    border: 1px solid #FCD34D;
+}
+
+/* ============================================================
+   BODY SPLIT — THE SCROLL ARCHITECTURE
+============================================================ */
+.qd-body {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    overflow: hidden;
+}
+
+.qd-left {
+    overflow-y: auto;
+    height: 100%;
+    padding: 24px 24px 48px 0;
+    background: #F8FAFC;
+    scrollbar-width: thin;
+    scrollbar-color: #CBD5E1 transparent;
+}
+
+.qd-left::-webkit-scrollbar {
+    width: 4px;
+}
+
+.qd-left::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.qd-left::-webkit-scrollbar-thumb {
+    background: #CBD5E1;
+    border-radius: 2px;
+}
+
+.qd-right {
+    overflow-y: auto;
+    height: 100%;
+    padding: 24px 0 24px 20px;
+    border-left: 1px solid #E2E8F0;
+    background: #F1F5F9;
+    /* Level 2 — sidebar background */
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    scrollbar-width: thin;
+    scrollbar-color: #CBD5E1 transparent;
+}
+
+.qd-right::-webkit-scrollbar {
+    width: 4px;
+}
+
+.qd-right::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.qd-right::-webkit-scrollbar-thumb {
+    background: #CBD5E1;
+    border-radius: 2px;
+}
+
+/* ============================================================
+   TIMELINE — THE LINE FIX
+   ─────────────────────────────────────────────────────────────
+   PROBLEM: Previously .qd-tl-row had align-items:flex-start,
+   so the spine was only 52px tall (the dot height). The line
+   (flex:1) had nothing to grow into beyond min-height.
+
+   FIX: align-items:stretch makes the spine as tall as the body.
+   Now flex:1 on .qd-tl-line fills the remaining spine height
+   after the 52px dot, spanning the full gap to the next month.
+============================================================ */
+.qd-timeline {
+    display: flex;
+    flex-direction: column;
+}
+
+.qd-tl-row {
+    display: flex;
+    gap: 16px;
+    align-items: stretch;
+    /* ← THE KEY FIX: spine = body height */
+}
+
+.qd-tl-spine {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex-shrink: 0;
+    width: 52px;
+}
+
+.qd-tl-dot {
+    width: 52px;
+    height: 52px;
+    border-radius: 13px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    flex-shrink: 0;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.10);
+    border: 1.5px solid rgba(0, 0, 0, 0.06);
+}
+
+.qd-tl-dot-mon {
+    font-size: 8px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
+    line-height: 1;
+}
+
+.qd-tl-dot-yr {
+    font-size: 18px;
+    font-weight: 900;
+    line-height: 1;
+}
+
+/* The line — now ALWAYS visible thanks to align-items:stretch */
+.qd-tl-line {
+    width: 3px;
+    flex: 1;
+    /* fills from below dot to bottom of row */
+    min-height: 0;
+    /* allow flex to shrink if needed */
+    border-radius: 3px;
+    margin: 6px 0 0 0;
+    /* 6px gap from dot bottom */
+    opacity: 0.65;
+    /* background colour set inline per-month from MONTH_PALETTE.line */
+}
+
+/* Month body — fills remaining row width */
+.qd-tl-body {
+    flex: 1;
+    min-width: 0;
+    padding-bottom: 28px;
+}
+
+/* Month header — min-height matches dot so they visually align */
+.qd-tl-month-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-height: 52px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+}
+
+.qd-tl-month-name {
+    font-size: 1.125rem;
+    font-weight: 800;
+    color: #0F172A;
+    letter-spacing: -0.01em;
+}
+
+.qd-tl-month-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.qd-tl-score-pill {
+    padding: 5px 13px;
+    border-radius: 100px;
+    font-size: 13px;
+    font-weight: 800;
+    /* border set inline */
+}
+
+.qd-tl-eval-date {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: #64748B;
+    font-weight: 500;
+}
+
+/* ── RA Evaluation Remark — visually important, blue left accent ── */
+.qd-tl-ra-remark {
+    background: #EFF6FF;
+    border: 1px solid #BFDBFE;
+    border-left: 4px solid #3B82F6;
+    /* blue accent — important! */
+    border-radius: 0 10px 10px 0;
+    padding: 12px 15px;
+    margin-bottom: 13px;
+}
+
+.qd-tl-remark-label {
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: #2563EB;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.qd-tl-remark-text {
+    font-size: 13.5px;
+    color: #1E3A5F;
+    font-style: italic;
+    line-height: 1.6;
+    font-weight: 500;
+}
+
+/* Timestamps */
+.qd-tl-timestamps {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-bottom: 13px;
+}
+
+.qd-ts-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+}
+
+.qd-ts-plan {
+    color: #94A3B8;
+    font-weight: 500;
+}
+
+.qd-ts-ach {
+    color: #475569;
+    font-weight: 700;
+}
+
+/* Plans section heading — orange accent */
+.qd-tl-plans-label {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 11.5px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: #EA580C;
+    border-left: 3px solid #EA580C;
+    padding-left: 9px;
+    margin-bottom: 13px;
+}
+
+.qd-plans-count {
+    background: #FFEDD5;
+    border: 1px solid #FDBA74;
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-size: 10px;
+    color: #9A3412;
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: 700;
+}
+
+.qd-plan-cards-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+/* ============================================================
+   PLAN CARD
+============================================================ */
+.qd-plan-card {
+    border: 1px solid #E2E8F0;
+    border-left: 4px solid #94A3B8;
+    /* overridden inline */
+    border-radius: 12px;
+    overflow: hidden;
+    background: #FFFFFF;
+    /* Level 3 — pure white cards */
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.qd-plan-card:hover {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.10);
+    transform: translateY(-1px);
+}
+
+.qd-plan-top {
+    display: flex;
+    align-items: flex-start;
+    gap: 13px;
+    padding: 14px 16px 12px;
+    background: #FFFFFF;
+}
+
+.qd-plan-ring-wrap {
+    flex-shrink: 0;
+}
+
+.qd-plan-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.qd-plan-name-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 5px;
+}
+
+/* Numbered chip — clean, professional */
+.qd-plan-num-chip {
+    width: 24px;
+    height: 24px;
+    min-width: 24px;
+    border-radius: 7px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 800;
+    flex-shrink: 0;
+}
+
+.qd-plan-name {
+    font-size: 12px;
+    font-weight: 700;
+    color: #475569;
+    white-space: nowrap;
+}
+
+.qd-plan-status-badge {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 9px;
+    border-radius: 100px;
+    flex-shrink: 0;
+    white-space: nowrap;
+    margin-left: auto;
+}
+
+.qd-plan-desc {
+    font-size: 14px;
+    color: #1E293B;
+    line-height: 1.5;
+    font-weight: 500;
+}
+
+/* Progress section */
+.qd-plan-prog-section {
+    padding: 10px 16px 11px;
+    border-top: 1px solid #F1F5F9;
+    background: #FAFAFA;
+}
+
+.qd-plan-prog-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 7px;
+}
+
+.qd-plan-prog-lbl {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: #64748B;
+    font-weight: 700;
+}
+
+.qd-plan-prog-pct {
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.qd-bar-track {
+    width: 100%;
+    background: #E5E7EB;
+    border-radius: 100px;
+    overflow: hidden;
+}
+
+.qd-plan-markers {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    color: #94A3B8;
+    margin-top: 5px;
+    font-weight: 500;
+}
+
+/* Achievement section */
+.qd-plan-ach-section {
+    padding: 10px 16px 14px;
+    border-top: 1px solid #F1F5F9;
+    background: #FFFFFF;
+}
+
+.qd-plan-ach-lbl {
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: #64748B;
+    margin-bottom: 7px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.qd-plan-ach-text {
+    font-size: 13.5px;
+    color: #1E293B;
+    background: #F8FAFC;
+    border: 1px solid #E2E8F0;
+    border-radius: 8px;
+    padding: 10px 13px;
+    line-height: 1.6;
+    font-weight: 500;
+}
+
+.qd-plan-ach-empty,
+.qd-plan-ach-no-submission {
+    font-size: 12px;
+    color: #94A3B8;
+    font-style: italic;
+    background: #F8FAFC;
+    border: 1px dashed #CBD5E1;
+    border-radius: 8px;
+    padding: 10px 13px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 500;
+}
+
+/* Additional achievements */
+.qd-extras-card {
+    border: 1px solid #FDE68A;
+    border-radius: 12px;
+    overflow: hidden;
+    margin-top: 12px;
+}
+
+.qd-extras-header {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 10px 14px;
+    background: #FFFBEB;
+    border-bottom: 1px solid #FDE68A;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #92400E;
+}
+
+.qd-extras-count {
+    margin-left: auto;
+    background: #FEF3C7;
+    color: #92400E;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 6px;
+    border: 1px solid #FCD34D;
+}
+
+.qd-extras-body {
+    padding: 10px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.qd-extra-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+}
+
+.qd-extra-num {
+    width: 22px;
+    height: 22px;
+    min-width: 22px;
+    border-radius: 50%;
+    background: #FEF3C7;
+    color: #92400E;
+    font-size: 10px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 1px;
+    border: 1px solid #FCD34D;
+}
+
+.qd-extra-text {
+    font-size: 13px;
+    color: #374151;
+    line-height: 1.4;
+    font-weight: 500;
+}
+
+/* Legacy fallback */
+.qd-legacy-ach-box {
+    background: #F8FAFC;
+    border: 1px solid #E2E8F0;
+    border-radius: 10px;
+    padding: 11px 14px;
+}
+
+.qd-legacy-ach-badge {
+    display: inline-block;
+    background: #E2E8F0;
+    color: #64748B;
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    padding: 2px 8px;
+    border-radius: 5px;
+    margin-bottom: 7px;
+}
+
+.qd-legacy-ach-text {
+    font-size: 13px;
+    color: #374151;
+    line-height: 1.5;
+    font-weight: 500;
+}
+
+.qd-no-plan-note {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #94A3B8;
+    font-style: italic;
+    padding: 8px 0;
+}
+
+/* ============================================================
+   RIGHT PANEL
+============================================================ */
+
+/* Score card */
+.qd-score-card {
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 14px;
+    overflow: hidden;
+    flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07);
+}
+
+.qd-score-top {
+    padding: 22px 18px 18px;
+    /* border-bottom set inline with score colour */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    background: #FAFAFA;
+}
+
+.qd-score-big {
+    font-size: 44px;
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: -0.02em;
+}
+
+.qd-score-denom {
+    font-size: 20px;
+    font-weight: 500;
+    color: #94A3B8;
+    margin-left: 2px;
+}
+
+.qd-score-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
+    color: #64748B;
+    font-weight: 700;
+    margin-top: 2px;
+}
+
+.qd-score-quarter-chip {
+    padding: 5px 13px;
+    border-radius: 100px;
+    font-size: 11px;
+    font-weight: 800;
+    margin-top: 7px;
+    /* bg, color, border set inline */
+}
+
+/* Monthly bars */
+.qd-monthly-bars {
+    padding: 16px 18px 18px;
+    background: #FFFFFF;
+}
+
+.qd-monthly-bars-label {
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: #64748B;
+    margin-bottom: 13px;
+}
+
+.qd-mb-row {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin-bottom: 12px;
+}
+
+.qd-mb-row:last-child {
+    margin-bottom: 0;
+}
+
+.qd-mb-label {
+    font-size: 11px;
+    color: #475569;
+    width: 56px;
+    flex-shrink: 0;
+    font-weight: 600;
+}
+
+.qd-mb-track {
+    flex: 1;
+    height: 8px;
+    background: #E5E7EB;
+    border-radius: 100px;
+    overflow: hidden;
+}
+
+.qd-mb-fill {
+    height: 100%;
+    border-radius: 100px;
+    transition: width 0.6s ease;
+}
+
+.qd-mb-score-chip {
+    font-size: 11px;
+    font-weight: 800;
+    min-width: 30px;
+    text-align: center;
+    padding: 3px 7px;
+    border-radius: 6px;
+    flex-shrink: 0;
+    /* bg, color, border set inline */
+}
+
+/* Remarks card */
+.qd-remarks-card {
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 14px;
+    padding: 16px 18px;
+    flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07);
+}
+
+.qd-remarks-label {
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: #64748B;
+    margin-bottom: 11px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.qd-remarks-text {
+    font-size: 13.5px;
+    color: #1E293B;
+    background: #F8FAFC;
+    border: 1px solid #E2E8F0;
+    border-radius: 9px;
+    padding: 11px 13px;
+    line-height: 1.6;
+    margin-bottom: 11px;
+    white-space: pre-wrap;
+    font-weight: 500;
+}
+
+.qd-remarks-empty {
+    font-size: 12.5px;
+    color: #94A3B8;
+    font-style: italic;
+    background: #F8FAFC;
+    border: 1px dashed #CBD5E1;
+    border-radius: 9px;
+    padding: 11px 13px;
+    margin-bottom: 11px;
+    text-align: center;
+    font-weight: 500;
+}
+
+.qd-btn-edit {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 10px;
+    background: #FFFFFF;
+    border: 1.5px solid #CBD5E1;
+    border-radius: 9px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #374151;
+    cursor: pointer;
+    justify-content: center;
+    transition: all 0.15s ease;
+}
+
+.qd-btn-edit:hover {
+    background: #EFF6FF;
+    border-color: #3B82F6;
+    color: #2563EB;
+}
+
+.qd-remarks-edit {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+}
+
+.qd-remarks-textarea {
+    width: 100%;
+    min-height: 90px;
+    padding: 11px 13px;
+    border: 1.5px solid #CBD5E1;
+    border-radius: 9px;
+    font-size: 13px;
+    background: #FFFFFF;
+    color: #1E293B;
+    resize: vertical;
+    font-family: inherit;
+    line-height: 1.5;
+    font-weight: 500;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.qd-remarks-textarea:focus {
+    outline: none;
+    border-color: #3B82F6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.qd-remarks-actions {
+    display: flex;
+    gap: 9px;
+}
+
+.qd-btn-cancel {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 8px;
+    background: #FFFFFF;
+    border: 1.5px solid #CBD5E1;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #64748B;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.qd-btn-cancel:hover {
+    background: #F1F5F9;
+    border-color: #94A3B8;
+    color: #374151;
+}
+
+.qd-btn-cancel:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.qd-btn-save {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 8px;
+    background: #EA580C;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    box-shadow: 0 2px 4px rgba(234, 88, 12, 0.3);
+}
+
+.qd-btn-save:hover:not(:disabled) {
+    background: #C2410C;
+    box-shadow: 0 3px 8px rgba(234, 88, 12, 0.4);
+}
+
+.qd-btn-save:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+/* Generated date pill */
+.qd-generated-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    align-self: flex-start;
+    padding: 6px 12px;
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 100px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #64748B;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+/* ============================================================
+   RESPONSIVE
+============================================================ */
+@media (max-width: 1100px) {
+    .qd-body {
+        grid-template-columns: 1fr 270px;
+    }
+}
+
+@media (max-width: 900px) {
+    .qd-page {
+        height: auto;
+        overflow: visible;
+    }
+
+    .qd-body {
+        grid-template-columns: 1fr;
+        overflow: visible;
+        height: auto;
+    }
+
+    .qd-left {
+        overflow-y: visible;
+        height: auto;
+        padding-right: 0;
+    }
+
+    .qd-right {
+        overflow-y: visible;
+        height: auto;
+        border-left: none;
+        border-bottom: 1px solid #E2E8F0;
+        padding-left: 0;
+        padding-bottom: 20px;
+        order: -1;
+    }
+
+    /* On mobile, rows should go back to flex-start so body doesn't stretch awkwardly */
+    .qd-tl-row {
+        align-items: flex-start;
+    }
+
+    .qd-tl-line {
+        min-height: 24px;
+    }
+}
+
+@media (max-width: 640px) {
+    .qd-sticky-header {
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .qd-quarter-chip,
+    .qd-status-pill {
+        display: none;
+    }
+
+    .qd-tl-dot {
+        width: 44px;
+        height: 44px;
+    }
+
+    .qd-tl-dot-yr {
+        font-size: 14px;
+    }
+
+    .qd-tl-month-header {
+        min-height: 44px;
+    }
+}

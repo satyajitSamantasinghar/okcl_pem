@@ -372,6 +372,8 @@ exports.getMonthlyPlansList = async (req, res) => {
 
     // Attach evaluation status
     const result = await Promise.all(plans.map(async (p) => {
+      if (!p.employeeId) return null; // Safe guard for dangling plans where user was deleted
+      
       const evaluation = await MonthlyEvaluation.findOne({
         employeeId: p.employeeId._id,
         month: p.month
@@ -390,7 +392,7 @@ exports.getMonthlyPlansList = async (req, res) => {
       };
     }));
 
-    res.json(result);
+    res.json(result.filter(Boolean));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -407,7 +409,7 @@ exports.getQuarterlyEvalsList = async (req, res) => {
 
     const evals = await QuarterlyEvaluation.find(filter)
       .populate("employeeId", "name employeeCode department")
-      .populate("evaluatedBy", "name")
+      .populate("raId", "name")
       .sort({ createdAt: -1 })
       .limit(100);
 
