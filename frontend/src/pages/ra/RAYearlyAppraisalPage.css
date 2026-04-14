@@ -1376,10 +1376,31 @@
     gap: 4px;
 }
 
+.yap-eval-field-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
 .yap-eval-field label {
     font-size: 0.8rem;
     font-weight: 700;
     color: var(--text-primary);
+}
+
+.yap-eval-cap {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: rgba(255, 122, 24, 0.08);
+    color: var(--primary);
+    font-size: 0.68rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
 }
 
 .yap-eval-hint {

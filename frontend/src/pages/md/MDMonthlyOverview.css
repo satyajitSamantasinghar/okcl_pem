@@ -7,6 +7,97 @@
     margin-bottom: 24px;
 }
 
+/* ── Premium Stat Cards ─────────────────────── */
+.mmo-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.mmo-stat-card {
+    background: var(--bg-card, #fff);
+    border: 1px solid var(--border-default, #E5E7EB);
+    border-radius: 16px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.02);
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+}
+
+.mmo-stat-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 24px rgba(0,0,0,0.06);
+    border-color: transparent;
+}
+
+/* Base Top Color Bars */
+.mmo-stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 4px;
+    background: var(--border-default);
+    transition: background 0.3s ease;
+}
+
+/* Hover Gradient Accents */
+.mmo-stat-card.sc-blue:hover::before { background: linear-gradient(90deg, #3B82F6, #60A5FA); border-color: #3B82F6; }
+.mmo-stat-card.sc-green:hover::before { background: linear-gradient(90deg, #10B981, #34D399); border-color: #10B981; }
+.mmo-stat-card.sc-purple:hover::before { background: linear-gradient(90deg, #8B5CF6, #A78BFA); border-color: #8B5CF6; }
+.mmo-stat-card.sc-red:hover::before { background: linear-gradient(90deg, #EF4444, #F87171); border-color: #EF4444; }
+
+.mmo-stat-card.sc-blue:hover { border-color: #BFDBFE; box-shadow: 0 10px 25px rgba(59,130,246,0.15); }
+.mmo-stat-card.sc-green:hover { border-color: #A7F3D0; box-shadow: 0 10px 25px rgba(16,185,129,0.15); }
+.mmo-stat-card.sc-purple:hover { border-color: #DDD6FE; box-shadow: 0 10px 25px rgba(139,92,246,0.15); }
+.mmo-stat-card.sc-red:hover { border-color: #FECACA; box-shadow: 0 10px 25px rgba(239,68,68,0.15); }
+
+.mmo-stat-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.mmo-stat-icon-wrap {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    transition: transform 0.3s ease;
+}
+
+.mmo-stat-card:hover .mmo-stat-icon-wrap {
+    transform: scale(1.1) rotate(5deg);
+}
+
+.sc-blue .mmo-stat-icon-wrap { background: #EFF6FF; color: #3B82F6; }
+.sc-green .mmo-stat-icon-wrap { background: #ECFDF5; color: #10B981; }
+.sc-purple .mmo-stat-icon-wrap { background: #F5F3FF; color: #8B5CF6; }
+.sc-red .mmo-stat-icon-wrap { background: #FEF2F2; color: #EF4444; }
+
+.mmo-stat-label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+}
+
+.mmo-stat-val {
+    font-size: 2.2rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    line-height: 1;
+}
+
 /* ── Filter bar ─────────────────────────────── */
 .mmo-filter-bar {
     display: flex;

@@ -32,15 +32,15 @@ const navItemsByRole = {
     ],
     HRD: [
         { path: '/hrd', label: 'Dashboard', icon: <FiHome /> },
-        { path: '/hrd/employees', label: 'People Directory', icon: <FiUsers /> },
+        { path: '/hrd/employees', label: 'Employee Overview', icon: <FiUsers /> },
         { path: '/hrd/monthly-overview', label: 'Monthly Overview', icon: <FiList /> },
         { path: '/hrd/yearly-appraisal', label: 'Yearly Appraisal', icon: <FiAward /> },
     ],
     MD: [
         { path: '/md', label: 'Dashboard', icon: <FiHome /> },
-        { path: '/md/employees', label: 'People Directory', icon: <FiUsers /> },
+        { path: '/md/employees', label: 'Employee Overview', icon: <FiUsers /> },
         { path: '/md/monthly-overview', label: 'Monthly Overview', icon: <FiList /> },
-        { path: '/md/approvals', label: 'Approvals', icon: <FiCheckCircle /> },
+        { path: '/md/approvals', label: 'Yearly Appraisal', icon: <FiCheckCircle /> },
         { path: '/md/audit', label: 'Audit Trail', icon: <FiShield /> },
     ],
 };

@@ -6,7 +6,7 @@ import {
     FiUsers, FiUserCheck, FiFileText, FiCheckCircle,
     FiBarChart2, FiSearch, FiCalendar,
     FiClock, FiTarget, FiChevronRight,
-    FiX, FiArrowLeft, FiActivity, FiPieChart, FiUsers as FiUsersIcon, FiFolder
+    FiX, FiArrowLeft, FiActivity, FiPieChart, FiUsers as FiUsersIcon
 } from 'react-icons/fi';
 import {
     LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
@@ -36,11 +36,47 @@ function formatTimeAgo(date) {
     return new Date(date).toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
 }
 
+function formatShortDate(date) {
+    if (!date) return '—';
+    return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
 function getRatioColorClass(pct) {
     if (pct >= 75) return 'green';
     if (pct >= 40) return 'amber';
     return 'red';
 }
+
+function getScoreBand(score) {
+    if (score == null) return 'muted';
+    if (score >= 8) return 'strong';
+    if (score >= 6) return 'steady';
+    return 'watch';
+}
+
+/* Change 3 — Progress bar colour utility */
+const progressBarColor = (rate) => {
+    if (rate >= 75) return '#10B981';   // green
+    if (rate >= 40) return '#F59E0B';   // amber
+    return '#EF4444';                    // red
+};
+
+/* Change 1 — Shared tooltip style */
+const TOOLTIP_STYLE = {
+    contentStyle: {
+        background: 'var(--bg-card, #ffffff)',
+        border: '1px solid var(--border-default, #E5E7EB)',
+        borderRadius: '10px',
+        boxShadow: '0 8px 24px rgba(0,0,0,0.14)',
+        fontSize: '13px',
+        padding: '10px 14px',
+        color: 'var(--text-primary, #111827)'
+    },
+    wrapperStyle: { zIndex: 9999 },
+    cursor: { fill: 'rgba(0,0,0,0.04)' },
+    formatter: (value, name) => [value, name],
+    labelStyle: { fontWeight: 600, marginBottom: 4, color: 'var(--text-primary)' }
+};
 
 /* ====================================================
    COMPONENT
@@ -140,10 +176,23 @@ const MDDashboard = () => {
     const mpCount = stats?.monthlyPlansSubmitted || 0;
     const achCount = stats?.monthlyAchievementsSubmitted || 0;
     const ypCount = stats?.yearlyPlansTotal || 0;
+    const ypPending = stats?.yearlyPlansPending || 0;
+    const ypApproved = Math.max(0, ypCount - ypPending);
 
     const mpPct = Math.round((mpCount / empTotal) * 100);
-    const achPct = Math.round((achCount / empTotal) * 100);
+    const achPct = Math.round((achCount / Math.max(mpCount, 1)) * 100);
     const ypPct = Math.round((ypCount / empTotal) * 100);
+
+    // Current month evaluations done by RA
+    const currentMonth = (() => {
+        const n = new Date();
+        return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`;
+    })();
+    const evaluationsThisMonth = useMemo(() =>
+        monthlyPlansList.filter(p => p.month === currentMonth && p.evaluationStatus === 'EVALUATED').length,
+        [monthlyPlansList, currentMonth]
+    );
+    const evalPct = Math.round((evaluationsThisMonth / Math.max(mpCount, 1)) * 100);
 
     // 6 Month Trend - ABSOLUTE COUNTS
     const trendData = useMemo(() => {
@@ -185,33 +234,61 @@ const MDDashboard = () => {
     }, [allEmployees]);
     const DEPT_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#14B8A6'];
 
-    // RA Leaderboard mapped factually
+    // RA Leaderboard — table-style with per-RA monthly stats
     const raLeaderboard = useMemo(() => {
+        // Build a map of all RA users
         const raMap = {};
         const ras = allEmployees.filter(emp => emp.role === 'RA');
-        
-        // Pre-fill active RAs
+
         ras.forEach(ra => {
-            raMap[ra._id] = { name: ra.name, quarterlyConducts: 0, distinctEmployees: new Set() };
+            raMap[ra._id] = {
+                id: ra._id,
+                name: ra.name,
+                teamEmployeeIds: new Set(),
+                plansSubmitted: 0,
+                plansSubmittedThisMonth: 0,
+                achievementsThisMonth: 0,
+                evaluatedTotal: 0
+            };
         });
 
-        quarterlyList.forEach(q => {
-            const raId = q.raId?._id;
-            const empId = q.employeeId?._id;
-            if (raId) {
-                if (!raMap[raId]) raMap[raId] = { name: q.raId.name, quarterlyConducts: 0, distinctEmployees: new Set() };
-                if (empId) raMap[raId].distinctEmployees.add(empId);
-                raMap[raId].quarterlyConducts += 1;
+        // Map employees to their RA
+        allEmployees.forEach(emp => {
+            if (emp.role === 'EMPLOYEE' && emp.reportingAuthorityId) {
+                const raId = emp.reportingAuthorityId?._id || emp.reportingAuthorityId;
+                if (raMap[raId]) {
+                    raMap[raId].teamEmployeeIds.add(String(emp._id));
+                }
             }
         });
 
-        return Object.values(raMap).map(ra => ({
-            name: ra.name,
-            empCount: ra.distinctEmployees.size,
-            quarterlyConducts: ra.quarterlyConducts
-        })).sort((a,b) => b.quarterlyConducts - a.quarterlyConducts); // Highest evaluations first
+        // Monthly plan stats per RA team
+        monthlyPlansList.forEach(p => {
+            const empId = String(p.employeeId?._id || p.employeeId);
+            const isCurrentMonth = p.month === currentMonth;
+            
+            // Find which RA this employee belongs to
+            Object.values(raMap).forEach(ra => {
+                if (ra.teamEmployeeIds.has(empId)) {
+                    ra.plansSubmitted += 1;
+                    if (isCurrentMonth) ra.plansSubmittedThisMonth += 1;
+                    if (isCurrentMonth && p.hasAchievement) ra.achievementsThisMonth += 1;
+                    if (p.evaluationStatus === 'EVALUATED') ra.evaluatedTotal += 1;
+                }
+            });
+        });
 
-    }, [quarterlyList, allEmployees]);
+        return Object.values(raMap).map(ra => {
+            const teamSize = ra.teamEmployeeIds.size;
+            return {
+                name: ra.name,
+                teamSize: teamSize,
+                subPct: teamSize > 0 ? Math.round((ra.plansSubmittedThisMonth / teamSize) * 100) : 0,
+                achPct: ra.plansSubmittedThisMonth > 0 ? Math.round((ra.achievementsThisMonth / ra.plansSubmittedThisMonth) * 100) : 0,
+                evaluated: ra.evaluatedTotal
+            };
+        }).sort((a, b) => b.evaluated - a.evaluated || b.achPct - a.achPct);
+    }, [allEmployees, monthlyPlansList, currentMonth]);
 
     // Pending Action Queue - Filter and dedup
     const pendingQueue = useMemo(() => {
@@ -226,6 +303,8 @@ const MDDashboard = () => {
                   queue.push({
                       id: p._id,
                       name: p.employeeId?.name || "Unknown",
+                      raName: p.employeeId?.reportingAuthorityId?.name || null,
+                      department: p.employeeId?.department || null,
                       type: 'Monthly',
                       entity: 'MONTHLY_PLAN',
                       date: p.submittedAt || p.createdAt,
@@ -243,6 +322,8 @@ const MDDashboard = () => {
                   queue.push({
                       id: p._id,
                       name: p.employeeId?.name || "Unknown",
+                      raName: null,
+                      department: p.employeeId?.department || null,
                       type: 'Yearly Plan',
                       entity: 'YEARLY_PLAN',
                       date: p.submittedAt || p.createdAt,
@@ -254,6 +335,9 @@ const MDDashboard = () => {
         
         return queue.sort((a,b) => new Date(b.date) - new Date(a.date));
     }, [monthlyPlansList, yearlyPlansList]);
+
+    const displayedPending = pendingQueue.slice(0, 5);
+    const totalPending = pendingQueue.length;
 
     /* ---- Handlers ---- */
     const handleSearch = (val) => {
@@ -317,7 +401,6 @@ const MDDashboard = () => {
     };
 
     const handleApproveAllVisible = async () => {
-        // MD explicit request: "Add Approve All functionality in Action Required header"
         try {
             const yearlyPending = pendingQueue.filter(i => i.entity === 'YEARLY_PLAN');
             if (yearlyPending.length === 0) {
@@ -325,8 +408,7 @@ const MDDashboard = () => {
                 setApproveAllConfirmOpen(false);
                 return;
             }
-            // Execute batch consecutively 
-            for (const item of yearlyPending.slice(0, 5)) { // process visible ones
+            for (const item of yearlyPending.slice(0, 5)) {
                 await api.put(`/md/yearly-plan/${item.id}`, { decision: 'APPROVE' });
             }
             toast.success('Batch approve completed.');
@@ -372,22 +454,22 @@ const MDDashboard = () => {
        MAIN DASHBOARD
     ======================================================== */
     return (
-        <div className="md-fade-in fade-in">
-            {/* Header + Inline Search */}
+        <div className="md-dashboard-container md-fade-in fade-in">
+            {/* Header — no search here; search is in topbar (Change 8) */}
             <div className="md-exec-header">
                 <div>
                     <h1>Managing Director Dashboard</h1>
-                    <p className="md-exec-subtitle">Executive organization-wide performance oversight & approval flow</p>
+                    <p className="md-exec-subtitle">Executive organization-wide performance oversight &amp; approval flow</p>
                 </div>
-                
-                <div className="md-inline-search" ref={searchRef}>
-                    <FiSearch className="md-search-icon" />
+
+                {/* Change 8 — Compact search in header area (visible when no topbar) */}
+                <div className="md-nav-search" ref={searchRef}>
+                    <FiSearch size={14} />
                     <input
-                        className="md-search-input"
                         type="text"
                         placeholder="Search employee or RA..."
                         value={searchQuery}
-                        onChange={(e) => handleSearch(e.target.value)}
+                        onChange={e => handleSearch(e.target.value)}
                     />
                     {searchOpen && searchResults.length > 0 && (
                         <div className="md-search-dropdown" style={{ top: '110%' }}>
@@ -412,23 +494,27 @@ const MDDashboard = () => {
                 {/* === LEFT COLUMN: Metrics & Charts === */}
                 <div className="md-main-content">
                     
-                    {/* Organization Health Bar */}
+                    {/* Change 2 — Redesigned Organization Health Bar */}
                     <div className="md-health-bar">
+                        {/* Metric 1: Yearly plans approved */}
                         <div className="md-health-item">
-                            <span className="md-health-label">Submission Rate</span>
+                            <span className="md-health-label">Yearly plans approved</span>
+                            <span className="md-health-value" style={{ color: ypApproved > 0 ? '#10B981' : '#94A3B8' }}>{ypApproved}</span>
+                        </div>
+                        {/* Metric 2: Submission rate */}
+                        <div className="md-health-item">
+                            <span className="md-health-label">Submission rate</span>
                             <span className={`md-health-value ${getRatioColorClass(mpPct)}`}>{mpPct}%</span>
                         </div>
+                        {/* Metric 3: Evaluations done by RA this month */}
                         <div className="md-health-item">
-                            <span className="md-health-label">Achievement Rate</span>
-                            <span className={`md-health-value ${getRatioColorClass(achPct)}`}>{achPct}%</span>
+                            <span className="md-health-label">Evaluations done</span>
+                            <span className={`md-health-value ${getRatioColorClass(evalPct)}`}>{evaluationsThisMonth}</span>
                         </div>
-                        <div className="md-health-item">
-                            <span className="md-health-label">Eval Rate Proxy</span>
-                            <span className="md-health-value green">{Math.round((stats?.todayAuditCount || 0) * 1.5) || 82}%</span>
-                        </div>
+                        {/* Metric 4: Pending approvals */}
                         <div className="md-health-item md-health-urgent">
-                            <span className="md-health-label">Pending Approvals</span>
-                            <span className="md-health-value" style={{color: pendingQueue.length > 0 ? '#EF4444' : '#22C55E' }}>{pendingQueue.length}</span>
+                            <span className="md-health-label">Pending approvals</span>
+                            <span className="md-health-value" style={{ color: '#EF4444' }}>{totalPending}</span>
                         </div>
                     </div>
 
@@ -446,7 +532,8 @@ const MDDashboard = () => {
                             <div className="md-kpi-label"><FiFileText /> Monthly Plans</div>
                             <div className="md-kpi-ratio">{mpCount} <span className="md-kpi-ratio-sub">/ {empTotal}</span></div>
                             <div className="md-kpi-progress">
-                                <div className={`md-kpi-progress-fill ${getRatioColorClass(mpPct)}`} style={{width: `${mpPct}%`}}></div>
+                                {/* Change 3 — progressBarColor() applied */}
+                                <div className="md-kpi-progress-fill" style={{ width: `${mpPct}%`, background: progressBarColor(mpPct) }} />
                             </div>
                             <div className="md-kpi-footer">
                                 <span className={`md-kpi-badge ${getRatioColorClass(mpPct)}`}>{mpPct}% submitted</span>
@@ -457,7 +544,7 @@ const MDDashboard = () => {
                             <div className="md-kpi-label"><FiCheckCircle /> Achievements</div>
                             <div className="md-kpi-ratio">{achCount} <span className="md-kpi-ratio-sub">/ {mpCount || 1}</span></div>
                             <div className="md-kpi-progress">
-                                <div className={`md-kpi-progress-fill ${getRatioColorClass(achPct)}`} style={{width: `${achPct}%`}}></div>
+                                <div className="md-kpi-progress-fill" style={{ width: `${achPct}%`, background: progressBarColor(achPct) }} />
                             </div>
                             <div className="md-kpi-footer">
                                 <span className={`md-kpi-badge ${getRatioColorClass(achPct)}`}>{achPct}% achieved</span>
@@ -468,7 +555,7 @@ const MDDashboard = () => {
                             <div className="md-kpi-label"><FiTarget /> Yearly Plans</div>
                             <div className="md-kpi-ratio">{ypCount} <span className="md-kpi-ratio-sub">/ {empTotal}</span></div>
                             <div className="md-kpi-progress">
-                                <div className={`md-kpi-progress-fill ${getRatioColorClass(ypPct)}`} style={{width: `${ypPct}%`}}></div>
+                                <div className="md-kpi-progress-fill" style={{ width: `${ypPct}%`, background: progressBarColor(ypPct) }} />
                             </div>
                             <div className="md-kpi-footer">
                                 <span className={`md-kpi-badge ${getRatioColorClass(ypPct)}`}>{ypPct}% filed</span>
@@ -486,7 +573,10 @@ const MDDashboard = () => {
                                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-default)" />
                                         <XAxis dataKey="month" tick={{ fontSize: 12, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
                                         <YAxis tick={{ fontSize: 12, fill: 'var(--text-muted)' }} allowDecimals={false} axisLine={false} tickLine={false} />
-                                        <RechartsTooltip cursor={{ fill: 'rgba(0,0,0,0.03)' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
+                                        <RechartsTooltip
+                                            {...TOOLTIP_STYLE}
+                                            cursor={{ fill: 'rgba(0,0,0,0.03)' }}
+                                        />
                                         <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
                                         <Bar dataKey="Plans Submitted" fill="#3B82F6" radius={[4, 4, 0, 0]} maxBarSize={40} />
                                         <Bar dataKey="Achievements" fill="#22C55E" radius={[4, 4, 0, 0]} maxBarSize={40} />
@@ -497,142 +587,7 @@ const MDDashboard = () => {
                         </div>
                     </div>
 
-                    {/* Chart Row 2 */}
-                    <div className="md-charts-row" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
-                        
-                        {/* RA Performance Comparison */}
-                        <div className="md-chart-card">
-                            <h3><FiBarChart2 className="md-chart-icon" /> RA Performance Comparison</h3>
-                            <div className="md-ra-leaderboard">
-                                <div className="md-ra-header">
-                                    <div className="md-ra-col-name">RA Name</div>
-                                    <div className="md-ra-col-val" title="Evaluations Conducted (Quarterly)">Appraisals Done</div>
-                                    <div className="md-ra-col-val" title="Distinct Assigned Employees tracked">Emp Tracked</div>
-                                </div>
-                                {raLeaderboard.length === 0 ? (
-                                    <p className="md-empty-state">No RA data available</p>
-                                ) : raLeaderboard.map((ra, idx) => (
-                                    <div key={idx} className="md-ra-row">
-                                        <div className="md-ra-col-name">{ra.name}</div>
-                                        <div className="md-ra-col-val" style={{ fontWeight: 700, color: 'var(--primary)' }}>{ra.quarterlyConducts}</div>
-                                        <div className="md-ra-col-val" style={{ color: 'var(--text-secondary)' }}>{ra.empCount > 0 ? ra.empCount : '-'}</div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Yearly Plans Donut Fix */}
-                        <div className="md-chart-card">
-                            <h3><FiPieChart className="md-chart-icon" /> Yearly Plans Overview</h3>
-                            <div className="md-chart-container" style={{ position: 'relative' }}>
-                                <ResponsiveContainer width="100%" height={250}>
-                                    <PieChart>
-                                        <Pie
-                                            data={[
-                                                { name: 'Approved', value: Math.max(0, ypCount - (stats?.yearlyPlansPending || 0)) },
-                                                { name: 'Under Review', value: stats?.yearlyPlansPending || 0 },
-                                                { name: 'Not Started', value: Math.max(0, empTotal - ypCount) }
-                                            ]}
-                                            cx="50%" cy="50%" innerRadius={70} outerRadius={95} paddingAngle={2} dataKey="value"
-                                        >
-                                            <Cell fill="#10B981" /> {/* Green */}
-                                            <Cell fill="#F59E0B" /> {/* Amber */}
-                                            <Cell fill="#E2E8F0" /> {/* Gray */}
-                                        </Pie>
-                                        <RechartsTooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
-                                        <Legend 
-                                            verticalAlign="bottom" 
-                                            height={36}
-                                            iconType="circle"
-                                            wrapperStyle={{ fontSize: '12px', marginTop: '10px' }} 
-                                        />
-                                    </PieChart>
-                                </ResponsiveContainer>
-                                <div className="md-donut-center">
-                                    <div className="md-donut-num">{empTotal}</div>
-                                    <div className="md-donut-txt">Total</div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Workforce Distribution */}
-                        <div className="md-chart-card">
-                            <h3><FiPieChart className="md-chart-icon" /> Workforce Distribution</h3>
-                            {deptStats.length > 0 ? (
-                                <>
-                                    <div style={{ position: 'relative' }}>
-                                        <ResponsiveContainer width="100%" height={200}>
-                                            <PieChart>
-                                                <Pie
-                                                    data={deptStats}
-                                                    dataKey="count"
-                                                    nameKey="department"
-                                                    cx="50%" cy="50%"
-                                                    innerRadius={60}
-                                                    outerRadius={85}
-                                                    paddingAngle={3}
-                                                    labelLine={false}
-                                                >
-                                                    {deptStats.map((_, i) => (
-                                                        <Cell key={i} fill={DEPT_COLORS[i % DEPT_COLORS.length]} />
-                                                    ))}
-                                                </Pie>
-                                                <RechartsTooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
-                                            </PieChart>
-                                        </ResponsiveContainer>
-                                        <div className="md-donut-center">
-                                            <div className="md-donut-num">{empTotal}</div>
-                                            <div className="md-donut-txt">Total</div>
-                                        </div>
-                                    </div>
-                                    <div className="md-dept-legend" style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                        {deptStats.map((d, i) => (
-                                            <div key={d.department} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.8125rem' }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: DEPT_COLORS[i % DEPT_COLORS.length] }} />
-                                                    <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{d.department}</span>
-                                                </div>
-                                                <div style={{ display: 'flex', gap: '12px', color: 'var(--text-muted)' }}>
-                                                    <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{d.count}</span>
-                                                    <span style={{ width: '30px', textAlign: 'right' }}>{Math.round((d.count / empTotal) * 100)}%</span>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </>
-                            ) : (
-                                <p className="md-empty-state">No department mapped</p>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Navigation Tiles */}
-                    <div className="md-nav-tiles-row">
-                        <div className="md-nav-tile" onClick={() => navigate('/md/employees')}>
-                            <div className="md-nt-icon blue"><FiUsersIcon /></div>
-                            <div className="md-nt-body">
-                                <h4>People Directory</h4>
-                                <p>Manage and search employee base</p>
-                            </div>
-                            <FiChevronRight className="md-nt-arrow" />
-                        </div>
-                        <div className="md-nav-tile" onClick={() => navigate('/md/monthly-overview')}>
-                            <div className="md-nt-icon orange"><FiClock /></div>
-                            <div className="md-nt-body">
-                                <h4>Monthly Overview</h4>
-                                <p>Track detailed operational progress</p>
-                            </div>
-                            <FiChevronRight className="md-nt-arrow" />
-                        </div>
-                        <div className="md-nav-tile" onClick={() => navigate('/md/approvals')}>
-                            <div className="md-nt-icon green"><FiCheckCircle /></div>
-                            <div className="md-nt-body">
-                                <h4>Approvals Hub</h4>
-                                <p>Clear organizational bottlenecks</p>
-                            </div>
-                            <FiChevronRight className="md-nt-arrow" />
-                        </div>
-                    </div>                </div>
+                </div>
 
                 {/* === RIGHT COLUMN: Action Required Queue === */}
                 <div className="md-action-required">
@@ -652,30 +607,216 @@ const MDDashboard = () => {
                                 <FiCheckCircle style={{ fontSize: '2rem', marginBottom: '10px', color: '#10B981' }} />
                                 <p>You're all caught up!</p>
                             </div>
-                        ) : pendingQueue.slice(0, 5).map(item => (
+                        ) : displayedPending.map(item => (
                             <div key={`${item.entity}-${item.id}`} className="md-approval-item">
                                 <div className="md-ap-info">
+                                    {/* Change 6 — Employee name + meta context */}
                                     <div className="md-ap-user">{item.name}</div>
+                                    <div className="ar-employee-meta">
+                                        {item.raName ? `via ${item.raName} · ` : ''}{item.department || 'No dept'}
+                                    </div>
                                     <div className="md-ap-desc">
                                         <span className={`md-ap-tag ${item.entity === 'YEARLY_PLAN' ? 'yp' : 'mp'}`}>{item.type}</span> 
                                         <span className="md-ap-time">• {formatTimeAgo(item.date)}</span>
                                     </div>
                                 </div>
-                                <div className="md-ap-actions">
+                                {/* Change 7 — Equal-weight approve/reject buttons */}
+                                <div className={`md-ap-actions ${item.entity === 'YEARLY_PLAN' ? 'ar-action-row' : ''}`}>
                                     {item.entity === 'YEARLY_PLAN' && (
                                         <button className="md-btn-approve" onClick={() => handleApprove(item)}>Approve</button>
                                     )}
-                                    <button className="md-btn-reject" onClick={() => setRejectTarget(item)}>Reject</button>
+                                    <button className="ar-reject-btn" onClick={() => setRejectTarget(item)}>Reject</button>
                                 </div>
                             </div>
                         ))}
                     </div>
 
                     <div className="md-aq-footer">
+                        {/* Change 6 — Showing N of total */}
+                        {totalPending > 0 && (
+                            <div className="ar-showing">Showing {displayedPending.length} of {totalPending} pending</div>
+                        )}
                         <Link to="/md/approvals" className="md-btn-view-all">View All Approvals →</Link>
                     </div>
                 </div>
 
+            </div>
+
+            <div className="md-full-width-stack">
+                {/* Chart Row 2 */}
+                <div className="md-charts-row md-charts-row--secondary">
+                    {/* Change 4 — RA Performance Comparison: clean table layout */}
+                    <div className="md-chart-card md-chart-card--ra">
+                        <h3><FiBarChart2 className="md-chart-icon" /> RA Performance Comparison</h3>
+                        {raLeaderboard.length === 0 ? (
+                            <p className="md-empty-state">No RA data available</p>
+                        ) : (
+                            <>
+                                {/* Table-style RA rows */}
+                                <div className="md-ra-table">
+                                    <div className="md-ra-table-header">
+                                        <span>RA Name</span>
+                                        <span>Team</span>
+                                        <span>Submission Rate</span>
+                                        <span>Achievement</span>
+                                        <span>Evaluations Done</span>
+                                    </div>
+                                    <div className="md-ra-leaderboard md-ra-leaderboard--detailed">
+                                        {raLeaderboard.map((ra, idx) => (
+                                            <div key={`${ra.name}-${idx}`} className="md-ra-table-row">
+                                                {/* Column 1: Name with avatar */}
+                                                <div className="md-ra-name-cell">
+                                                    <div className="md-ra-avatar">{getInitials(ra.name)}</div>
+                                                    <span className="md-ra-col-name">{ra.name}</span>
+                                                </div>
+                                                {/* Column 2: Team size */}
+                                                <div className="md-ra-table-cell">
+                                                    <span className="md-ra-cell-val">{ra.teamSize}</span>
+                                                </div>
+                                                {/* Column 3: Submission Rate */}
+                                                <div className="md-ra-table-cell">
+                                                    <span className="md-ra-pct-badge" style={{ color: progressBarColor(ra.subPct) }}>
+                                                        {ra.subPct}%
+                                                    </span>
+                                                </div>
+                                                {/* Column 4: Achievement % */}
+                                                <div className="md-ra-table-cell">
+                                                    <span className="md-ra-pct-badge" style={{ color: progressBarColor(ra.achPct) }}>
+                                                        {ra.achPct}%
+                                                    </span>
+                                                </div>
+                                                {/* Column 5: Evaluations Done */}
+                                                <div className="md-ra-table-cell">
+                                                    <span className="md-ra-pct-badge" style={{ color: ra.evaluated > 0 ? '#10B981' : '#F59E0B' }}>
+                                                        {ra.evaluated}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </>
+                        )}
+                    </div>
+
+                    {/* Yearly Plans Donut — Change 1 + Change 9 tooltip format */}
+                    <div className="md-chart-card">
+                        <h3><FiPieChart className="md-chart-icon" /> Yearly Plans Overview</h3>
+                        <div className="md-chart-container" style={{ position: 'relative' }}>
+                            <ResponsiveContainer width="100%" height={250}>
+                                <PieChart>
+                                    <Pie
+                                        data={[
+                                            { name: 'Approved', value: ypApproved },
+                                            { name: 'Under Review', value: ypPending },
+                                            { name: 'Not Started', value: Math.max(0, empTotal - ypCount) }
+                                        ]}
+                                        cx="50%" cy="50%" innerRadius={70} outerRadius={95} paddingAngle={2} dataKey="value"
+                                    >
+                                        <Cell fill="#10B981" />
+                                        <Cell fill="#F59E0B" />
+                                        <Cell fill="#E2E8F0" />
+                                    </Pie>
+                                    {/* Change 1 + 9 */}
+                                    <RechartsTooltip
+                                        {...TOOLTIP_STYLE}
+                                        formatter={(value, name) => [`${value} employees`, name]}
+                                        labelFormatter={(label) => `${label}`}
+                                    />
+                                    <Legend
+                                        verticalAlign="bottom"
+                                        height={36}
+                                        iconType="circle"
+                                        wrapperStyle={{ fontSize: '12px', marginTop: '10px' }}
+                                    />
+                                </PieChart>
+                            </ResponsiveContainer>
+                            <div className="md-donut-center">
+                                <div className="md-donut-num">{empTotal}</div>
+                                <div className="md-donut-txt">Total</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Workforce Distribution — Change 1 tooltip */}
+                    <div className="md-chart-card">
+                        <h3><FiPieChart className="md-chart-icon" /> Workforce Distribution</h3>
+                        {deptStats.length > 0 ? (
+                            <>
+                                <div style={{ position: 'relative' }}>
+                                    <ResponsiveContainer width="100%" height={200}>
+                                        <PieChart>
+                                            <Pie
+                                                data={deptStats}
+                                                dataKey="count"
+                                                nameKey="department"
+                                                cx="50%" cy="50%"
+                                                innerRadius={60}
+                                                outerRadius={85}
+                                                paddingAngle={3}
+                                                labelLine={false}
+                                            >
+                                                {deptStats.map((_, i) => (
+                                                    <Cell key={i} fill={DEPT_COLORS[i % DEPT_COLORS.length]} />
+                                                ))}
+                                            </Pie>
+                                            {/* Change 1 */}
+                                            <RechartsTooltip {...TOOLTIP_STYLE} />
+                                        </PieChart>
+                                    </ResponsiveContainer>
+                                    <div className="md-donut-center">
+                                        <div className="md-donut-num">{empTotal}</div>
+                                        <div className="md-donut-txt">Total</div>
+                                    </div>
+                                </div>
+                                <div className="md-dept-legend" style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    {deptStats.map((d, i) => (
+                                        <div key={d.department} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.8125rem' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: DEPT_COLORS[i % DEPT_COLORS.length] }} />
+                                                <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{d.department}</span>
+                                            </div>
+                                            <div style={{ display: 'flex', gap: '12px', color: 'var(--text-muted)' }}>
+                                                <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{d.count}</span>
+                                                <span style={{ width: '30px', textAlign: 'right' }}>{Math.round((d.count / empTotal) * 100)}%</span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </>
+                        ) : (
+                            <p className="md-empty-state">No department mapped</p>
+                        )}
+                    </div>
+                </div>
+
+                {/* Navigation Tiles */}
+                <div className="md-nav-tiles-row">
+                    <div className="md-nav-tile" onClick={() => navigate('/md/employees')}>
+                        <div className="md-nt-icon blue"><FiUsersIcon /></div>
+                        <div className="md-nt-body">
+                            <h4>People Directory</h4>
+                            <p>Manage and search employee base</p>
+                        </div>
+                        <FiChevronRight className="md-nt-arrow" />
+                    </div>
+                    <div className="md-nav-tile" onClick={() => navigate('/md/monthly-overview')}>
+                        <div className="md-nt-icon orange"><FiClock /></div>
+                        <div className="md-nt-body">
+                            <h4>Monthly Overview</h4>
+                            <p>Track detailed operational progress</p>
+                        </div>
+                        <FiChevronRight className="md-nt-arrow" />
+                    </div>
+                    <div className="md-nav-tile" onClick={() => navigate('/md/approvals')}>
+                        <div className="md-nt-icon green"><FiCheckCircle /></div>
+                        <div className="md-nt-body">
+                            <h4>Approvals Hub</h4>
+                            <p>Clear organizational bottlenecks</p>
+                        </div>
+                        <FiChevronRight className="md-nt-arrow" />
+                    </div>
+                </div>
             </div>
 
             {/* Confirm Approve All Modal */}
@@ -715,8 +856,8 @@ const MDDashboard = () => {
                             <button className="mp-modal-close" onClick={() => setRejectTarget(null)}><FiX /></button>
                         </div>
                         <div style={{ padding: '20px' }}>
-                            <div style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '6px' }}>
-                                Remarks (Required to guide revision)
+                            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '6px' }}>
+                                Remarks (required to guide revision)
                             </div>
                             <textarea
                                 style={{
@@ -786,7 +927,19 @@ function EmployeeDetailView({ employee, data, tab, setTab, onBack }) {
                                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-default)" />
                                         <XAxis dataKey="month" tickFormatter={m => m.slice(5)} tick={{ fontSize: 12, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
                                         <YAxis domain={[0, 10]} ticks={[0, 2, 4, 6, 8, 10]} tick={{ fontSize: 12, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
-                                        <RechartsTooltip cursor={{ stroke: 'var(--border-default)', strokeWidth: 1, strokeDasharray: '3 3' }} />
+                                        <RechartsTooltip
+                                            contentStyle={{
+                                                background: 'var(--bg-card, #ffffff)',
+                                                border: '1px solid var(--border-default, #E5E7EB)',
+                                                borderRadius: '10px',
+                                                boxShadow: '0 8px 24px rgba(0,0,0,0.14)',
+                                                fontSize: '13px',
+                                                padding: '10px 14px',
+                                                color: 'var(--text-primary, #111827)'
+                                            }}
+                                            wrapperStyle={{ zIndex: 9999 }}
+                                            cursor={{ stroke: 'var(--border-default)', strokeWidth: 1, strokeDasharray: '3 3' }}
+                                        />
                                         <Line type="monotone" dataKey="score" name="Score" stroke="#3B82F6" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
                                     </LineChart>
                                 </ResponsiveContainer>

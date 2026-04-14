@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
 import {
@@ -595,6 +596,8 @@ const MonthlyPlanPage = () => {
        ACHIEVEMENT MODAL — unchanged
     ====================================================== */
     const renderAchModal = () => {
+        // Rendered via portal so position:fixed is relative to the true viewport
+        // (not the overflow-x:hidden dashboard-main container)
         if (!achModal) return null;
         const existing = achievementByPlanId[achModal._id];
         const isDraft = existing?.status === 'DRAFT';
@@ -604,7 +607,7 @@ const MonthlyPlanPage = () => {
             : 0;
         const completedCount = achItems.filter(a => a.progress >= 100).length;
 
-        return (
+        return createPortal(
             <div className="mp-overlay" onClick={() => setAchModal(null)}>
                 <div className="mp-ach-modal mp-ach-modal--wide" onClick={e => e.stopPropagation()}>
                     <div className="mp-ach-modal-header mp-ach-modal-header--green">
@@ -723,7 +726,8 @@ const MonthlyPlanPage = () => {
                         <button className="btn btn-secondary" onClick={() => setAchModal(null)}>Cancel</button>
                     </div>
                 </div>
-            </div>
+            </div>,
+            document.body
         );
     };
 
@@ -779,7 +783,7 @@ const MonthlyPlanPage = () => {
             : st.cls === 'evaluated' ? 'sp-eval'
                 : 'sp-plan';
 
-        return (
+        return createPortal(
             <div className="mp-overlay" onClick={() => setSelectedPlan(null)}>
                 <div className="dmod" onClick={e => e.stopPropagation()}>
 
@@ -1066,7 +1070,8 @@ const MonthlyPlanPage = () => {
                     </div>
 
                 </div>
-            </div>
+            </div>,
+            document.body
         );
     };
 
@@ -1341,8 +1346,7 @@ const MonthlyPlanPage = () => {
             {renderAchModal()}
             {renderDetailModal()}
 
-            {/* Resubmit / Draft Edit Modal */}
-            {resubmitPlan && (
+            {resubmitPlan && createPortal(
                 <div className="mp-overlay" onClick={() => setResubmitPlan(null)}>
                     <div className="mp-ach-modal mp-ach-modal--wide" onClick={e => e.stopPropagation()}>
 
@@ -1400,7 +1404,8 @@ const MonthlyPlanPage = () => {
                             <button className="btn btn-secondary" onClick={() => setResubmitPlan(null)}>Cancel</button>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

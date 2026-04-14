@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
@@ -419,7 +420,7 @@ const RAEmployeeDetailPage = () => {
         const stLabel = isRejected ? 'Rejected' : isEval ? 'Evaluated' : plan.hasAchievement ? 'Achievement added' : 'Plan submitted';
         const stCls   = isRejected ? 'sp-rejected' : isEval ? 'sp-eval' : plan.hasAchievement ? 'sp-ach' : 'sp-plan';
 
-        return (
+        return createPortal(
             <div className="mp-overlay" onClick={() => setSelectedMonthDetail(null)}>
                 <div className="dmod dmod--wide" onClick={e => e.stopPropagation()}>
 
@@ -699,7 +700,8 @@ const RAEmployeeDetailPage = () => {
                     </div>
 
                 </div>
-            </div>
+            </div>,
+            document.body
         );
     };
 

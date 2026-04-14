@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
@@ -375,7 +376,7 @@ const MDEmployeeDetailPage = () => {
     ════════════════════════════════════════════════════ */
     const renderRejectModal = () => {
         if (!rejectTarget) return null;
-        return (
+        return createPortal(
             <div className="med-overlay" onClick={() => setRejectTarget(null)}>
                 <div className="med-modal" style={{ height: 'auto', maxHeight: '90vh' }} onClick={e => e.stopPropagation()}>
                     <div className="med-modal-header">
@@ -429,7 +430,8 @@ const MDEmployeeDetailPage = () => {
                         </button>
                     </div>
                 </div>
-            </div>
+            </div>,
+            document.body
         );
     };
 
@@ -483,7 +485,7 @@ const MDEmployeeDetailPage = () => {
         const stLabel = isRejected ? 'Rejected' : isEval ? 'Evaluated' : plan.hasAchievement ? 'Achievement added' : 'Plan submitted';
         const stCls   = isRejected ? 'sp-rejected' : isEval ? 'sp-eval' : plan.hasAchievement ? 'sp-ach' : 'sp-plan';
 
-        return (
+        return createPortal(
             <div className="mp-overlay" onClick={() => setSelectedMonthDetail(null)}>
                 <div className="dmod dmod--wide" onClick={e => e.stopPropagation()}>
 
@@ -798,7 +800,8 @@ const MDEmployeeDetailPage = () => {
                     </div>
 
                 </div>
-            </div>
+            </div>,
+            document.body
         );
     };
 

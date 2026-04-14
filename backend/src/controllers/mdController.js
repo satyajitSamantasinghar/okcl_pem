@@ -180,9 +180,14 @@ exports.getAllEmployees = async (req, res) => {
       filter.$or = [{ name: regex }, { employeeCode: regex }];
     }
 
-    const employees = await User.find(filter, "name employeeCode department role")
-      .sort({ name: 1 })
-      .limit(50);
+    let query = User.find(filter, "name employeeCode department role reportingAuthorityId")
+      .sort({ name: 1 });
+      
+    if (req.query.q) {
+      query = query.limit(50);
+    }
+    
+    const employees = await query.exec();
 
     res.json(employees);
   } catch (error) {

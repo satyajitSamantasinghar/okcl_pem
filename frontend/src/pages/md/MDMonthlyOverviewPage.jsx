@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
 import {
@@ -287,7 +288,7 @@ const MDMonthlyOverviewPage = () => {
     ══════════════════════════════════════════════════ */
     const renderRejectModal = () => {
         if (!rejectTarget) return null;
-        return (
+        return createPortal(
             <div className="mmo-overlay" onClick={() => setRejectTarget(null)}>
                 <div className="mmo-reject-modal" onClick={e => e.stopPropagation()}>
                     <div className="mmo-reject-modal-header">
@@ -324,7 +325,8 @@ const MDMonthlyOverviewPage = () => {
                         <button className="mmo-reject-cancel-btn" onClick={() => setRejectTarget(null)}>Cancel</button>
                     </div>
                 </div>
-            </div>
+            </div>,
+            document.body
         );
     };
 
@@ -379,7 +381,7 @@ const MDMonthlyOverviewPage = () => {
         const stLabel = isRejected ? 'Rejected' : isEval ? 'Evaluated' : plan.hasAchievement ? 'Achievement added' : 'Plan submitted';
         const stCls   = isRejected ? 'sp-rejected' : isEval ? 'sp-eval' : plan.hasAchievement ? 'sp-ach' : 'sp-plan';
 
-        return (
+        return createPortal(
             <div className="mp-overlay" onClick={() => setSelected(null)}>
                 <div className="dmod dmod--wide" onClick={e => e.stopPropagation()}>
 
@@ -693,7 +695,8 @@ const MDMonthlyOverviewPage = () => {
                     </div>
 
                 </div>
-            </div>
+            </div>,
+            document.body
         );
     };
 
@@ -709,23 +712,43 @@ const MDMonthlyOverviewPage = () => {
                 </div>
             </div>
 
-            {/* Stats row - Using MD KPI Tiles */}
-            <div className="md-kpi-grid">
-                <div className="md-kpi-tile blue">
-                    <div className="md-kpi-label"><FiFileText /> Total Submissions</div>
-                    <div className="md-kpi-value">{stats.total}</div>
+            {/* Stats row - Premium UI */}
+            <div className="mmo-stats-grid">
+                <div className="mmo-stat-card sc-blue">
+                    <div className="mmo-stat-top">
+                        <div className="mmo-stat-icon-wrap"><FiFileText /></div>
+                    </div>
+                    <div>
+                        <div className="mmo-stat-label">Total Submissions</div>
+                        <div className="mmo-stat-val">{stats.total}</div>
+                    </div>
                 </div>
-                <div className="md-kpi-tile green">
-                    <div className="md-kpi-label"><FiTrendingUp /> Has Achievements</div>
-                    <div className="md-kpi-value">{stats.achievement}</div>
+                <div className="mmo-stat-card sc-green">
+                    <div className="mmo-stat-top">
+                        <div className="mmo-stat-icon-wrap"><FiTrendingUp /></div>
+                    </div>
+                    <div>
+                        <div className="mmo-stat-label">Has Achievements</div>
+                        <div className="mmo-stat-val">{stats.achievement}</div>
+                    </div>
                 </div>
-                <div className="md-kpi-tile purple">
-                    <div className="md-kpi-label"><FiCheckCircle /> Evaluated</div>
-                    <div className="md-kpi-value">{stats.evaluated}</div>
+                <div className="mmo-stat-card sc-purple">
+                    <div className="mmo-stat-top">
+                        <div className="mmo-stat-icon-wrap"><FiCheckCircle /></div>
+                    </div>
+                    <div>
+                        <div className="mmo-stat-label">Evaluated</div>
+                        <div className="mmo-stat-val">{stats.evaluated}</div>
+                    </div>
                 </div>
-                <div className="md-kpi-tile red">
-                    <div className="md-kpi-label"><FiAlertCircle /> Rejected</div>
-                    <div className="md-kpi-value">{stats.rejected}</div>
+                <div className="mmo-stat-card sc-red">
+                    <div className="mmo-stat-top">
+                        <div className="mmo-stat-icon-wrap"><FiAlertCircle /></div>
+                    </div>
+                    <div>
+                        <div className="mmo-stat-label">Rejected</div>
+                        <div className="mmo-stat-val">{stats.rejected}</div>
+                    </div>
                 </div>
             </div>
 

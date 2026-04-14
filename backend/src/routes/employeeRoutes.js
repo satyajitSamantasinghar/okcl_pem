@@ -5,7 +5,10 @@ const { verifyToken } = require("../middleware/authMiddleware");
 const { authorizeRoles } = require("../middleware/roleMiddleware");
 const {
   allowMonthlyPlanSubmission,
-  allowMonthlyAchievementSubmission
+  allowMonthlyAchievementSubmission,
+  allowYearlyPlanSubmission,
+  allowYearlyAppraisalSubmission,
+  allowYearlyPlanEdit
 } = require("../middleware/dateMiddleware");
 
 const employeeController = require("../controllers/employeeController");
@@ -30,6 +33,7 @@ router.post(
   "/yearly-plan",
   verifyToken,
   authorizeRoles("EMPLOYEE"),
+  allowYearlyPlanSubmission,
   employeeController.submitYearlyPlan
 );
 
@@ -37,6 +41,7 @@ router.put(
   "/yearly-plan/:id",
   verifyToken,
   authorizeRoles("EMPLOYEE"),
+  allowYearlyPlanEdit,
   employeeController.editYearlyPlan
 );
 
@@ -44,6 +49,7 @@ router.post(
   "/yearly-plan/:id/resubmit",
   verifyToken,
   authorizeRoles("EMPLOYEE"),
+  allowYearlyPlanEdit,
   employeeController.resubmitYearlyPlan
 );
 
@@ -72,6 +78,7 @@ router.post(
   "/yearly-appraisal-report",
   verifyToken,
   authorizeRoles("EMPLOYEE"),
+  allowYearlyAppraisalSubmission,
   employeeController.submitYearlyAppraisalReport
 );
 

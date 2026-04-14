@@ -28,7 +28,7 @@ const PLAN_STATUS_OPTIONS = [
     { value: 'PENDING', label: 'Pending' },
     { value: 'APPROVED', label: 'Approved' },
     { value: 'REJECTED', label: 'Rejected' },
-    { value: 'EDITED', label: 'Edited' },
+    { value: 'EDITED', label: 'Edited Before Approval' },
     { value: 'EDITED_AFTER_APPROVAL', label: 'Edited After Approval' },
 ];
 
@@ -75,10 +75,10 @@ function getPlanStatusInfo(status) {
         PENDING: { label: 'Pending', cls: 'pending', icon: <FiClock /> },
         APPROVED: { label: 'Approved', cls: 'approved', icon: <FiCheckCircle /> },
         REJECTED: { label: 'Rejected', cls: 'rejected', icon: <FiAlertCircle /> },
-        EDITED: { label: 'Edited', cls: 'edited', icon: <FiEdit3 /> },
+        EDITED: { label: 'Edited Before Approval', cls: 'edited', icon: <FiEdit3 /> },
         EDITED_AFTER_APPROVAL: { label: 'Edited After Approval', cls: 'edited', icon: <FiEdit3 /> },
     };
-    return map[status] || { label: status || 'Pending', cls: 'pending', icon: <FiClock /> };
+    return map[status] || { label: status || 'Draft', cls: 'draft', icon: <FiClock /> };
 }
 
 function getReportStatusInfo(status) {
@@ -237,11 +237,14 @@ const FilterBar = ({
 
 const Pagination = ({ totalItems, page, onPageChange }) => {
     const totalPages = Math.ceil(totalItems / PAGE_SIZE);
+    const start = totalItems === 0 ? 0 : ((page - 1) * PAGE_SIZE) + 1;
+    const end = Math.min(page * PAGE_SIZE, totalItems);
 
     if (totalPages <= 1) return null;
 
     return (
         <div className="yp-pagination">
+            <div className="yp-pagination-summary">{`Showing ${start}-${end} of ${totalItems}`}</div>
             <button type="button" className="yp-page-btn" disabled={page === 1} onClick={() => onPageChange(page - 1)}>
                 Previous
             </button>
@@ -272,6 +275,55 @@ const EmptyState = ({ icon, title, message, actionLabel, onAction }) => (
         <button type="button" className="btn btn-primary" onClick={onAction}>
             {actionLabel}
         </button>
+    </div>
+);
+
+const LoadingSkeleton = () => (
+    <div className="yp-page yp-page--loading">
+        <section className="yp-hero yp-hero--skeleton">
+            <div className="yp-hero-copy">
+                <div className="yp-skeleton yp-skeleton--kicker" />
+                <div className="yp-skeleton yp-skeleton--title" />
+                <div className="yp-skeleton yp-skeleton--subtitle" />
+            </div>
+            <div className="yp-hero-actions">
+                <div className="yp-skeleton yp-skeleton--button" />
+                <div className="yp-skeleton yp-skeleton--button" />
+                <div className="yp-skeleton yp-skeleton--icon" />
+            </div>
+        </section>
+
+        <section className="yp-summary-strip">
+            {Array.from({ length: 3 }, (_, index) => (
+                <div key={index} className="yp-summary-card">
+                    <div className="yp-skeleton yp-skeleton--stat-label" />
+                    <div className="yp-skeleton yp-skeleton--stat-value" />
+                </div>
+            ))}
+        </section>
+
+        <section className="yp-panel">
+            <div className="yp-toolbar">
+                <div className="yp-toolbar-filters">
+                    <div className="yp-skeleton yp-skeleton--control" />
+                    <div className="yp-skeleton yp-skeleton--control" />
+                    <div className="yp-skeleton yp-skeleton--search" />
+                </div>
+                <div className="yp-skeleton yp-skeleton--control" />
+            </div>
+            <div className="yp-list-shell">
+                {Array.from({ length: 5 }, (_, index) => (
+                    <div key={index} className="yp-skeleton-row">
+                        <div className="yp-skeleton yp-skeleton--row-large" />
+                        <div className="yp-skeleton yp-skeleton--row-small" />
+                        <div className="yp-skeleton yp-skeleton--row-badge" />
+                        <div className="yp-skeleton yp-skeleton--row-small" />
+                        <div className="yp-skeleton yp-skeleton--row-small" />
+                        <div className="yp-skeleton yp-skeleton--row-action" />
+                    </div>
+                ))}
+            </div>
+        </section>
     </div>
 );
 
@@ -948,12 +1000,7 @@ const YearlyPlanPage = () => {
     );
 
     if (loading) {
-        return (
-            <div className="loading-container">
-                <div className="spinner" />
-                <p>Loading yearly plans...</p>
-            </div>
-        );
+        return <LoadingSkeleton />;
     }
 
     return (
@@ -983,12 +1030,8 @@ const YearlyPlanPage = () => {
                     <strong>{plans.length}</strong>
                 </div>
                 <div className="yp-summary-card">
-                    <span>Reports Submitted</span>
+                    <span>Appraisal Submitted</span>
                     <strong>{reports.length}</strong>
-                </div>
-                <div className="yp-summary-card">
-                    <span>Pending Plans</span>
-                    <strong>{plans.filter((plan) => plan.status === 'PENDING').length}</strong>
                 </div>
                 <div className="yp-summary-card">
                     <span>Completed Reports</span>
@@ -1107,33 +1150,51 @@ const YearlyPlanPage = () => {
                     icon={<FiTarget />}
                     onClose={closePlanModal}
                 >
-                    <form className="yp-form" onSubmit={handleSubmitPlan}>
-                        <div className="yp-form-group">
-                            <label>Financial Year <span className="required">*</span></label>
-                            <select value={financialYear} onChange={(e) => setFinancialYear(e.target.value)} required>
-                                <option value="">Select Financial Year</option>
-                                {yearOptions.map((year) => (
-                                    <option key={year} value={year}>{year}</option>
-                                ))}
-                            </select>
+                    <form className="yp-modal-form" onSubmit={handleSubmitPlan}>
+                        <div className="yp-modal-form-body">
+                            <div className="yp-form-section">
+                                <div className="yp-form-section-header">
+                                    <h3>Planning Context</h3>
+                                    <p>Select the financial year and create the submission context.</p>
+                                </div>
+                                <div className="yp-form-group">
+                                    <label>Financial Year <span className="required">*</span></label>
+                                    <select value={financialYear} onChange={(e) => setFinancialYear(e.target.value)} required>
+                                        <option value="">Select Financial Year</option>
+                                        {yearOptions.map((year) => (
+                                            <option key={year} value={year}>{year}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="yp-form-section">
+                                <div className="yp-form-section-header">
+                                    <h3>Plan Narrative</h3>
+                                    <p>Document yearly goals, success metrics, milestones, and delivery expectations.</p>
+                                </div>
+                                <div className="yp-form-group">
+                                    <label>Plan and Objectives <span className="required">*</span></label>
+                                    <textarea
+                                        placeholder="Write your yearly plan, objectives, milestones, and measurable outcomes."
+                                        value={planAndObjectives}
+                                        onChange={(e) => setPlanAndObjectives(e.target.value)}
+                                        required
+                                        style={{ minHeight: '240px' }}
+                                    />
+                                </div>
+                            </div>
                         </div>
-                        <div className="yp-form-group">
-                            <label>Plan and Objectives <span className="required">*</span></label>
-                            <textarea
-                                placeholder="Write your plan and objectives"
-                                value={planAndObjectives}
-                                onChange={(e) => setPlanAndObjectives(e.target.value)}
-                                required
-                                style={{ minHeight: '180px' }}
-                            />
-                        </div>
-                        <div className="yp-form-actions">
-                            <button type="submit" className="btn btn-primary" disabled={submitting}>
-                                {submitting ? 'Submitting...' : 'Submit Plan'}
-                            </button>
-                            <button type="button" className="btn btn-secondary" onClick={closePlanModal}>
-                                Cancel
-                            </button>
+
+                        <div className="yp-modal-form-footer">
+                            <div className="yp-form-actions">
+                                <button type="submit" className="btn btn-primary" disabled={submitting}>
+                                    {submitting ? 'Submitting...' : 'Submit Plan'}
+                                </button>
+                                <button type="button" className="btn btn-secondary" onClick={closePlanModal}>
+                                    Cancel
+                                </button>
+                            </div>
                         </div>
                     </form>
                 </ModalShell>
@@ -1146,52 +1207,71 @@ const YearlyPlanPage = () => {
                     icon={<FiFileText />}
                     onClose={closeReportModal}
                 >
-                    <form className="yp-form" onSubmit={handleSubmitReport}>
-                        <div className="yp-form-row">
-                            <div className="yp-form-group">
-                                <label>Financial Year <span className="required">*</span></label>
-                                <select value={reportYear} onChange={(e) => setReportYear(e.target.value)} required>
-                                    <option value="">Select Financial Year</option>
-                                    {yearOptions.map((year) => (
-                                        <option key={year} value={year}>{year}</option>
-                                    ))}
-                                </select>
+                    <form className="yp-modal-form" onSubmit={handleSubmitReport}>
+                        <div className="yp-modal-form-body">
+                            <div className="yp-form-section">
+                                <div className="yp-form-section-header">
+                                    <h3>Submission Context</h3>
+                                    <p>Choose the financial year and link the report to a yearly plan when relevant.</p>
+                                </div>
+                                <div className="yp-form-row">
+                                    <div className="yp-form-group">
+                                        <label>Financial Year <span className="required">*</span></label>
+                                        <select value={reportYear} onChange={(e) => setReportYear(e.target.value)} required>
+                                            <option value="">Select Financial Year</option>
+                                            {yearOptions.map((year) => (
+                                                <option key={year} value={year}>{year}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div className="yp-form-group">
+                                        <label>Link to Yearly Plan</label>
+                                        <select value={selectedPlanId} onChange={(e) => setSelectedPlanId(e.target.value)}>
+                                            <option value="">None</option>
+                                            {plans.map((plan) => (
+                                                <option key={plan._id} value={plan._id}>{`FY ${plan.financialYear} - v${plan.version || 1}`}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
                             </div>
-                            <div className="yp-form-group">
-                                <label>Link to Yearly Plan</label>
-                                <select value={selectedPlanId} onChange={(e) => setSelectedPlanId(e.target.value)}>
-                                    <option value="">None</option>
-                                    {plans.map((plan) => (
-                                        <option key={plan._id} value={plan._id}>{`FY ${plan.financialYear} - v${plan.version || 1}`}</option>
-                                    ))}
-                                </select>
+
+                            <div className="yp-form-section">
+                                <div className="yp-form-section-header">
+                                    <h3>Self Assessment</h3>
+                                    <p>Provide detailed delivery against KRA and list additional responsibilities completed.</p>
+                                </div>
+                                <div className="yp-form-group">
+                                    <label>Work / KRA Self-Assessment <span className="required">*</span></label>
+                                    <textarea
+                                        placeholder="Describe the work completed against your yearly KRA and outcomes delivered."
+                                        value={workKRA}
+                                        onChange={(e) => setWorkKRA(e.target.value)}
+                                        required
+                                        style={{ minHeight: '220px' }}
+                                    />
+                                </div>
+                                <div className="yp-form-group">
+                                    <label>Additional Assignments</label>
+                                    <textarea
+                                        placeholder="Capture extra assignments handled beyond the planned KRA."
+                                        value={additionalAssignments}
+                                        onChange={(e) => setAdditionalAssignments(e.target.value)}
+                                        style={{ minHeight: '150px' }}
+                                    />
+                                </div>
                             </div>
                         </div>
-                        <div className="yp-form-group">
-                            <label>Work / KRA Self-Assessment <span className="required">*</span></label>
-                            <textarea
-                                placeholder="Describe the work completed against your yearly KRA and outcomes delivered."
-                                value={workKRA}
-                                onChange={(e) => setWorkKRA(e.target.value)}
-                                required
-                                style={{ minHeight: '160px' }}
-                            />
-                        </div>
-                        <div className="yp-form-group">
-                            <label>Additional Assignments</label>
-                            <textarea
-                                placeholder="Capture extra assignments handled beyond the planned KRA."
-                                value={additionalAssignments}
-                                onChange={(e) => setAdditionalAssignments(e.target.value)}
-                            />
-                        </div>
-                        <div className="yp-form-actions">
-                            <button type="submit" className="btn btn-primary" disabled={submitting}>
-                                {submitting ? 'Submitting...' : 'Submit Report'}
-                            </button>
-                            <button type="button" className="btn btn-secondary" onClick={closeReportModal}>
-                                Cancel
-                            </button>
+
+                        <div className="yp-modal-form-footer">
+                            <div className="yp-form-actions">
+                                <button type="submit" className="btn btn-primary" disabled={submitting}>
+                                    {submitting ? 'Submitting...' : 'Submit Report'}
+                                </button>
+                                <button type="button" className="btn btn-secondary" onClick={closeReportModal}>
+                                    Cancel
+                                </button>
+                            </div>
                         </div>
                     </form>
                 </ModalShell>

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
 import {
@@ -327,7 +328,7 @@ const HRDMonthlyOverviewPage = () => {
         const stLabel = isRejected ? 'Rejected' : isEval ? 'Evaluated' : plan.hasAchievement ? 'Achievement added' : 'Plan submitted';
         const stCls   = isRejected ? 'sp-rejected' : isEval ? 'sp-eval' : plan.hasAchievement ? 'sp-ach' : 'sp-plan';
 
-        return (
+        return createPortal(
             <div className="mp-overlay" onClick={() => setSelected(null)}>
                 <div className="dmod dmod--wide" onClick={e => e.stopPropagation()}>
 
@@ -605,7 +606,8 @@ const HRDMonthlyOverviewPage = () => {
                     </div>
 
                 </div>
-            </div>
+            </div>,
+            document.body
         );
     };
 
