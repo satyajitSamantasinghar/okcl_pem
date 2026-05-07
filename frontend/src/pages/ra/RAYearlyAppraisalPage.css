@@ -1,4 +1,4 @@
-/* =====================================================
+﻿/* =====================================================
    RA YEARLY APPRAISAL PAGE — DESIGN SYSTEM v2
    Prefix: yap-
    8px spacing system · CSS vars from index.css
@@ -841,21 +841,82 @@
 }
 
 /* Give Back btn and stepper breathing room */
-.yap-detail-header > .yap-back-btn { margin: 14px 0 0; }
-.yap-detail-header > .yap-stepper   { margin: 0; border-radius: 0; border-left: none; border-right: none; }
-.yap-detail-header > .yap-hero      { border-radius: 0; border-left: none; border-right: none; border-top: none; margin: 0; }
-.yap-detail-header > .yap-rejection-alert { border-radius: 0; }
+.yap-detail-header>.yap-back-btn {
+    margin: 14px 0 0;
+}
+
+.yap-detail-header>.yap-stepper {
+    margin: 0;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+}
+
+.yap-detail-header>.yap-hero {
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    border-top: none;
+    margin: 0;
+}
+
+.yap-detail-header>.yap-rejection-alert {
+    border-radius: 0;
+}
 
 /* Scrollable split body */
 .yap-detail-body {
     position: sticky;
     top: var(--yap-detail-sticky-top);
     align-self: stretch;
-    display: grid;
-    grid-template-columns: 1fr 320px;
+    display: flex;
+    flex-direction: row;
     overflow: hidden;
     height: var(--yap-detail-body-height);
     min-height: 0;
+}
+
+/* ── DRAGGABLE DIVIDER ── */
+.yap-split-divider {
+    flex: 0 0 5px;
+    width: 5px;
+    background: #E2E8F0;
+    cursor: col-resize;
+    position: relative;
+    transition: background 0.15s;
+    z-index: 10;
+    user-select: none;
+}
+
+.yap-split-divider::before {
+    content: '';
+    position: absolute;
+    inset: 0 -3px;
+    /* expand hit-area without affecting layout */
+}
+
+.yap-split-divider::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 3px;
+    height: 40px;
+    border-radius: 99px;
+    background: #94A3B8;
+    transition: background 0.15s, height 0.15s;
+}
+
+.yap-split-divider:hover,
+.yap-split-divider:active {
+    background: rgba(255, 122, 24, 0.12);
+}
+
+.yap-split-divider:hover::after,
+.yap-split-divider:active::after {
+    background: var(--primary, #FF7A18);
+    height: 56px;
 }
 
 /* ── LEFT PANE — clean reading surface ── */
@@ -871,9 +932,18 @@
     scrollbar-color: #CBD5E1 transparent;
 }
 
-.yap-detail-left::-webkit-scrollbar       { width: 4px; }
-.yap-detail-left::-webkit-scrollbar-track  { background: transparent; }
-.yap-detail-left::-webkit-scrollbar-thumb  { background: #CBD5E1; border-radius: 99px; }
+.yap-detail-left::-webkit-scrollbar {
+    width: 4px;
+}
+
+.yap-detail-left::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.yap-detail-left::-webkit-scrollbar-thumb {
+    background: #CBD5E1;
+    border-radius: 99px;
+}
 
 /* ── RIGHT PANE — sidebar ── */
 .yap-detail-right {
@@ -889,9 +959,18 @@
     scrollbar-color: #CBD5E1 transparent;
 }
 
-.yap-detail-right::-webkit-scrollbar       { width: 4px; }
-.yap-detail-right::-webkit-scrollbar-track  { background: transparent; }
-.yap-detail-right::-webkit-scrollbar-thumb  { background: #CBD5E1; border-radius: 99px; }
+.yap-detail-right::-webkit-scrollbar {
+    width: 4px;
+}
+
+.yap-detail-right::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.yap-detail-right::-webkit-scrollbar-thumb {
+    background: #CBD5E1;
+    border-radius: 99px;
+}
 
 /* ════════════════════════════════════════
    LEFT-PANE SECTION COMPONENTS
@@ -903,7 +982,10 @@
     margin-bottom: 28px;
     flex-shrink: 0;
 }
-.yap-section:last-child { margin-bottom: 0; }
+
+.yap-section:last-child {
+    margin-bottom: 0;
+}
 
 /* Section heading with colour accent strip on left */
 .yap-section-hd {
@@ -912,15 +994,33 @@
     gap: 10px;
     padding: 0 0 0 14px;
     margin-bottom: 12px;
-    border-left: 4px solid #94a3b8;  /* default — overridden by modifier */
+    border-left: 4px solid #94a3b8;
+    /* default — overridden by modifier */
 }
 
-.yap-section-hd--blue   { border-left-color: var(--info, #2563EB); }
-.yap-section-hd--teal   { border-left-color: #0D9488; }
-.yap-section-hd--purple { border-left-color: #7C3AED; }
-.yap-section-hd--green  { border-left-color: var(--success, #16A34A); }
-.yap-section-hd--amber  { border-left-color: var(--warning, #F59E0B); }
-.yap-section-hd--orange { border-left-color: var(--primary, #FF7A18); }
+.yap-section-hd--blue {
+    border-left-color: var(--info, #2563EB);
+}
+
+.yap-section-hd--teal {
+    border-left-color: #0D9488;
+}
+
+.yap-section-hd--purple {
+    border-left-color: #7C3AED;
+}
+
+.yap-section-hd--green {
+    border-left-color: var(--success, #16A34A);
+}
+
+.yap-section-hd--amber {
+    border-left-color: var(--warning, #F59E0B);
+}
+
+.yap-section-hd--orange {
+    border-left-color: var(--primary, #FF7A18);
+}
 
 /* Icon badge inside section heading */
 .yap-section-hd-icon {
@@ -935,12 +1035,35 @@
     margin-top: 1px;
 }
 
-.yap-section-hd--blue   .yap-section-hd-icon { background: var(--info-bg, #DBEAFE);          color: var(--info, #2563EB);     }
-.yap-section-hd--teal   .yap-section-hd-icon { background: rgba(13,148,136,0.1);              color: #0D9488;                  }
-.yap-section-hd--purple .yap-section-hd-icon { background: rgba(124,58,237,0.1);              color: #7C3AED;                  }
-.yap-section-hd--green  .yap-section-hd-icon { background: var(--success-bg, #DCFCE7);       color: var(--success, #16A34A);  }
-.yap-section-hd--amber  .yap-section-hd-icon { background: var(--warning-bg, #FEF3C7);       color: var(--warning, #F59E0B);  }
-.yap-section-hd--orange .yap-section-hd-icon { background: rgba(255,122,24,0.1);              color: var(--primary, #FF7A18);  }
+.yap-section-hd--blue .yap-section-hd-icon {
+    background: var(--info-bg, #DBEAFE);
+    color: var(--info, #2563EB);
+}
+
+.yap-section-hd--teal .yap-section-hd-icon {
+    background: rgba(13, 148, 136, 0.1);
+    color: #0D9488;
+}
+
+.yap-section-hd--purple .yap-section-hd-icon {
+    background: rgba(124, 58, 237, 0.1);
+    color: #7C3AED;
+}
+
+.yap-section-hd--green .yap-section-hd-icon {
+    background: var(--success-bg, #DCFCE7);
+    color: var(--success, #16A34A);
+}
+
+.yap-section-hd--amber .yap-section-hd-icon {
+    background: var(--warning-bg, #FEF3C7);
+    color: var(--warning, #F59E0B);
+}
+
+.yap-section-hd--orange .yap-section-hd-icon {
+    background: rgba(255, 122, 24, 0.1);
+    color: var(--primary, #FF7A18);
+}
 
 .yap-section-hd-title {
     font-size: 0.8125rem;
@@ -967,7 +1090,7 @@
     font-size: 0.875rem;
     color: #1E293B;
     line-height: 1.8;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
 }
 
 /* ── REMARK ITEMS (inside Evaluator Remarks section) ── */
@@ -976,15 +1099,26 @@
     border: 1px solid #E2E8F0;
     overflow: hidden;
     background: #FFFFFF;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
     margin-bottom: 10px;
     flex-shrink: 0;
 }
-.yap-remark-item:last-child { margin-bottom: 0; }
 
-.yap-remark-item--ra  { border-left: 4px solid var(--primary, #FF7A18); }
-.yap-remark-item--hrd { border-left: 4px solid #0D9488; }
-.yap-remark-item--md  { border-left: 4px solid #6366F1; }
+.yap-remark-item:last-child {
+    margin-bottom: 0;
+}
+
+.yap-remark-item--ra {
+    border-left: 4px solid var(--primary, #FF7A18);
+}
+
+.yap-remark-item--hrd {
+    border-left: 4px solid #0D9488;
+}
+
+.yap-remark-item--md {
+    border-left: 4px solid #6366F1;
+}
 
 .yap-remark-item-hd {
     display: flex;
@@ -996,9 +1130,21 @@
     text-transform: uppercase;
     letter-spacing: 0.08em;
 }
-.yap-remark-item--ra  .yap-remark-item-hd { background: rgba(255,122,24,0.07); color: var(--primary, #FF7A18); }
-.yap-remark-item--hrd .yap-remark-item-hd { background: rgba(13,148,136,0.07);  color: #0D9488; }
-.yap-remark-item--md  .yap-remark-item-hd { background: rgba(99,102,241,0.07);  color: #6366F1; }
+
+.yap-remark-item--ra .yap-remark-item-hd {
+    background: rgba(255, 122, 24, 0.07);
+    color: var(--primary, #FF7A18);
+}
+
+.yap-remark-item--hrd .yap-remark-item-hd {
+    background: rgba(13, 148, 136, 0.07);
+    color: #0D9488;
+}
+
+.yap-remark-item--md .yap-remark-item-hd {
+    background: rgba(99, 102, 241, 0.07);
+    color: #6366F1;
+}
 
 .yap-remark-item-body {
     padding: 12px 14px;
@@ -1612,6 +1758,7 @@
 
 /* ─── RESPONSIVE ────────────────────────── */
 @media (max-width: 1024px) {
+
     /* Collapse to single column, restore natural browser scroll */
     .yap-detail-page {
         height: auto;
@@ -1629,10 +1776,14 @@
         position: static;
         top: auto;
         height: auto;
-        grid-template-columns: 1fr;
+        flex-direction: column;
         overflow: visible;
         flex: none;
         min-height: auto;
+    }
+
+    .yap-split-divider {
+        display: none;
     }
 
     .yap-detail-left {
@@ -1701,4 +1852,354 @@
     .yap-scorecard--highlight {
         grid-column: 1;
     }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PHASE 3 — PLAN BASELINE BANNER
+   Shown below the hero header on all appraisal report views
+═══════════════════════════════════════════════════════════ */
+.yap-baseline-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 24px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    border-top: 1px solid transparent;
+    flex-shrink: 0;
+}
+
+.yap-baseline-banner--approved {
+    background: #f0fdf4;
+    color: #166534;
+    border-top-color: #bbf7d0;
+}
+
+.yap-baseline-banner--warning {
+    background: #fffbeb;
+    color: #92400e;
+    border-top-color: #fde68a;
+}
+
+.yap-baseline-banner--neutral {
+    background: #f8fafc;
+    color: #475569;
+    border-top-color: #e2e8f0;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PHASE 2 — COMPARE MODE BUTTON (hero area)
+═══════════════════════════════════════════════════════════ */
+.yap-compare-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 9px 16px;
+    border-radius: 9px;
+    border: 1.5px solid var(--border-default);
+    background: var(--bg-card);
+    color: var(--text-primary);
+    font-size: 0.82rem;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
+    white-space: nowrap;
+}
+
+.yap-compare-btn:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+    background: rgba(255, 122, 24, 0.05);
+}
+
+.yap-compare-btn--active {
+    background: rgba(239, 68, 68, 0.08);
+    border-color: #ef4444;
+    color: #dc2626;
+}
+
+.yap-compare-btn--active:hover {
+    background: rgba(239, 68, 68, 0.14);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PHASE 2 — 3-COLUMN COMPARE BODY LAYOUT
+═══════════════════════════════════════════════════════════ */
+.yap-detail-page--compare .yap-detail-header {
+    /* header still fixed-height, no changes needed */
+}
+
+.yap-compare-body {
+    position: sticky;
+    top: var(--yap-detail-sticky-top);
+    display: flex;
+    flex-direction: row;
+    height: var(--yap-detail-body-height);
+    min-height: 0;
+    overflow: hidden;
+}
+
+.yap-sync-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 14px;
+    border-radius: 100px;
+    border: 1.5px solid var(--border-default);
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    font-size: 0.72rem;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.yap-sync-btn--on {
+    background: rgba(255, 122, 24, 0.1);
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+/* Individual compare panes */
+.yap-compare-pane {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    scrollbar-width: thin;
+    scrollbar-color: #CBD5E1 transparent;
+}
+
+.yap-compare-pane::-webkit-scrollbar {
+    width: 4px;
+}
+
+.yap-compare-pane::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.yap-compare-pane::-webkit-scrollbar-thumb {
+    background: #CBD5E1;
+    border-radius: 99px;
+}
+
+.yap-compare-pane--plan {
+    background: #f0f4ff;
+    border-right: 1px solid #dde4ff;
+    flex: 0 0 35%;
+}
+
+.yap-compare-pane--report {
+    background: #f0fff4;
+    border-right: 1px solid #d1fae5;
+    flex: 0 0 35%;
+}
+
+.yap-compare-pane--scoring {
+    background: #f1f5f9;
+    flex: 1;
+    padding: 0 0 0 0;
+    min-width: 260px;
+}
+
+/* Sticky pane header */
+.yap-compare-pane-hd {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    padding: 10px 20px;
+    font-size: 0.68rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-secondary);
+    background: inherit;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.yap-compare-pane--plan .yap-compare-pane-hd {
+    color: #3730a3;
+    background: #eef2ff;
+    border-bottom-color: #c7d2fe;
+}
+
+.yap-compare-pane--report .yap-compare-pane-hd {
+    color: #166534;
+    background: #dcfce7;
+    border-bottom-color: #bbf7d0;
+}
+
+.yap-compare-pane--scoring .yap-compare-pane-hd {
+    color: var(--primary);
+    background: #f1f5f9;
+    border-bottom-color: #e2e8f0;
+}
+
+/* Hide compare button on mobile */
+@media (max-width: 1024px) {
+    .yap-compare-btn {
+        display: none;
+    }
+
+    .yap-compare-body {
+        position: static;
+        top: auto;
+        height: auto;
+        flex-direction: column;
+        overflow: visible;
+    }
+
+    .yap-compare-pane {
+        overflow-y: visible;
+        height: auto;
+        flex: none !important;
+        width: 100%;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PHASE 1 — RIGHT PANEL TABS (📋 Yearly Plan / ⭐ Scoring)
+═══════════════════════════════════════════════════════════ */
+.yap-right-tabs {
+    display: flex;
+    gap: 2px;
+    border-bottom: 2px solid var(--border-default);
+    background: var(--bg-card);
+    flex-shrink: 0;
+    padding: 0 12px;
+}
+
+.yap-right-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 10px 14px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: color 0.15s, border-color 0.15s;
+    white-space: nowrap;
+}
+
+.yap-right-tab:hover {
+    color: var(--text-primary);
+}
+
+.yap-right-tab--active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PHASE 1 — YEARLY PLAN TAB CONTENT (inside right panel)
+═══════════════════════════════════════════════════════════ */
+.yap-plan-tab {
+    padding: 14px 16px 40px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.yap-plan-tab-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.yap-plan-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 11px;
+    border-radius: 100px;
+    font-size: 0.68rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.yap-plan-status-badge--approved {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.yap-plan-status-badge--pending {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.yap-plan-status-badge--edited {
+    background: #e0e7ff;
+    color: #3730a3;
+}
+
+.yap-plan-tab-fy {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.yap-plan-tab-warning {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px 13px;
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    border-left: 4px solid #f59e0b;
+    border-radius: 8px;
+    font-size: 0.78rem;
+    color: #92400e;
+    line-height: 1.5;
+}
+
+.yap-plan-tab-approved {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 9px 13px;
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-left: 4px solid #22c55e;
+    border-radius: 8px;
+    font-size: 0.78rem;
+    color: #166534;
+    font-weight: 600;
+}
+
+/* Empty state for plan tab */
+.yap-plan-tab-empty {
+    padding: 32px 20px;
+    text-align: center;
+    color: var(--text-secondary);
+}
+
+.yap-plan-tab-empty-icon {
+    font-size: 1.8rem;
+    opacity: 0.3;
+    margin-bottom: 10px;
+}
+
+.yap-plan-tab-empty p {
+    font-size: 0.84rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 4px;
+}
+
+.yap-plan-tab-empty span {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    line-height: 1.5;
 }

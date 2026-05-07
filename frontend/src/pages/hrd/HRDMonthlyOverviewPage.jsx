@@ -623,25 +623,130 @@ const HRDMonthlyOverviewPage = () => {
                 </div>
             </div>
 
-            {/* Stats row - Using MD KPI Tiles */}
-            <div className="md-kpi-grid">
-                <div className="md-kpi-tile blue">
-                    <div className="md-kpi-label"><FiFileText /> Total Submissions</div>
-                    <div className="md-kpi-value">{stats.total}</div>
-                </div>
-                <div className="md-kpi-tile green">
-                    <div className="md-kpi-label"><FiTrendingUp /> Has Achievements</div>
-                    <div className="md-kpi-value">{stats.achievement}</div>
-                </div>
-                <div className="md-kpi-tile purple">
-                    <div className="md-kpi-label"><FiCheckCircle /> Evaluated</div>
-                    <div className="md-kpi-value">{stats.evaluated}</div>
-                </div>
-                <div className="md-kpi-tile red">
-                    <div className="md-kpi-label"><FiAlertCircle /> Rejected</div>
-                    <div className="md-kpi-value">{stats.rejected}</div>
-                </div>
-            </div>
+            {/* Stats row — Professional KPI Cards */}
+            {(() => {
+                const total = stats.total || 1; // avoid div/0
+                const achPct  = Math.round((stats.achievement / total) * 100);
+                const evalPct = Math.round((stats.evaluated   / total) * 100);
+                const rejPct  = Math.round((stats.rejected    / total) * 100);
+
+                const cardBase = {
+                    background: '#ffffff',
+                    border: '1px solid #E2E8F0',
+                    borderRadius: '16px',
+                    padding: '20px 22px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0',
+                    position: 'relative',
+                    overflow: 'hidden',
+                    boxShadow: '0 1px 4px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.03)',
+                    transition: 'transform 0.2s, box-shadow 0.2s',
+                    flex: '1',
+                    minWidth: '0',
+                };
+
+                const KpiCard = ({ icon, label, value, pct, accentColor, accentBg, trackColor, sublabel, glow }) => (
+                    <div style={{ ...cardBase }}
+                        onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = `0 8px 24px rgba(0,0,0,0.07), 0 0 0 1px ${accentColor}22`; }}
+                        onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.03)'; }}
+                    >
+                        {/* Top accent bar */}
+                        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '3px', background: accentColor, borderRadius: '16px 16px 0 0' }} />
+
+                        {/* Icon + label row */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', marginTop: '4px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <div style={{
+                                    width: '36px', height: '36px', borderRadius: '10px',
+                                    background: accentBg, color: accentColor,
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    fontSize: '1rem', flexShrink: 0,
+                                }}>
+                                    {icon}
+                                </div>
+                                <span style={{ fontSize: '0.8rem', fontWeight: '600', color: '#64748B', lineHeight: 1.2 }}>{label}</span>
+                            </div>
+                            {pct !== null && (
+                                <span style={{
+                                    fontSize: '0.7rem', fontWeight: '700', padding: '3px 8px',
+                                    borderRadius: '20px', background: accentBg, color: accentColor,
+                                    letterSpacing: '0.02em',
+                                }}>
+                                    {pct}%
+                                </span>
+                            )}
+                        </div>
+
+                        {/* Big value */}
+                        <div style={{ fontSize: '2.25rem', fontWeight: '800', color: '#0F172A', lineHeight: '1', marginBottom: '12px', letterSpacing: '-0.02em' }}>
+                            {value}
+                        </div>
+
+                        {/* Progress bar */}
+                        {pct !== null && (
+                            <div style={{ width: '100%', height: '5px', background: trackColor, borderRadius: '4px', marginBottom: '10px', overflow: 'hidden' }}>
+                                <div style={{
+                                    height: '100%', width: `${pct}%`,
+                                    background: accentColor,
+                                    borderRadius: '4px',
+                                    transition: 'width 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
+                                }} />
+                            </div>
+                        )}
+
+                        {/* Sub label */}
+                        <div style={{ fontSize: '0.72rem', color: '#94A3B8', fontWeight: '500', marginTop: 'auto' }}>
+                            {sublabel}
+                        </div>
+                    </div>
+                );
+
+                return (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '20px' }}>
+                        <KpiCard
+                            icon={<FiFileText />}
+                            label="Total Submissions"
+                            value={stats.total}
+                            pct={null}
+                            accentColor="#3B82F6"
+                            accentBg="#EFF6FF"
+                            trackColor="#DBEAFE"
+                            sublabel={`For ${MONTHS.find(m => m.v === filterMonth)?.l || 'selected period'} ${filterYear}`}
+                        />
+                        <KpiCard
+                            icon={<FiTrendingUp />}
+                            label="Has Achievements"
+                            value={stats.achievement}
+                            pct={achPct}
+                            accentColor="#10B981"
+                            accentBg="#ECFDF5"
+                            trackColor="#D1FAE5"
+                            sublabel={`${stats.total - stats.achievement} still pending achievement`}
+                        />
+                        <KpiCard
+                            icon={<FiCheckCircle />}
+                            label="Evaluated"
+                            value={stats.evaluated}
+                            pct={evalPct}
+                            accentColor="#8B5CF6"
+                            accentBg="#F5F3FF"
+                            trackColor="#EDE9FE"
+                            sublabel={`${stats.total - stats.evaluated} awaiting RA evaluation`}
+                        />
+                        <KpiCard
+                            icon={<FiAlertCircle />}
+                            label="Rejected by MD"
+                            value={stats.rejected}
+                            pct={rejPct}
+                            accentColor="#EF4444"
+                            accentBg="#FEF2F2"
+                            trackColor="#FEE2E2"
+                            sublabel={stats.rejected === 0 ? 'No rejections — great!' : `${stats.rejected} plan${stats.rejected !== 1 ? 's' : ''} need resubmission`}
+                        />
+                    </div>
+                );
+            })()}
 
             {/* Filter bar */}
             <div className="mmo-filter-bar">

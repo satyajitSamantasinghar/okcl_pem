@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
@@ -412,7 +413,7 @@ const RADashboard = () => {
         <div className="fade-in ra-dashboard-container">
 
             {/* ── Modal ── */}
-            {modalConfig.isOpen && (
+            {modalConfig.isOpen && createPortal(
                 <div className="ra-modal-overlay" onClick={closeModal}>
                     <div className="ra-modal-content" onClick={(e) => e.stopPropagation()}>
                         <div className="ra-modal-header">
@@ -448,7 +449,8 @@ const RADashboard = () => {
                             )}
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
             {/* ── 1. Welcome Banner ── */}

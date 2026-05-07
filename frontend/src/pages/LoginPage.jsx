@@ -90,7 +90,7 @@ const LoginPage = () => {
                 </form>
 
                 <div className="login-footer">
-                    <a href="#" className="login-link">Don't have an account?</a>
+                    <a href="#" className="login-link">Login with HRMS</a>
                     <a href="#" className="login-link">Forgot password?</a>
                 </div>
             </div>

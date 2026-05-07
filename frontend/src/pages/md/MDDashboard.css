@@ -729,6 +729,7 @@
     backdrop-filter: blur(4px);
     display: flex; align-items: center; justify-content: center;
     z-index: 1000;
+    padding-left: var(--sidebar-width, 260px);
 }
 .mp-modal {
     background: #fff;
@@ -779,6 +780,7 @@
     .md-charts-row { grid-template-columns: 1fr !important; }
     .md-chart-card { grid-column: span 1 !important; }
     .md-nav-tiles-row { grid-template-columns: 1fr; }
+    .mp-overlay { padding-left: 0; }
 }
 @media (max-width: 768px) {
     .md-health-bar { grid-template-columns: repeat(2, 1fr); gap: 12px; padding: 16px; }

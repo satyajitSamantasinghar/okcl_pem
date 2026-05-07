@@ -427,27 +427,14 @@ import {
     FiCheckCircle, FiAlertCircle, FiEdit3, FiChevronRight
 } from 'react-icons/fi';
 import './RAQuarterlyEvaluationPage.css';
+// FISCAL YEAR FIX — import shared fiscal utilities
+import { getCurrentQuarterLabel, buildQuarterOptions } from '../../utils/fiscalUtils';
 
-/* =====================================================
-   HELPERS
-===================================================== */
-function getCurrentQuarter() {
-    const now = new Date();
-    const q = Math.ceil((now.getMonth() + 1) / 3);
-    return `Q${q}-${now.getFullYear()}`;
-}
-
-function buildQuarterOptions() {
-    const opts = [];
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    for (let y = currentYear - 1; y <= currentYear; y++) {
-        for (let q = 1; q <= 4; q++) {
-            opts.push(`Q${q}-${y}`);
-        }
-    }
-    return opts;
-}
+// FISCAL YEAR FIX — removed local getCurrentQuarter() which used calendar-based
+// Math.ceil((month+1)/3). Now using getCurrentQuarterLabel() from fiscalUtils.
+// FISCAL YEAR FIX — removed local buildQuarterOptions() which iterated calendar years
+// and labeled Q1=Jan-Mar. Now using buildQuarterOptions() from fiscalUtils
+// which follows April-March fiscal year order.
 
 function getInitials(name) {
     if (!name) return '?';
@@ -473,11 +460,13 @@ function getScoreBg(score) {
 ===================================================== */
 const RAQuarterlyEvaluationPage = () => {
     const navigate = useNavigate();
-    const [quarter, setQuarter] = useState(getCurrentQuarter());
+    // FISCAL YEAR FIX — was getCurrentQuarter() (calendar-based), now getCurrentQuarterLabel()
+    const [quarter, setQuarter] = useState(getCurrentQuarterLabel());
     const [evaluations, setEvaluations] = useState([]);
     const [loading, setLoading] = useState(true);
 
-    const quarterOptions = buildQuarterOptions();
+    // FISCAL YEAR FIX — uses fiscal buildQuarterOptions() from fiscalUtils (2 years back)
+    const quarterOptions = buildQuarterOptions(2);
 
     const fetchEvaluations = useCallback(async () => {
         setLoading(true);

@@ -372,7 +372,7 @@ const HRDDashboard = () => {
                 </div>
             )}
 
-            {/* ── Shortcuts: Monthly Overview | People Directory | Yearly Appraisal ── */}
+            {/* ── Shortcuts: Monthly Overview | Employee Overview | Yearly Appraisal ── */}
             <div className="hrd-shortcuts">
                 <Link to="/hrd/monthly-overview" className="hrd-shortcut">
                     <div className="hrd-shortcut-icon green"><FiList /></div>
@@ -385,7 +385,7 @@ const HRDDashboard = () => {
                 <Link to="/hrd/employees" className="hrd-shortcut">
                     <div className="hrd-shortcut-icon blue"><FiUsers /></div>
                     <div className="hrd-shortcut-body">
-                        <h4>People Directory</h4>
+                        <h4>Employee Overview</h4>
                         <p>Interactive overview of all employees and reporting authorities</p>
                     </div>
                     <FiChevronRight className="hrd-shortcut-arrow" />

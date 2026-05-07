@@ -496,6 +496,7 @@ exports.getYearlyReports = async (req, res) => {
 
     const reports = await YearlyAppraisalReport.find(filter)
       .populate("employeeId", "name employeeCode department")
+      .populate("yearlyPlanId", "planAndObjectives financialYear version status submittedAt editHistory mdRemarks")
       .sort({ submittedAt: -1 });
 
     res.json(reports);

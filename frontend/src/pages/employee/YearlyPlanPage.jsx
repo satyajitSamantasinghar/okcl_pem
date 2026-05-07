@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
 import {
@@ -159,25 +160,28 @@ const RAStatusBadge = ({ report }) => {
     );
 };
 
-const ModalShell = ({ title, subtitle, icon, onClose, children }) => (
-    <div className="yp-modal-overlay" onClick={onClose}>
-        <div className="yp-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="yp-modal-header">
-                <div className="yp-modal-title-wrap">
-                    <div className="yp-modal-icon">{icon}</div>
-                    <div>
-                        <h2>{title}</h2>
-                        <p>{subtitle}</p>
+const ModalShell = ({ title, subtitle, icon, onClose, children }) => {
+    const content = (
+        <div className="yp-modal-overlay" onClick={onClose}>
+            <div className="yp-modal" onClick={(e) => e.stopPropagation()}>
+                <div className="yp-modal-header">
+                    <div className="yp-modal-title-wrap">
+                        <div className="yp-modal-icon">{icon}</div>
+                        <div>
+                            <h2>{title}</h2>
+                            <p>{subtitle}</p>
+                        </div>
                     </div>
+                    <button className="yp-modal-close" type="button" onClick={onClose} aria-label="Close">
+                        <FiX />
+                    </button>
                 </div>
-                <button className="yp-modal-close" type="button" onClick={onClose} aria-label="Close">
-                    <FiX />
-                </button>
+                <div className="yp-modal-body">{children}</div>
             </div>
-            <div className="yp-modal-body">{children}</div>
         </div>
-    </div>
-);
+    );
+    return createPortal(content, document.body);
+};
 
 const FilterBar = ({
     years,

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
@@ -92,9 +93,9 @@ const MDDashboard = () => {
             loadEmployeeDetail(emp);
             window.history.replaceState({}, '');
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
-    
+
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(true);
 
@@ -197,7 +198,7 @@ const MDDashboard = () => {
     // 6 Month Trend - ABSOLUTE COUNTS
     const trendData = useMemo(() => {
         const dataMap = {};
-        
+
         // Initialize last 6 months strictly
         const now = new Date();
         for (let i = 5; i >= 0; i--) {
@@ -230,7 +231,7 @@ const MDDashboard = () => {
             const d = emp.department || 'Unassigned';
             counts[d] = (counts[d] || 0) + 1;
         });
-        return Object.keys(counts).map(dept => ({ department: dept, count: counts[dept] })).sort((a,b) => b.count - a.count);
+        return Object.keys(counts).map(dept => ({ department: dept, count: counts[dept] })).sort((a, b) => b.count - a.count);
     }, [allEmployees]);
     const DEPT_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#14B8A6'];
 
@@ -266,7 +267,7 @@ const MDDashboard = () => {
         monthlyPlansList.forEach(p => {
             const empId = String(p.employeeId?._id || p.employeeId);
             const isCurrentMonth = p.month === currentMonth;
-            
+
             // Find which RA this employee belongs to
             Object.values(raMap).forEach(ra => {
                 if (ra.teamEmployeeIds.has(empId)) {
@@ -294,46 +295,46 @@ const MDDashboard = () => {
     const pendingQueue = useMemo(() => {
         const queue = [];
         const seen = new Set();
-        
+
         monthlyPlansList.forEach(p => {
-             if (p.status === 'SUBMITTED' || p.status === 'PENDING') {
+            if (p.status === 'SUBMITTED' || p.status === 'PENDING') {
                 const key = `mp-${p._id}`;
                 if (!seen.has(key)) {
-                  seen.add(key);
-                  queue.push({
-                      id: p._id,
-                      name: p.employeeId?.name || "Unknown",
-                      raName: p.employeeId?.reportingAuthorityId?.name || null,
-                      department: p.employeeId?.department || null,
-                      type: 'Monthly',
-                      entity: 'MONTHLY_PLAN',
-                      date: p.submittedAt || p.createdAt,
-                      val: p
-                  });
+                    seen.add(key);
+                    queue.push({
+                        id: p._id,
+                        name: p.employeeId?.name || "Unknown",
+                        raName: p.employeeId?.reportingAuthorityId?.name || null,
+                        department: p.employeeId?.department || null,
+                        type: 'Monthly',
+                        entity: 'MONTHLY_PLAN',
+                        date: p.submittedAt || p.createdAt,
+                        val: p
+                    });
                 }
-             }
+            }
         });
-        
+
         yearlyPlansList.forEach(p => {
-             if (p.status === 'PENDING') {
+            if (p.status === 'PENDING') {
                 const key = `yp-${p._id}`;
                 if (!seen.has(key)) {
-                  seen.add(key);
-                  queue.push({
-                      id: p._id,
-                      name: p.employeeId?.name || "Unknown",
-                      raName: null,
-                      department: p.employeeId?.department || null,
-                      type: 'Yearly Plan',
-                      entity: 'YEARLY_PLAN',
-                      date: p.submittedAt || p.createdAt,
-                      val: p
-                  });
+                    seen.add(key);
+                    queue.push({
+                        id: p._id,
+                        name: p.employeeId?.name || "Unknown",
+                        raName: null,
+                        department: p.employeeId?.department || null,
+                        type: 'Yearly Plan',
+                        entity: 'YEARLY_PLAN',
+                        date: p.submittedAt || p.createdAt,
+                        val: p
+                    });
                 }
-             }
+            }
         });
-        
-        return queue.sort((a,b) => new Date(b.date) - new Date(a.date));
+
+        return queue.sort((a, b) => new Date(b.date) - new Date(a.date));
     }, [monthlyPlansList, yearlyPlansList]);
 
     const displayedPending = pendingQueue.slice(0, 5);
@@ -362,7 +363,7 @@ const MDDashboard = () => {
         try {
             const res = await api.get(`/md/employee/${emp._id}`);
             setEmpDetail(res.data);
-        } catch { toast.error('Failed to load employee detail'); } 
+        } catch { toast.error('Failed to load employee detail'); }
         finally { setEmpDetailLoading(false); }
     };
 
@@ -490,10 +491,10 @@ const MDDashboard = () => {
 
             {/* Layout Split: Main Analytics (Left) vs Action Queue (Right) */}
             <div className="md-dash-layout">
-                
+
                 {/* === LEFT COLUMN: Metrics & Charts === */}
                 <div className="md-main-content">
-                    
+
                     {/* Change 2 — Redesigned Organization Health Bar */}
                     <div className="md-health-bar">
                         {/* Metric 1: Yearly plans approved */}
@@ -616,7 +617,7 @@ const MDDashboard = () => {
                                         {item.raName ? `via ${item.raName} · ` : ''}{item.department || 'No dept'}
                                     </div>
                                     <div className="md-ap-desc">
-                                        <span className={`md-ap-tag ${item.entity === 'YEARLY_PLAN' ? 'yp' : 'mp'}`}>{item.type}</span> 
+                                        <span className={`md-ap-tag ${item.entity === 'YEARLY_PLAN' ? 'yp' : 'mp'}`}>{item.type}</span>
                                         <span className="md-ap-time">• {formatTimeAgo(item.date)}</span>
                                     </div>
                                 </div>
@@ -795,7 +796,7 @@ const MDDashboard = () => {
                     <div className="md-nav-tile" onClick={() => navigate('/md/employees')}>
                         <div className="md-nt-icon blue"><FiUsersIcon /></div>
                         <div className="md-nt-body">
-                            <h4>People Directory</h4>
+                            <h4>Employee Overview</h4>
                             <p>Manage and search employee base</p>
                         </div>
                         <FiChevronRight className="md-nt-arrow" />
@@ -811,7 +812,7 @@ const MDDashboard = () => {
                     <div className="md-nav-tile" onClick={() => navigate('/md/approvals')}>
                         <div className="md-nt-icon green"><FiCheckCircle /></div>
                         <div className="md-nt-body">
-                            <h4>Approvals Hub</h4>
+                            <h4>Yearly plan and appraisal</h4>
                             <p>Clear organizational bottlenecks</p>
                         </div>
                         <FiChevronRight className="md-nt-arrow" />
@@ -820,7 +821,7 @@ const MDDashboard = () => {
             </div>
 
             {/* Confirm Approve All Modal */}
-            {approveAllConfirmOpen && (
+            {approveAllConfirmOpen && createPortal(
                 <div className="mp-overlay" onClick={() => setApproveAllConfirmOpen(false)}>
                     <div className="mp-modal" style={{ maxWidth: '400px' }} onClick={e => e.stopPropagation()}>
                         <div className="mp-modal-header" style={{ borderBottom: 'none', paddingBottom: '10px' }}>
@@ -839,11 +840,12 @@ const MDDashboard = () => {
                             </div>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
             {/* Reject Modal */}
-            {rejectTarget && (
+            {rejectTarget && createPortal(
                 <div className="mp-overlay" onClick={() => setRejectTarget(null)}>
                     <div className="mp-modal" style={{ maxWidth: '440px' }} onClick={e => e.stopPropagation()}>
                         <div className="mp-modal-header">
@@ -877,7 +879,8 @@ const MDDashboard = () => {
                             </div>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

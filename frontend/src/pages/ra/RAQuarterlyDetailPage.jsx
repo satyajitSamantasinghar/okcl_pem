@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
@@ -273,6 +273,65 @@ const PlanCard = ({ planText, planIndex, pa, hasAchievementRecord }) => {
 };
 
 /* ====================================================
+   SPLIT PANE HOOK
+==================================================== */
+const SPLIT_KEY = 'ra_qdp_split_pct';
+const DEFAULT_PCT = 65;
+const MIN_PCT = 40;
+const MAX_PCT = 80;
+
+const useSplitPane = () => {
+    const [leftPct, setLeftPct] = useState(() => {
+        const saved = localStorage.getItem(SPLIT_KEY);
+        const n = Number(saved);
+        return (n >= MIN_PCT && n <= MAX_PCT) ? n : DEFAULT_PCT;
+    });
+    const containerRef = useRef(null);
+    const dragging = useRef(false);
+
+    const onMouseMove = useCallback((e) => {
+        if (!dragging.current || !containerRef.current) return;
+        const rect = containerRef.current.getBoundingClientRect();
+        const rawPct = ((e.clientX - rect.left) / rect.width) * 100;
+        const clamped = Math.min(MAX_PCT, Math.max(MIN_PCT, rawPct));
+        setLeftPct(clamped);
+    }, []);
+
+    const onMouseUp = useCallback(() => {
+        if (!dragging.current) return;
+        dragging.current = false;
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        document.body.style.pointerEvents = '';
+        localStorage.setItem(SPLIT_KEY, String(Math.round(leftPct)));
+    }, [leftPct]);
+
+    useEffect(() => {
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
+        return () => {
+            window.removeEventListener('mousemove', onMouseMove);
+            window.removeEventListener('mouseup', onMouseUp);
+        };
+    }, [onMouseMove, onMouseUp]);
+
+    const onDividerMouseDown = useCallback((e) => {
+        e.preventDefault();
+        dragging.current = true;
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        document.body.style.pointerEvents = 'none';
+    }, []);
+
+    const onDividerDblClick = useCallback(() => {
+        setLeftPct(DEFAULT_PCT);
+        localStorage.setItem(SPLIT_KEY, String(DEFAULT_PCT));
+    }, []);
+
+    return { leftPct, containerRef, onDividerMouseDown, onDividerDblClick };
+};
+
+/* ====================================================
    MAIN PAGE
 ==================================================== */
 const RAQuarterlyDetailPage = () => {
@@ -283,6 +342,8 @@ const RAQuarterlyDetailPage = () => {
     const [editingRemarks, setEditing] = useState(false);
     const [remarksText, setRemarksText] = useState('');
     const [saving, setSaving] = useState(false);
+
+    const { leftPct, containerRef, onDividerMouseDown, onDividerDblClick } = useSplitPane();
 
     const fetchDetail = useCallback(async () => {
         setLoading(true);
@@ -348,10 +409,10 @@ const RAQuarterlyDetailPage = () => {
             </div>
 
             {/* ════════ BODY ════════ */}
-            <div className="qd-body">
+            <div className="qd-body" ref={containerRef}>
 
                 {/* LEFT — scrollable timeline */}
-                <div className="qd-left">
+                <div className="qd-left" style={{ width: `${leftPct}%`, flexShrink: 0 }}>
                     <div className="qd-timeline">
                         {monthlyData.map((m, idx) => {
                             const chip = getMonthChip(m.month);
@@ -503,8 +564,16 @@ const RAQuarterlyDetailPage = () => {
                     </div>
                 </div>
 
+                {/* DIVIDER */}
+                <div
+                    className="qd-split-divider"
+                    onMouseDown={onDividerMouseDown}
+                    onDoubleClick={onDividerDblClick}
+                    title="Drag to resize, double-click to reset"
+                />
+
                 {/* RIGHT — fixed */}
-                <div className="qd-right">
+                <div className="qd-right" style={{ flex: 1, minWidth: 0 }}>
 
                     {/* Score card */}
                     <div className="qd-score-card">

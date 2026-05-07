@@ -5,6 +5,8 @@ const MonthlyPlan = require("../models/MonthlyPlan");
 const YearlyPlan = require("../models/YearlyPlan");
 const YearlyAppraisalReport = require("../models/YearlyAppraisalReport");
 const AuditLog = require("../models/AuditLog");
+// FISCAL YEAR FIX — shared fiscal utility
+const { getQuarterMonthStrings, getCurrentFiscalYear } = require("../utils/fiscalUtils");
 
 /* =====================================================
    1. RA DASHBOARD
@@ -331,6 +333,14 @@ exports.getMonthlyEvaluations = async (req, res) => {
               score: 0,
               remarks: ""
             });
+          } else if (!exists.monthlyPlanId || exists.monthlyPlanId.toString() !== plan._id.toString()) {
+            // ✅ FIX: The evaluation exists but points to a deleted/old plan.
+            // Update the reference to the newly-submitted plan so View/Evaluate works correctly.
+            await MonthlyEvaluation.findByIdAndUpdate(exists._id, {
+              monthlyPlanId: plan._id,
+              // Reset to PENDING only if it was never evaluated yet
+              ...(exists.status === "PENDING" ? { score: 0, remarks: "" } : {})
+            });
           }
         }
       }
@@ -396,16 +406,21 @@ exports.getMonthlyEvaluationById = async (req, res) => {
       return res.status(403).json({ message: "You are not authorized to view this evaluation" });
     }
 
-    const achievement = await MonthlyAchievement.findOne({ monthlyPlanId: evaluation.monthlyPlanId._id });
+    // ✅ FIX: monthlyPlanId can be null if the original plan was deleted from the DB.
+    // Guard against this to prevent a "Cannot read properties of null" TypeError (500 crash).
+    const planDoc = evaluation.monthlyPlanId || null;
+    const achievement = planDoc
+      ? await MonthlyAchievement.findOne({ monthlyPlanId: planDoc._id })
+      : null;
     const canViewScore = req.user.role === "RA" || req.user.role === "HRD" || req.user.role === "MD";
 
     res.json({
-      plan: evaluation.monthlyPlanId,
+      plan: planDoc,
       achievement: achievement || null,
       remarks: evaluation.remarks || null,
       score: canViewScore ? evaluation.score : null,
       status: {
-        planSubmitted: true,
+        planSubmitted: !!planDoc,
         achievementSubmitted: !!achievement,
         evaluated: evaluation.status === "EVALUATED"
       }
@@ -489,14 +504,10 @@ exports.generateQuarterlyEvaluation = async (req, res) => {
   }
 };
 
+// FISCAL YEAR FIX — was using calendar-based mapping { 1:[01,02,03], 2:[04,05,06], ... }
+// Now uses April-March fiscal year: Q1=Apr-Jun, Q2=Jul-Sep, Q3=Oct-Dec, Q4=Jan-Mar
 function getQuarterMonths(quarter) {
-  const match = quarter.match(/^Q(\d)-(\d{4})$/);
-  if (!match) return null;
-  const q = parseInt(match[1]);
-  const year = match[2];
-  const monthMap = { 1: ["01", "02", "03"], 2: ["04", "05", "06"], 3: ["07", "08", "09"], 4: ["10", "11", "12"] };
-  if (!monthMap[q]) return null;
-  return monthMap[q].map(m => `${year}-${m}`);
+  return getQuarterMonthStrings(quarter);
 }
 
 /* =====================================================
@@ -753,6 +764,7 @@ exports.getYearlyReports = async (req, res) => {
 
     const reports = await YearlyAppraisalReport.find(filter)
       .populate("employeeId", "name employeeCode department")
+      .populate("yearlyPlanId", "planAndObjectives financialYear version status submittedAt editHistory mdRemarks")
       .sort({ submittedAt: -1 });
     res.json(reports);
   } catch (error) {

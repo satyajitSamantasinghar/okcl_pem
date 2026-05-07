@@ -1441,6 +1441,7 @@
     align-items: center;
     justify-content: center;
     padding: 20px;
+    padding-left: calc(20px + var(--sidebar-width, 260px));
 }
 
 .ra-modal-content {
@@ -1634,6 +1635,10 @@
 
     .ra-lb-dept {
         display: none;
+    }
+
+    .ra-modal-overlay {
+        padding-left: 20px;
     }
 }
 

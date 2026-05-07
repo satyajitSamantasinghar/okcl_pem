@@ -8,6 +8,8 @@ const QuarterlyEvaluation = require("../models/QuarterlyEvaluation");
 const User = require("../models/User");
 const AuditLog = require("../models/AuditLog");
 const Notification = require("../models/Notification");
+// FISCAL YEAR FIX — shared fiscal utility
+const { getCurrentFiscalYear } = require("../utils/fiscalUtils");
 
 /* =====================================================
    MD DASHBOARD — KPI Stats
@@ -19,10 +21,9 @@ exports.getMDDashboard = async (req, res) => {
       return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}`;
     })();
 
-    const currentYear = new Date().getFullYear();
-    const fy = new Date().getMonth() >= 3
-      ? `${currentYear}-${String(currentYear + 1).slice(2)}`
-      : `${currentYear - 1}-${String(currentYear).slice(2)}`;
+    // FISCAL YEAR FIX — was: month >= 3 (wrong: March is NOT in the new FY)
+    // FY starts in April (month 4); Jan-Mar belong to the PREVIOUS FY start year
+    const fy = getCurrentFiscalYear();
 
     const [
       totalEmployees,
@@ -452,6 +453,7 @@ exports.getYearlyReports = async (req, res) => {
 
     const reports = await YearlyAppraisalReport.find(filter)
       .populate("employeeId", "name employeeCode department")
+      .populate("yearlyPlanId", "planAndObjectives financialYear version status submittedAt editHistory mdRemarks")
       .sort({ submittedAt: -1 });
 
     res.json(reports);

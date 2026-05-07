@@ -8,6 +8,8 @@ import {
     FiActivity, FiChevronRight, FiList, FiBell, FiBriefcase
 } from 'react-icons/fi';
 import './EmployeeDashboard.css';
+// FISCAL YEAR FIX — shared fiscal utility
+import { getFiscalYearShort } from '../../utils/fiscalUtils';
 
 const getInitials = (name) => {
     if (!name) return '?';
@@ -63,18 +65,20 @@ const EmployeeDashboard = () => {
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const [plansRes, achievementsRes, yearlyRes, quarterlyRes, evalsRes] = await Promise.all([
+                const [plansRes, achievementsRes, yearlyRes, quarterlyRes, evalsRes, appraisalRes] = await Promise.all([
                     api.get('/employee/monthly-plans'),
                     api.get('/employee/monthly-achievements'),
                     api.get('/employee/yearly-plans'),
                     api.get('/ra/quarterly-evaluations'),
                     api.get('/ra/monthly-evaluations', { params: { limit: 100 } }),
+                    api.get('/employee/yearly-appraisal-reports').catch(() => ({ data: [] }))
                 ]);
 
                 const plans = plansRes.data || [];
                 const achievements = achievementsRes.data || [];
                 const yearly = yearlyRes.data || [];
                 const evals = evalsRes.data?.data || [];
+                const appraisals = appraisalRes.data || [];
 
                 setStats({
                     monthlyPlans: plans.length,
@@ -90,9 +94,9 @@ const EmployeeDashboard = () => {
 
                 const now = new Date();
                 const currentMonthString = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-                const currentFinancialYear = now.getMonth() >= 3
-                    ? `${now.getFullYear()}-${String((now.getFullYear() + 1) % 100).padStart(2, '0')}`
-                    : `${now.getFullYear() - 1}-${String(now.getFullYear() % 100).padStart(2, '0')}`;
+                // FISCAL YEAR FIX — was: getMonth() >= 3 ? year : year-1
+                // Using getFiscalYearShort() from fiscalUtils for consistency
+                const currentFinancialYear = getFiscalYearShort(now);
 
                 // Check Monthly Plan for current month
                 const currentPlan = plans.find(p => p.month === currentMonthString);
@@ -155,8 +159,11 @@ const EmployeeDashboard = () => {
 
                 // --- 2. Compute Deadlines ---
                 const dls = [];
-                // Monthly Plan Deadline: 10th of current month
-                const planDeadline = new Date(now.getFullYear(), now.getMonth(), 10, 23, 59, 59);
+                const fyStartYear = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+                const fyEndYear = fyStartYear + 1;
+
+                // Monthly Plan Deadline: 7th of current month
+                const planDeadline = new Date(now.getFullYear(), now.getMonth(), 7, 23, 59, 59);
                 const planDiff = Math.ceil((planDeadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
                 // Achievement Deadline: Last day of current month
@@ -170,7 +177,7 @@ const EmployeeDashboard = () => {
                         title: `Monthly Plan (${currMonthDisplay})`,
                         date: planDeadline,
                         days: planDiff,
-                        critical: planDiff <= 2
+                        critical: planDiff <= 2 && planDiff >= 0
                     });
                 }
 
@@ -181,7 +188,39 @@ const EmployeeDashboard = () => {
                         title: `Monthly Achievement (${currMonthDisplay})`,
                         date: achDeadline,
                         days: achDiff,
-                        critical: achDiff <= 3
+                        critical: achDiff <= 3 && achDiff >= 0
+                    });
+                }
+
+                // Yearly Plan Deadline: 30 April of FY start year
+                const yearlyPlanDeadline = new Date(fyStartYear, 3, 30, 23, 59, 59);
+                const yearlyPlanDiff = Math.ceil((yearlyPlanDeadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                
+                if (!currentYearly && yearlyPlanDiff >= -30) {
+                    dls.push({
+                        title: `Yearly Plan (FY ${currentFinancialYear})`,
+                        date: yearlyPlanDeadline,
+                        days: yearlyPlanDiff,
+                        critical: yearlyPlanDiff <= 7 && yearlyPlanDiff >= 0
+                    });
+                }
+
+                // Yearly Appraisal Report Deadline: 30 April of FY end year
+                const yearlyAppraisalDeadline = new Date(fyEndYear, 3, 30, 23, 59, 59);
+                const yearlyAppraisalDiff = Math.ceil((yearlyAppraisalDeadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                
+                const hasAppraisal = appraisals.some(a => a.financialYear === currentFinancialYear && a.status !== 'DRAFT');
+                
+                // Show appraisal deadline if within a reasonable window (e.g. from March 1st of endYear to April 30th)
+                const yearlyAppraisalWindowOpen = new Date(fyEndYear, 2, 1, 0, 0, 0); // 1st March
+                const daysUntilWindowOpen = Math.ceil((yearlyAppraisalWindowOpen.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+
+                if (!hasAppraisal && yearlyAppraisalDiff >= -30 && daysUntilWindowOpen <= 30) {
+                    dls.push({
+                        title: `Yearly Appraisal (FY ${currentFinancialYear})`,
+                        date: yearlyAppraisalDeadline,
+                        days: yearlyAppraisalDiff,
+                        critical: yearlyAppraisalDiff <= 7 && yearlyAppraisalDiff >= 0
                     });
                 }
 

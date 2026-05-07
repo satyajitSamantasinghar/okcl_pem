@@ -153,15 +153,15 @@
 .qd-body {
     flex: 1;
     min-height: 0;
-    display: grid;
-    grid-template-columns: 1fr 300px;
+    display: flex;
+    flex-direction: row;
     overflow: hidden;
 }
 
 .qd-left {
     overflow-y: auto;
     height: 100%;
-    padding: 24px 24px 48px 0;
+    padding: 24px 24px 48px 24px;
     background: #F8FAFC;
     scrollbar-width: thin;
     scrollbar-color: #CBD5E1 transparent;
@@ -183,8 +183,7 @@
 .qd-right {
     overflow-y: auto;
     height: 100%;
-    padding: 24px 0 24px 20px;
-    border-left: 1px solid #E2E8F0;
+    padding: 24px 20px 24px 20px;
     background: #F1F5F9;
     /* Level 2 — sidebar background */
     display: flex;
@@ -203,6 +202,33 @@
 }
 
 .qd-right::-webkit-scrollbar-thumb {
+    background: #CBD5E1;
+    border-radius: 2px;
+}
+
+/* ─── SPLIT DIVIDER ─── */
+.qd-split-divider {
+    width: 6px;
+    flex-shrink: 0;
+    background: #E2E8F0;
+    cursor: col-resize;
+    position: relative;
+    z-index: 10;
+    transition: background 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.qd-split-divider:hover,
+.qd-split-divider:active {
+    background: #94A3B8;
+}
+
+.qd-split-divider::after {
+    content: '';
+    width: 2px;
+    height: 24px;
     background: #CBD5E1;
     border-radius: 2px;
 }

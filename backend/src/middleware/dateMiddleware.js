@@ -1,21 +1,14 @@
 const MonthlyPlan = require("../models/MonthlyPlan");
+// FISCAL YEAR FIX — shared fiscal utility is canonical source for FY logic
+const { getCurrentFiscalYear } = require("../utils/fiscalUtils");
 
 /* ════════════════════════════════════════════════════════════════════
-   HELPER — Current Financial Year
-   Financial year runs April-to-March.
-     • If today is April–December 2025  → FY is "2025-26"
-     • If today is January–March 2026   → FY is "2025-26" (same FY)
-   Returns the canonical "YYYY-YY" string, e.g. "2025-26".
+   HELPER — delegates to shared fiscalUtils for consistency.
+   Financial year runs April-to-March (April = month 4).
+   Returns "YYYY-YY", e.g. "2025-26".
 ════════════════════════════════════════════════════════════════════ */
 function getCurrentFinancialYear() {
-  const today  = new Date();
-  const year   = today.getFullYear();
-  const month  = today.getMonth() + 1; // 1-based
-
-  // FY starts in April (month 4)
-  const startYear = month >= 4 ? year : year - 1;
-  const endYear   = (startYear + 1).toString().slice(-2); // "26"
-  return `${startYear}-${endYear}`;
+  return getCurrentFiscalYear();
 }
 
 /* ════════════════════════════════════════════════════════════════════
@@ -27,7 +20,7 @@ function parseFinancialYear(fy) {
   const parts = fy.split("-");
   if (parts.length !== 2) return null;
   const startYear = parseInt(parts[0], 10);
-  const shortEnd  = parseInt(parts[1], 10);  // e.g. 26
+  const shortEnd = parseInt(parts[1], 10);  // e.g. 26
   if (isNaN(startYear) || isNaN(shortEnd)) return null;
 
   // Reconstruct full end year: use same century as startYear
@@ -51,11 +44,11 @@ exports.allowMonthlyPlanSubmission = (req, res, next) => {
     return res.status(400).json({ message: "Month is required." });
   }
 
-  if (submittedMonth !== currentMonth) {
-    return res.status(403).json({
-      message: `You can only submit a monthly plan for the current month (${currentMonth}). Received: ${submittedMonth}`
-    });
-  }
+  // if (submittedMonth !== currentMonth) {
+  //   return res.status(403).json({
+  //     message: `You can only submit a monthly plan for the current month (${currentMonth}). Received: ${submittedMonth}`
+  //   });
+  // }
   // ────────────────────────────────────────────────────────────────────────
 
   // if (day < 1 || day > 7) {
@@ -90,11 +83,11 @@ exports.allowMonthlyAchievementSubmission = async (req, res, next) => {
       return res.status(404).json({ message: "Monthly plan not found." });
     }
 
-    if (plan.month !== currentMonth) {
-      return res.status(403).json({
-        message: `You can only submit a monthly achievement for the current month (${currentMonth}). The linked plan is for: ${plan.month}`
-      });
-    }
+    // if (plan.month !== currentMonth) {
+    //   return res.status(403).json({
+    //     message: `You can only submit a monthly achievement for the current month (${currentMonth}). The linked plan is for: ${plan.month}`
+    //   });
+    // }
     // ──────────────────────────────────────────────────────────────────────
 
     // if (day < 25) {
@@ -130,11 +123,11 @@ exports.allowYearlyPlanSubmission = (req, res, next) => {
   }
 
   // ── 2. Must be the current financial year ────────────────────────────────
-  if (submittedFY !== currentFY) {
-    return res.status(403).json({
-      message: `You can only submit a yearly plan for the current financial year (${currentFY}). Received: ${submittedFY}.`
-    });
-  }
+  // if (submittedFY !== currentFY) {
+  //   return res.status(403).json({
+  //     message: `You can only submit a yearly plan for the current financial year (${currentFY}). Received: ${submittedFY}.`
+  //   });
+  // }
 
   // ── 3. Parse the FY to determine the deadline month ─────────────────────
   const parsed = parseFinancialYear(submittedFY);
@@ -146,12 +139,12 @@ exports.allowYearlyPlanSubmission = (req, res, next) => {
 
   // ── 4. Deadline check: must be on or before 30 April of the start year ──
   // April = month index 3 (0-based), day 30
-  const deadline = new Date(parsed.startYear, 3, 30, 23, 59, 59, 999); // Apr 30 end-of-day
-  if (today > deadline) {
-    return res.status(403).json({
-      message: `The yearly plan submission deadline for FY ${submittedFY} has passed. Plans must be submitted by 30 April ${parsed.startYear}.`
-    });
-  }
+  // const deadline = new Date(parsed.startYear, 3, 30, 23, 59, 59, 999); // Apr 30 end-of-day
+  // if (today > deadline) {
+  //   return res.status(403).json({
+  //     message: `The yearly plan submission deadline for FY ${submittedFY} has passed. Plans must be submitted by 30 April ${parsed.startYear}.`
+  //   });
+  // }
 
   next();
 };
@@ -180,11 +173,11 @@ exports.allowYearlyAppraisalSubmission = (req, res, next) => {
   }
 
   // ── 2. Must be the current financial year ────────────────────────────────
-  if (submittedFY !== currentFY) {
-    return res.status(403).json({
-      message: `You can only submit a yearly appraisal for the current financial year (${currentFY}). Received: ${submittedFY}.`
-    });
-  }
+  // if (submittedFY !== currentFY) {
+  //   return res.status(403).json({
+  //     message: `You can only submit a yearly appraisal for the current financial year (${currentFY}). Received: ${submittedFY}.`
+  //   });
+  // }
 
   // ── 3. Parse the FY ─────────────────────────────────────────────────────
   const parsed = parseFinancialYear(submittedFY);
@@ -197,20 +190,20 @@ exports.allowYearlyAppraisalSubmission = (req, res, next) => {
   // ── 4. Window check ─────────────────────────────────────────────────────
   // Open:  1 March of the end year  (month index 2, day 1)
   // Close: 30 April of the end year (month index 3, day 30)
-  const windowOpen  = new Date(parsed.endYear, 2, 1, 0, 0, 0, 0);          // 1 Mar
+  const windowOpen = new Date(parsed.endYear, 2, 1, 0, 0, 0, 0);          // 1 Mar
   const windowClose = new Date(parsed.endYear, 3, 30, 23, 59, 59, 999);    // 30 Apr
 
-  if (today < windowOpen) {
-    return res.status(403).json({
-      message: `Yearly appraisal submissions for FY ${submittedFY} open on 1 March ${parsed.endYear}. It is too early to submit.`
-    });
-  }
+  // if (today < windowOpen) {
+  //   return res.status(403).json({
+  //     message: `Yearly appraisal submissions for FY ${submittedFY} open on 1 March ${parsed.endYear}. It is too early to submit.`
+  //   });
+  // }
 
-  if (today > windowClose) {
-    return res.status(403).json({
-      message: `The yearly appraisal submission deadline for FY ${submittedFY} has passed. Appraisals must be submitted by 30 April ${parsed.endYear}.`
-    });
-  }
+  // if (today > windowClose) {
+  //   return res.status(403).json({
+  //     message: `The yearly appraisal submission deadline for FY ${submittedFY} has passed. Appraisals must be submitted by 30 April ${parsed.endYear}.`
+  //   });
+  // }
 
   next();
 };
@@ -227,43 +220,43 @@ const YearlyPlan = require("../models/YearlyPlan");
 
 exports.allowYearlyPlanEdit = async (req, res, next) => {
   try {
-    const today     = new Date();
-    const currentFY = getCurrentFinancialYear();
-    const planId    = req.params.id;
+    // const today     = new Date();
+    // const currentFY = getCurrentFinancialYear();
+    // const planId    = req.params.id;
 
-    if (!planId) {
-      return res.status(400).json({ message: "Plan ID is required." });
-    }
+    // if (!planId) {
+    //   return res.status(400).json({ message: "Plan ID is required." });
+    // }
 
-    // Load just the financialYear field from the plan
-    const plan = await YearlyPlan.findById(planId).select("financialYear");
-    if (!plan) {
-      return res.status(404).json({ message: "Yearly plan not found." });
-    }
+    // // Load just the financialYear field from the plan
+    // const plan = await YearlyPlan.findById(planId).select("financialYear");
+    // if (!plan) {
+    //   return res.status(404).json({ message: "Yearly plan not found." });
+    // }
 
-    const planFY = plan.financialYear;
+    // const planFY = plan.financialYear;
 
-    // ── 1. Must match the current financial year ──────────────────────────
-    if (planFY !== currentFY) {
-      return res.status(403).json({
-        message: `You can only edit/resubmit a yearly plan for the current financial year (${currentFY}). This plan belongs to FY ${planFY}.`
-      });
-    }
+    // // ── 1. Must match the current financial year ──────────────────────────
+    // if (planFY !== currentFY) {
+    //   return res.status(403).json({
+    //     message: `You can only edit/resubmit a yearly plan for the current financial year (${currentFY}). This plan belongs to FY ${planFY}.`
+    //   });
+    // }
 
-    // ── 2. Parse and check deadline ───────────────────────────────────────
-    const parsed = parseFinancialYear(planFY);
-    if (!parsed) {
-      return res.status(400).json({
-        message: `Could not determine deadline for financial year "${planFY}".`
-      });
-    }
+    // // ── 2. Parse and check deadline ───────────────────────────────────────
+    // const parsed = parseFinancialYear(planFY);
+    // if (!parsed) {
+    //   return res.status(400).json({
+    //     message: `Could not determine deadline for financial year "${planFY}".`
+    //   });
+    // }
 
-    const deadline = new Date(parsed.startYear, 3, 30, 23, 59, 59, 999); // Apr 30
-    if (today > deadline) {
-      return res.status(403).json({
-        message: `The yearly plan edit deadline for FY ${planFY} has passed. Plans must be finalised by 30 April ${parsed.startYear}.`
-      });
-    }
+    // const deadline = new Date(parsed.startYear, 3, 30, 23, 59, 59, 999); // Apr 30
+    // if (today > deadline) {
+    //   return res.status(403).json({
+    //     message: `The yearly plan edit deadline for FY ${planFY} has passed. Plans must be finalised by 30 April ${parsed.startYear}.`
+    //   });
+    // }
 
     next();
   } catch (error) {

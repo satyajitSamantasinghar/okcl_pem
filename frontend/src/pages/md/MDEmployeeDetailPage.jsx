@@ -16,6 +16,7 @@ import {
 } from 'recharts';
 import './MDEmployeeDetail.css';
 import '../ra/RAEmployeeDetail.css';
+import { getCurrentFiscalYear, getFiscalYearShort } from '../../utils/fiscalUtils';
 
 /* ════════════════════════════════════════════════════
    PURE HELPERS
@@ -205,7 +206,9 @@ function CustomTooltip({ active, payload, label }) {
                 <div key={i} className="med-chart-tooltip-row">
                     <span className="med-chart-tooltip-dot" style={{ background: p.color || p.fill }} />
                     <span>{p.name}:</span>
-                    <strong style={{ color: getScoreColor(p.value) }}>{p.value}/10</strong>
+                    <strong style={{ color: getScoreColor(p.value) }}>
+                        {typeof p.value === 'number' ? p.value.toFixed(1) : p.value}/10
+                    </strong>
                 </div>
             ))}
         </div>
@@ -222,7 +225,7 @@ const MDEmployeeDetailPage = () => {
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('overview');
     const [selectedMonthDetail, setSelectedMonthDetail] = useState(null);
-    const [filterYear, setFilterYear] = useState(String(new Date().getFullYear()));
+    const [filterYear, setFilterYear] = useState(getCurrentFiscalYear());
 
     // MD Rejection states
     const [rejectTarget, setRejectTarget] = useState(null);
@@ -299,20 +302,56 @@ const MDEmployeeDetailPage = () => {
             return { ...plan, evaluation, achievement, hasAchievement: hasAch, isEval };
         });
 
-    const currentYear = new Date().getFullYear();
-    const availableYearsSet = new Set(Array.from({ length: 12 }, (_, i) => String(currentYear + 2 - i)));
-    monthlyPlans.forEach(p => { if (p.month) availableYearsSet.add(p.month.substring(0, 4)); });
-    quarterlyEvaluations.forEach(q => { if (q.quarter) availableYearsSet.add(q.quarter.split('-')[1]); });
-    yearlyPlans?.forEach(y => { if (y.financialYear) availableYearsSet.add(y.financialYear.substring(0, 4)); });
-    const availableYears = Array.from(availableYearsSet).sort((a, b) => b - a);
+    /* ── FISCAL YEAR FIX ── */
+    function monthToFY(monthStr) {
+        if (!monthStr) return null;
+        const [y, m] = monthStr.split('-').map(Number);
+        const startYear = m >= 4 ? y : y - 1;
+        return `${startYear}-${String(startYear + 1).slice(-2)}`;
+    }
+    function quarterToFY(quarterStr) {
+        if (!quarterStr) return null;
+        const match = quarterStr.match(/^Q(\d)-(\d{4})$/);
+        if (!match) return null;
+        const startYear = parseInt(match[2], 10);
+        return `${startYear}-${String(startYear + 1).slice(-2)}`;
+    }
 
-    const filteredMonths    = unifiedMonths.filter(m => m.month && m.month.startsWith(filterYear));
-    const filteredQuarterly = quarterlyEvaluations.filter(q => q.quarter && q.quarter.includes(filterYear));
-    const shortFilterYear   = filterYear.substring(2);
-    const fyMatch = fy => fy && (fy.startsWith(filterYear) || fy.endsWith(`-${shortFilterYear}`));
+    const fySet = new Set();
+    const nowFY = getCurrentFiscalYear();
+    const nowStart = parseInt(nowFY.split('-')[0], 10);
+    for (let i = 0; i <= 3; i++) {
+        const s = nowStart - i;
+        fySet.add(`${s}-${String(s + 1).slice(-2)}`);
+    }
+    monthlyPlans.forEach(p => { const fy = monthToFY(p.month); if (fy) fySet.add(fy); });
+    quarterlyEvaluations.forEach(q => { const fy = quarterToFY(q.quarter); if (fy) fySet.add(fy); });
+    (yearlyPlans || []).forEach(y => { if (y.financialYear) fySet.add(y.financialYear); });
+    (yearlyReports || []).forEach(y => { if (y.financialYear) fySet.add(y.financialYear); });
+
+    const availableYears = Array.from(fySet).sort((a, b) =>
+        parseInt(b.split('-')[0]) - parseInt(a.split('-')[0])
+    );
+
+    function monthInFY(monthStr, fy) {
+        if (!monthStr || !fy) return false;
+        const [y, m] = monthStr.split('-').map(Number);
+        const startYear = parseInt(fy.split('-')[0], 10);
+        return (y === startYear && m >= 4) || (y === startYear + 1 && m <= 3);
+    }
+    function quarterInFY(quarterStr, fy) {
+        if (!quarterStr || !fy) return false;
+        const match = quarterStr.match(/^Q\d-(\d{4})$/);
+        if (!match) return false;
+        return parseInt(match[1], 10) === parseInt(fy.split('-')[0], 10);
+    }
+
+    const filteredMonths = unifiedMonths.filter(m => monthInFY(m.month, filterYear));
+    const filteredQuarterly = quarterlyEvaluations.filter(q => quarterInFY(q.quarter, filterYear));
+    const fyMatch = fy => fy === filterYear;
     const filteredYearlyPlans   = (yearlyPlans || []).filter(y => fyMatch(y.financialYear));
     const filteredYearlyReports = (yearlyReports || []).filter(y => fyMatch(y.financialYear));
-    const filteredEvals = monthlyEvaluations.filter(e => e.month && e.month.startsWith(filterYear));
+    const filteredEvals = monthlyEvaluations.filter(e => monthInFY(e.month, filterYear));
 
     const evaluatedEvals = filteredEvals.filter(e => e.status === 'EVALUATED' && e.score > 0);
     const avgScore = evaluatedEvals.length > 0
@@ -347,9 +386,9 @@ const MDEmployeeDetailPage = () => {
     if (bestEval && bestEval.score >= 8)
         insights.push({ icon: <FiStar />, variant: 'positive', text: `Best performance in ${formatMonth(bestEval.month)} with ${bestEval.score}/10 — ${getScoreLabel(bestEval.score)} rating` });
     if (completionRate === 100 && filteredMonths.length > 0)
-        insights.push({ icon: <FiThumbsUp />, variant: 'positive', text: `100% evaluation completion for ${filterYear} — all plans reviewed` });
+        insights.push({ icon: <FiThumbsUp />, variant: 'positive', text: `100% evaluation completion for FY ${filterYear} — all plans reviewed` });
     else if (completionRate < 50 && filteredMonths.length > 1)
-        insights.push({ icon: <FiInfo />, variant: 'warning', text: `Only ${completionRate}% evaluated in ${filterYear} — ${filteredMonths.filter(m => !m.isEval).length} pending review` });
+        insights.push({ icon: <FiInfo />, variant: 'warning', text: `Only ${completionRate}% evaluated in FY ${filterYear} — ${filteredMonths.filter(m => !m.isEval).length} pending review` });
 
     const headerStatus = completionRate === 100 && filteredMonths.length > 0
         ? { label: 'On Track', cls: 'green' }
@@ -917,7 +956,7 @@ const MDEmployeeDetailPage = () => {
                 <div className="med-year-filter">
                     <FiFilter className="med-year-filter-icon" />
                     <select value={filterYear} onChange={e => setFilterYear(e.target.value)}>
-                        {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
+                        {availableYears.map(fy => <option key={fy} value={fy}>FY {fy}</option>)}
                     </select>
                 </div>
             </div>
@@ -944,7 +983,7 @@ const MDEmployeeDetailPage = () => {
                             <div className="med-chart-title"><FiBarChart2 /> Monthly Evaluation Trend</div>
                             <p className="med-chart-sub">Score progression over time — identifies growth and dip patterns</p>
                             {filteredEvals.filter(e => e.status === 'EVALUATED').length === 0 ? (
-                                <p className="med-chart-empty">No evaluations yet for {filterYear}</p>
+                                <p className="med-chart-empty">No evaluations yet for FY {filterYear}</p>
                             ) : (
                                 <ResponsiveContainer width="100%" height={260}>
                                     <AreaChart
@@ -974,7 +1013,7 @@ const MDEmployeeDetailPage = () => {
                             <div className="med-chart-title"><FiTarget /> Quarterly Evaluation Scores</div>
                             <p className="med-chart-sub">Quarter-wise average — highlights sustained or volatile performance</p>
                             {filteredQuarterly.length === 0 ? (
-                                <p className="med-chart-empty">No quarterly evaluations for {filterYear}</p>
+                                <p className="med-chart-empty">No quarterly evaluations for FY {filterYear}</p>
                             ) : (
                                 <ResponsiveContainer width="100%" height={260}>
                                     <BarChart data={[...filteredQuarterly].reverse()}
@@ -1002,7 +1041,7 @@ const MDEmployeeDetailPage = () => {
                     {filteredMonths.length === 0 ? (
                         <div className="med-empty-center">
                             <FiCalendar style={{ fontSize: '2.5rem', opacity: 0.2 }} />
-                            <p>No monthly reviews found for {filterYear}</p>
+                            <p>No monthly reviews found for FY {filterYear} (Apr {filterYear.split('-')[0]} – Mar {parseInt(filterYear.split('-')[0]) + 1})</p>
                         </div>
                     ) : (
                         <div className="med-table-card">
@@ -1080,7 +1119,7 @@ const MDEmployeeDetailPage = () => {
                     {filteredQuarterly.length === 0 ? (
                         <div className="med-empty-center">
                             <FiTarget style={{ fontSize: '2.5rem', opacity: 0.2 }} />
-                            <p>No quarterly evaluations found for {filterYear}</p>
+                            <p>No quarterly evaluations found for FY {filterYear}</p>
                         </div>
                     ) : filteredQuarterly.map(qe => (
                         <div key={qe._id} className="med-qtr-card" style={{ '--qclr': getScoreColor(qe.averageScore) }}>

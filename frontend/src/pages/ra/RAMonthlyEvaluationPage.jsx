@@ -9,6 +9,7 @@ import {
     FiDownload, FiChevronUp, FiChevronDown, FiChevronLeft,
     FiChevronRight, FiAward, FiCalendar, FiAlertCircle, FiFileText,
 } from 'react-icons/fi';
+import { FaFile } from 'react-icons/fa';
 
 /* ─────────────────────────────────────────
    HELPERS — per spec
@@ -75,10 +76,10 @@ function getEffectivePlanAch(ach, planCount) {
 function getProgressTokens(progress) {
     const p = Math.min(100, Math.max(0, progress || 0));
     if (p === 100) return { label: 'Completed', color: '#3B6D11', bg: '#EAF3DE', text: '#27500A', border: '#3B6D11' };
-    if (p >= 75)  return { label: 'Almost done', color: '#BA7517', bg: '#FAEEDA', text: '#633806', border: '#BA7517' };
-    if (p >= 50)  return { label: 'Halfway', color: '#E85523', bg: '#FFF0EB', text: '#993C1D', border: '#E85523' };
-    if (p >= 25)  return { label: 'Just started', color: '#BA7517', bg: '#FAEEDA', text: '#633806', border: '#BA7517' };
-    return         { label: 'Not started', color: '#A32D2D', bg: '#FCEBEB', text: '#791F1F', border: '#A32D2D' };
+    if (p >= 75) return { label: 'Almost done', color: '#BA7517', bg: '#FAEEDA', text: '#633806', border: '#BA7517' };
+    if (p >= 50) return { label: 'Halfway', color: '#E85523', bg: '#FFF0EB', text: '#993C1D', border: '#E85523' };
+    if (p >= 25) return { label: 'Just started', color: '#BA7517', bg: '#FAEEDA', text: '#633806', border: '#BA7517' };
+    return { label: 'Not started', color: '#A32D2D', bg: '#FCEBEB', text: '#791F1F', border: '#A32D2D' };
 }
 
 function parseAdditionalAch(raw) {
@@ -812,7 +813,7 @@ const RAMonthlyEvaluationPage = () => {
 
             {/* ── KPI STRIP ── */}
             <div className="meval-kpi-strip">
-                <SummaryCard icon={<FiUsers size={16} />} value={total} label="Total" subtitle="Employees" color="blue" />
+                <SummaryCard icon={<FaFile size={16} />} value={total} label="Total" subtitle="Monthly plans submitted" color="blue" />
                 <SummaryCard icon={<FiClock size={16} />} value={pending} label="Pending" subtitle="Awaiting evaluation" color="amber" />
                 <SummaryCard icon={<FiCheckCircle size={16} />} value={evaluated} label="Evaluated" subtitle="This month" color="green" />
                 <SummaryCard icon={<FiTrendingUp size={16} />} value={`${completion}%`} label="Completion" subtitle={`${evaluated}/${total} done`} color="orange" />

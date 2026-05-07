@@ -1,11 +1,11 @@
 /* ==========================================
-   MONTHLY PLAN PAGE — v5 (detail modal redesign)
+   MONTHLY PLAN PAGE — v6 (clean SaaS redesign)
 ========================================== */
 
 /* ── Generic reusable progress bar ── */
 .mp-progress-track {
     width: 100%;
-    background: var(--border-default);
+    background: #E2E8F0;
     border-radius: 99px;
     overflow: hidden;
 }
@@ -48,8 +48,8 @@
 }
 
 .mp-stat-icon.green {
-    background: rgba(59, 109, 17, .1);
-    color: #3B6D11;
+    background: rgba(22, 163, 74, .1);
+    color: #16A34A;
 }
 
 .mp-stat-icon.purple {
@@ -58,8 +58,8 @@
 }
 
 .mp-stat-icon.amber {
-    background: rgba(186, 117, 23, .1);
-    color: #BA7517;
+    background: rgba(217, 119, 6, .1);
+    color: #D97706;
 }
 
 .mp-stat-value {
@@ -329,23 +329,6 @@
     margin-bottom: 6px;
 }
 
-/* Old orange badge circle — kept only for legacy usage, but re-styled neutrally */
-.mp-plan-box-num {
-    width: 22px;
-    height: 22px;
-    border-radius: 6px;
-    background: var(--bg-page);
-    border: 1.5px solid var(--border-default);
-    color: var(--text-secondary);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.6875rem;
-    font-weight: 700;
-    flex-shrink: 0;
-}
-
-/* Sequential number with neutral pill style — replaces orange badge circles */
 .mp-plan-seq-num {
     display: inline-flex;
     align-items: center;
@@ -374,7 +357,6 @@
     color: #854F0B;
 }
 
-/* Tiny inline index shown in card plan list and ach list */
 .mp-plan-idx-xs {
     display: inline-flex;
     align-items: center;
@@ -390,7 +372,6 @@
     flex-shrink: 0;
     margin-top: 2px;
 }
-
 
 .mp-plan-box-label {
     font-size: 0.75rem;
@@ -458,7 +439,6 @@
     box-shadow: 0 0 0 3px rgba(186, 117, 23, .1);
 }
 
-/* Compact textarea inside modals */
 .mp-ach-modal .mp-plan-box-textarea {
     min-height: 72px;
     resize: none;
@@ -486,18 +466,6 @@
     color: #fff;
     border-style: solid;
     transform: scale(1.08);
-}
-
-.mp-plan-add-btn--amber {
-    border-color: #BA7517;
-    background: rgba(186, 117, 23, .06);
-    color: #854F0B;
-}
-
-.mp-plan-add-btn--amber:hover {
-    background: #BA7517;
-    color: #fff;
-    border-style: solid;
 }
 
 .mp-form-actions {
@@ -532,26 +500,25 @@
 }
 
 .mp-unified-card.status-submitted {
-    border-top: 3px solid #BA7517;
+    border-top: 3px solid #F59E0B;
 }
 
 .mp-unified-card.status-achievement {
-    border-top: 3px solid #3B6D11;
+    border-top: 3px solid #16A34A;
 }
 
 .mp-unified-card.status-evaluated {
-    border-top: 3px solid #534AB7;
+    border-top: 3px solid #7C3AED;
 }
 
 .mp-unified-card.status-rejected {
-    border-top: 3px solid #A32D2D;
+    border-top: 3px solid #DC2626;
 }
 
 .mp-unified-card.status-draft {
-    border-top: 3px solid #B4B2A9;
+    border-top: 3px solid #94A3B8;
 }
 
-/* Card header */
 .mp-unified-header {
     display: flex;
     align-items: center;
@@ -561,7 +528,6 @@
     border-bottom: 1px solid var(--border-default);
 }
 
-/* Month chip on card */
 .mp-month-chip-card {
     width: 42px;
     height: 42px;
@@ -605,31 +571,30 @@
 }
 
 .mp-status-badge.submitted {
-    background: #FAEEDA;
-    color: #633806;
+    background: #FFFBEB;
+    color: #B45309;
 }
 
 .mp-status-badge.achievement {
-    background: #EAF3DE;
-    color: #27500A;
+    background: #F0FDF4;
+    color: #15803D;
 }
 
 .mp-status-badge.evaluated {
-    background: #EEEDFE;
-    color: #3C3489;
+    background: #F5F3FF;
+    color: #7C3AED;
 }
 
 .mp-status-badge.rejected {
-    background: #FCEBEB;
-    color: #791F1F;
+    background: #FEF2F2;
+    color: #B91C1C;
 }
 
 .mp-status-badge.draft {
-    background: #F1EFE8;
-    color: #5F5E5A;
+    background: #F1F5F9;
+    color: #475569;
 }
 
-/* Section */
 .mp-section {
     padding: 12px 15px;
 }
@@ -639,7 +604,7 @@
 }
 
 .mp-section.achievement.empty {
-    background: rgba(59, 109, 17, .015);
+    background: rgba(22, 163, 74, .015);
 }
 
 .mp-section-label {
@@ -654,21 +619,6 @@
     margin-bottom: 6px;
 }
 
-/* Section label count — pill text instead of orange circle */
-.mp-section-label-count {
-    display: inline-flex;
-    align-items: center;
-    padding: 1px 7px;
-    border-radius: 100px;
-    background: var(--bg-page);
-    border: 0.5px solid var(--border-default);
-    color: var(--text-secondary);
-    font-size: 0.5625rem;
-    font-weight: 600;
-    flex-shrink: 0;
-}
-
-/* Plan count pill on card — contextual text */
 .mp-section-plan-count-pill {
     margin-left: auto;
     font-size: 0.5625rem;
@@ -681,7 +631,6 @@
     text-transform: none;
     letter-spacing: 0;
 }
-
 
 .mp-card-plan-list {
     display: flex;
@@ -737,7 +686,6 @@
     margin-top: 6px;
 }
 
-/* Achievement summary in card */
 .mp-card-ach-summary {
     display: flex;
     flex-direction: column;
@@ -760,62 +708,12 @@
     text-align: right;
 }
 
-.mp-card-ach-plan-rows {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.mp-card-ach-plan-row {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    padding: 8px 10px;
-    background: var(--bg-page);
-    border-radius: var(--radius-md);
-    border: 1px solid var(--border-default);
-}
-
-.mp-card-ach-plan-row-header {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.mp-card-ach-plan-text {
-    flex: 1;
-    font-size: 0.75rem;
-    color: var(--text-secondary);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.mp-card-ach-pct {
-    font-size: 0.6875rem;
-    font-weight: 700;
-    white-space: nowrap;
-}
-
-.mp-card-ach-detail {
-    font-size: 0.75rem;
-    color: var(--text-primary);
-    line-height: 1.4;
-    margin: 2px 0 0;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-}
-
 .mp-card-ach-summary-text {
     font-size: 0.6875rem;
     font-weight: 600;
     color: var(--text-secondary);
 }
 
-/* Draft inline */
 .mp-draft-inline {
     display: flex;
     flex-direction: column;
@@ -833,19 +731,6 @@
     padding: 3px 8px;
     border-radius: 100px;
     width: fit-content;
-}
-
-.mp-draft-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 0.6875rem;
-    font-weight: 700;
-    color: #633806;
-    background: #FAEEDA;
-    padding: 4px 10px;
-    border-radius: var(--radius-md);
-    margin-bottom: 8px;
 }
 
 .mp-add-ach-btn {
@@ -897,11 +782,11 @@
     align-items: center;
     gap: 6px;
     padding: 8px 15px;
-    background: #EEEDFE;
-    border-top: 1px solid #CECBF6;
+    background: #F5F3FF;
+    border-top: 1px solid #DDD6FE;
     font-size: 0.6875rem;
     font-weight: 600;
-    color: #534AB7;
+    color: #7C3AED;
 }
 
 .mp-eval-strip-score {
@@ -938,8 +823,8 @@
 .mp-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, .55);
-    backdrop-filter: blur(4px);
+    background: rgba(15, 23, 42, .6);
+    backdrop-filter: blur(6px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -958,676 +843,631 @@
     }
 }
 
-/* ============================================================
-   DETAIL MODAL — dmod-* namespace
-   Width: max 660px, clean single-column layout matching HTML spec
-============================================================ */
-.dmod {
-    background: var(--bg-card);
-    border-radius: var(--radius-lg);
-    width: 100%;
-    max-width: 780px;
-    max-height: 90vh;
-    overflow-y: auto;
-    box-shadow: 0 24px 64px rgba(0, 0, 0, .28);
-    animation: scaleUp .22s ease-out;
-    display: flex;
-    flex-direction: column;
-}
-
 @keyframes scaleUp {
     from {
         opacity: 0;
-        transform: scale(.95);
+        transform: scale(0.97) translateY(8px);
     }
 
     to {
         opacity: 1;
-        transform: scale(1);
+        transform: scale(1) translateY(0);
     }
 }
 
-/* ── Header ── */
-.dmod-hdr {
+/* ============================================================
+   DETAIL MODAL — dmod namespace (v5 — chip header + stepper below)
+============================================================ */
+.dmod {
+    background: #FFFFFF;
+    border-radius: 16px;
+    width: 100%;
+    max-width: 720px;
+    max-height: 88vh;
+    overflow: hidden;
     display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 18px 22px 15px;
-    border-bottom: 1px solid var(--border-default);
-    position: sticky;
-    top: 0;
-    z-index: 2;
-    background: var(--bg-card);
+    flex-direction: column;
+    box-shadow:
+        0 0 0 1px rgba(0, 0, 0, 0.07),
+        0 8px 32px rgba(0, 0, 0, 0.12),
+        0 32px 72px rgba(0, 0, 0, 0.10);
+    animation: scaleUp .22s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.dmod-hdr-left {
+/* ══════════════════════════════════
+   HEADER — warm distinct background
+══════════════════════════════════ */
+.dmod-hdr {
+    background: linear-gradient(135deg, #FFFBF7 0%, #FFF5EE 100%);
+    border-bottom: 1px solid #F0E8DC;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+
+/* Top row: [chip] [title/meta] [close] */
+.dmod-hdr-top {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 14px;
+    padding: 18px 20px 14px;
+    flex-shrink: 0;
 }
 
+/* ── Month chip inside the modal header ── */
 .dmod-month-chip {
-    width: 46px;
-    height: 46px;
-    min-width: 46px;
-    border-radius: 11px;
+    width: 52px;
+    min-width: 52px;
+    height: 52px;
+    border-radius: 12px;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: 1px;
     flex-shrink: 0;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, .12);
 }
 
-.dmod-mc-mon {
-    font-size: 9px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    line-height: 1;
-}
-
-.dmod-mc-yr {
-    font-size: 17px;
+.dmod-month-chip-mon {
+    font-size: 8.5px;
     font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
     line-height: 1;
+    opacity: 0.85;
+}
+
+.dmod-month-chip-yr {
+    font-size: 20px;
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: -0.5px;
+}
+
+/* Title + meta block */
+.dmod-hdr-info {
+    flex: 1;
+    min-width: 0;
 }
 
 .dmod-title {
-    font-size: 18px;
+    font-size: 19px;
     font-weight: 700;
-    color: var(--text-primary);
-    margin-bottom: 4px;
+    color: #0F172A;
+    margin: 0 0 4px;
     line-height: 1.2;
+    letter-spacing: -0.3px;
 }
 
 .dmod-meta {
     display: flex;
     align-items: center;
-    gap: 6px;
-    font-size: 12px;
-    color: var(--text-secondary);
+    gap: 5px;
+    font-size: 11.5px;
+    color: #64748B;
     flex-wrap: wrap;
 }
 
-.dmod-meta-sep {
+.dmod-meta-dot {
     width: 3px;
     height: 3px;
     border-radius: 50%;
-    background: var(--text-muted);
+    background: #CBD5E1;
     flex-shrink: 0;
-    opacity: 0.6;
 }
 
 .dmod-status-pill {
     padding: 2px 8px;
     border-radius: 100px;
-    font-size: 11px;
+    font-size: 10.5px;
     font-weight: 500;
 }
 
-.sp-plan {
-    background: #E6F1FB;
-    color: #0C447C;
+.dmod-sp-plan {
+    background: #EFF6FF;
+    color: #2563EB;
 }
 
-.sp-ach {
-    background: #EAF3DE;
-    color: #27500A;
+.dmod-sp-ach {
+    background: #F0FDF4;
+    color: #16A34A;
 }
 
-.sp-eval {
-    background: #FAEEDA;
-    color: #633806;
+.dmod-sp-eval {
+    background: #F5F3FF;
+    color: #7C3AED;
 }
 
+/* Close button — circular, top-right */
 .dmod-close {
-    width: 28px;
-    height: 28px;
+    width: 32px;
+    height: 32px;
     border-radius: 50%;
-    background: var(--bg-page);
-    border: 1px solid var(--border-default);
+    border: 1.5px solid #E2E8F0;
+    background: #FFFFFF;
+    color: #64748B;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--text-muted);
     cursor: pointer;
-    flex-shrink: 0;
     transition: all .15s;
+    flex-shrink: 0;
+    margin-left: auto;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .08);
 }
 
 .dmod-close:hover {
-    background: var(--bg-muted);
-    color: var(--text-primary);
+    background: #FEF2F2;
+    color: #DC2626;
+    border-color: #FECACA;
+    box-shadow: 0 2px 6px rgba(220, 38, 38, .15);
 }
 
-/* ── Stepper ── */
+/* ══════════════════════════════════
+   STEPPER — full-width row BELOW header top
+══════════════════════════════════ */
 .dmod-stepper {
     display: flex;
-    align-items: center;
-    padding: 13px 22px;
-    background: var(--bg-page);
-    border-bottom: 1px solid var(--border-default);
+    align-items: flex-start;
+    padding: 14px 28px 16px;
+    border-top: 1px solid #F0E8DC;
+    background: rgba(255, 255, 255, 0.6);
+    width: 100%;
+    box-sizing: border-box;
+    flex-shrink: 0;
 }
 
 .dmod-step {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 4px;
+    gap: 7px;
     flex-shrink: 0;
 }
 
-.dmod-snum {
-    width: 30px;
-    height: 30px;
+/* The circle node */
+.dmod-step-circle {
+    width: 32px;
+    height: 32px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 12px;
-    font-weight: 500;
+    transition: all .25s ease;
 }
 
-.dmod-snum--done {
-    background: #3B6D11;
-    color: #fff;
+/* done — solid green */
+.dmod-step-circle--done {
+    background: #16A34A;
+    border: 2px solid #16A34A;
+    color: #FFFFFF;
+    box-shadow: 0 0 0 4px rgba(22, 163, 74, 0.14);
 }
 
-.dmod-snum--active {
-    background: #E85523;
-    color: #fff;
-}
-
-.dmod-snum--idle {
-    background: var(--bg-card);
-    border: 1.5px solid var(--border-default);
-    color: var(--text-muted);
-}
-
-.dmod-slbl {
-    font-size: 10px;
-    font-weight: 500;
-}
-
-.dmod-slbl--done {
-    color: #3B6D11;
-}
-
-.dmod-slbl--active {
+/* active — white with orange ring */
+.dmod-step-circle--active {
+    background: #FFFFFF;
+    border: 2.5px solid #E85523;
     color: #E85523;
+    box-shadow: 0 0 0 4px rgba(232, 85, 35, 0.11);
 }
 
-.dmod-slbl--idle {
-    color: var(--text-muted);
+/* idle — light grey ring */
+.dmod-step-circle--idle {
+    background: #F8FAFC;
+    border: 2px solid #CBD5E1;
+    color: #CBD5E1;
 }
 
-.dmod-sline {
+/* Inner dot for non-check states */
+.dmod-step-dot-inner {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: 0.4;
+}
+
+.dmod-step-circle--active .dmod-step-dot-inner {
+    opacity: 0.75;
+    background: #E85523;
+}
+
+/* Step label */
+.dmod-step-lbl {
+    font-size: 11.5px;
+    font-weight: 500;
+    color: #94A3B8;
+    white-space: nowrap;
+    letter-spacing: 0.1px;
+    line-height: 1;
+}
+
+.dmod-step-lbl--done {
+    color: #16A34A;
+    font-weight: 600;
+}
+
+.dmod-step-lbl--active {
+    color: #E85523;
+    font-weight: 600;
+}
+
+.dmod-step-lbl--idle {
+    color: #94A3B8;
+}
+
+/* Connector line */
+.dmod-connector {
     flex: 1;
     height: 2px;
-    margin: 0 6px;
-    margin-bottom: 14px;
+    background: #E2E8F0;
+    margin: 15px 8px 0;
+    /* 15px aligns with circle centres (32px/2) */
+    border-radius: 2px;
+    transition: background .3s ease;
+    align-self: flex-start;
 }
 
-.dmod-sline--filled {
-    background: #3B6D11;
+.dmod-connector--filled {
+    background: #16A34A;
 }
 
-.dmod-sline--empty {
-    background: var(--border-default);
-}
-
-/* ── Body ── */
+/* ── Body (scrollable) ── */
 .dmod-body {
-    padding: 18px 22px;
+    padding: 22px 28px;
+    overflow-y: auto;
+    flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 14px;
-    flex: 1;
+    gap: 20px;
 }
 
-/* ── Overall progress bar ── */
-.dmod-op-bar {
-    background: #FFF8F5;
-    border: 0.5px solid #F5C4B3;
-    border-radius: 10px;
-    padding: 13px 15px;
+/* ── Overview 2-col cards ── */
+.dmod-overview {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
 }
 
-.dmod-op-row {
+.dmod-ov-card {
+    border: 1px solid #F1F5F9;
+    border-radius: 12px;
+    padding: 18px 20px;
+    background: #F8FAFC;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+}
+
+.dmod-ov-label {
+    font-size: 10.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
+    color: #94A3B8;
+    margin: 0;
+}
+
+.dmod-ov-value {
+    font-size: 28px;
+    font-weight: 700;
+    color: #0F172A;
+    margin: 0;
+    line-height: 1.1;
+    letter-spacing: -0.5px;
+}
+
+.dmod-ov-denom {
+    font-size: 15px;
+    font-weight: 400;
+    color: #64748B;
+}
+
+.dmod-ov-bar {
+    height: 4px;
+    background: #E2E8F0;
+    border-radius: 100px;
+    overflow: hidden;
+}
+
+.dmod-ov-fill {
+    height: 100%;
+    border-radius: 100px;
+    transition: width .5s ease;
+}
+
+.dmod-ov-ach-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 9px;
+    gap: 12px;
+    flex: 1;
 }
 
-.dmod-op-lbl {
-    font-size: 10px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.6px;
-    color: #854F0B;
-}
-
-.dmod-op-val {
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--text-primary);
-}
-
-.dmod-op-val span {
-    font-size: 11px;
-    color: var(--text-secondary);
-    font-weight: 400;
-    margin-left: 4px;
-}
-
-.dmod-pt {
-    height: 6px;
-    background: #F5C4B3;
-    border-radius: 100px;
-    overflow: hidden;
-}
-
-.dmod-pf {
-    height: 100%;
-    border-radius: 100px;
-    background: #E85523;
-    transition: width .4s ease;
-}
-
-/* Timestamps under progress bar */
-.dmod-ts-row {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    flex-wrap: wrap;
-    margin-top: 9px;
-    padding-top: 8px;
-    border-top: 0.5px solid #F5C4B3;
-}
-
-.dmod-ts-item {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 11px;
-    color: #854F0B;
-}
-
-/* ── Section label / count — detail modal ── */
-.dmod-sec-lbl {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--text-secondary);
-    margin-bottom: 10px;
-}
-
-/* Neutral text pill — replaces orange circle for plan counts */
-.dmod-sec-count-pill {
-    background: var(--bg-page);
-    border: 0.5px solid var(--border-default);
-    border-radius: 100px;
-    padding: 2px 9px;
-    font-size: 10px;
-    color: var(--text-secondary);
-    text-transform: none;
-    letter-spacing: 0;
-    font-weight: 500;
-    margin-left: auto;
-}
-
-/* Sequential index pill inside detail modal plan rows */
-.dmod-plan-idx-pill {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 22px;
-    height: 22px;
-    padding: 0 6px;
-    border-radius: 6px;
-    background: var(--bg-page);
-    border: 1.5px solid var(--border-default);
-    color: var(--text-secondary);
-    font-size: 10px;
+.dmod-ov-pct {
+    font-size: 36px;
     font-weight: 700;
-    flex-shrink: 0;
-    white-space: nowrap;
+    margin: 0;
+    line-height: 1;
+    letter-spacing: -1.5px;
+}
+
+.dmod-ov-sub-note {
+    font-size: 11px;
+    color: #94A3B8;
+    margin: 0;
     margin-top: 2px;
 }
 
-/* Wrapper for index pill + circular progress in detail modal */
-.dmod-pring-wrap {
+/* ── Section wrapper ── */
+.dmod-section {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    gap: 4px;
-    flex-shrink: 0;
+    gap: 12px;
 }
 
+.dmod-sec-hdr {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #F1F5F9;
+}
 
+.dmod-sec-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #374151;
+    display: flex;
+    align-items: center;
+}
+
+.dmod-sec-badge {
+    font-size: 11px;
+    font-weight: 500;
+    color: #94A3B8;
+    background: #F8FAFC;
+    border: 1px solid #E2E8F0;
+    padding: 2px 10px;
+    border-radius: 100px;
+}
+
+/* ── Plan cards — each plan is its own bordered card ── */
+.dmod-plan-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.dmod-plan-card {
+    background: #FFFFFF;
+    border: 1px solid #E8EEF4;
+    border-radius: 12px;
+    padding: 14px 16px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    transition: box-shadow .15s, border-color .15s;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .04);
+}
+
+.dmod-plan-card:hover {
+    box-shadow: 0 3px 10px rgba(0, 0, 0, .08);
+    border-color: #D1DCE8;
+}
+
+.dmod-plan-card-top {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.dmod-plan-card-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.dmod-plan-card-title-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+/* ── Keep old plan-list/item for backward compat but unused now ── */
 .dmod-plan-list {
     display: flex;
     flex-direction: column;
-    gap: 10px;
-}
-
-/* ── Simple plan item (Case A — no achievement yet) ── */
-.dmod-plan-simple-wrap {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    padding: 11px 13px;
-    background: var(--bg-page);
-    border: 0.5px solid var(--border-default);
-    border-radius: 10px;
-    border-left: 3px solid #B4B2A9;
-}
-
-/* ── Per-plan achievement card (Case B) ── */
-.dmod-pcard-wrap {
-    border-radius: 10px;
-    border: 0.5px solid var(--border-default);
+    border: 1px solid #E2E8F0;
+    border-radius: 12px;
     overflow: hidden;
 }
 
-.dmod-pcard {
-    border-left: 3px solid #B4B2A9;
-    border-radius: 0 10px 10px 0;
-    background: var(--bg-card);
-    overflow: hidden;
+.dmod-plan-item {
+    padding: 14px 18px;
+    background: #FFFFFF;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    transition: background .12s;
+    border-bottom: 1px solid #F1F5F9;
 }
 
-.dmod-ptop {
+.dmod-plan-item:last-child {
+    border-bottom: none;
+}
+
+.dmod-plan-item:hover {
+    background: #FAFBFC;
+}
+
+.dmod-plan-item-top {
     display: flex;
     align-items: flex-start;
-    gap: 11px;
-    padding: 12px 14px 10px;
+    justify-content: space-between;
+    gap: 10px;
 }
 
-.dmod-pring {
-    width: 40px;
-    height: 40px;
-    min-width: 40px;
-    border-radius: 50%;
-    border: 2.5px solid;
+.dmod-plan-item-left {
     display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 11px;
-    font-weight: 600;
-    flex-shrink: 0;
-    position: relative;
-}
-
-/* Remove old avatar+badge pattern — .dmod-pring and .dmod-pbadge no longer used as pair */
-/* Keep .dmod-pring--gray for potential future use but reset styles */
-.dmod-pring--gray {
-    border-color: #B4B2A9;
-    color: #888780;
-}
-
-.dmod-pinfo {
+    align-items: flex-start;
+    gap: 9px;
     flex: 1;
     min-width: 0;
 }
 
-.dmod-pname-row {
+.dmod-plan-num {
+    width: 24px;
+    height: 24px;
+    min-width: 24px;
+    border-radius: 50%;
+    background: #F1F5F9;
+    color: #475569;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    flex-shrink: 0;
+    margin-top: 1px;
+    border: 1.5px solid #E2E8F0;
+}
+
+.dmod-plan-name {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: #1E293B;
+    line-height: 1.45;
+    flex: 1;
+    min-width: 0;
+}
+
+/* Status badges */
+.dmod-badge {
+    padding: 2px 9px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 500;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.dmod-badge--green {
+    background: #F0FDF4;
+    color: #15803D;
+}
+
+.dmod-badge--amber {
+    background: #FFFBEB;
+    color: #B45309;
+}
+
+.dmod-badge--gray {
+    background: #F8FAFC;
+    color: #64748B;
+}
+
+/* Achievement detail text */
+.dmod-plan-ach-text {
+    font-size: 12.5px;
+    color: #64748B;
+    line-height: 1.6;
+    margin: 0;
+    padding-left: 0;
+}
+
+.dmod-plan-ach-empty {
+    font-size: 12px;
+    color: #94A3B8;
+    font-style: italic;
+    margin: 0;
+    padding-left: 0;
+}
+
+/* Progress bar row — sits at bottom of each card */
+.dmod-plan-prog-row {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 7px;
-    margin-bottom: 3px;
+    gap: 10px;
+    padding-left: 0;
+    padding-top: 2px;
 }
 
-.dmod-pname {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--text-secondary);
+.dmod-plan-prog-bar {
+    flex: 1;
+    height: 6px;
+    background: #E2E8F0;
+    border-radius: 100px;
+    overflow: hidden;
 }
 
-.dmod-pstatus {
-    font-size: 10px;
+.dmod-plan-prog-fill {
+    height: 100%;
+    border-radius: 100px;
+    transition: width .45s ease;
+}
+
+.dmod-plan-prog-pct {
+    font-size: 11px;
     font-weight: 600;
-    padding: 2px 8px;
-    border-radius: 5px;
+    min-width: 32px;
+    text-align: right;
     flex-shrink: 0;
 }
 
-.dmod-pstatus--done {
-    background: #EAF3DE;
-    color: #27500A;
-}
-
-.dmod-pstatus--none {
-    background: #FCEBEB;
-    color: #791F1F;
-}
-
-.dmod-pstatus--partial {
-    background: #FAEEDA;
-    color: #633806;
-}
-
-.dmod-pstatus--idle {
-    background: #F1EFE8;
-    color: #5F5E5A;
-}
-
-.dmod-pdesc {
-    font-size: 12px;
-    color: var(--text-primary);
-    line-height: 1.45;
-}
-
-/* Progress section inside plan card */
-.dmod-prog-section {
-    padding: 9px 14px 10px;
-    border-top: 0.5px solid var(--border-default);
-}
-
-.dmod-prog-labels {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 5px;
-}
-
-.dmod-prog-title {
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--text-secondary);
-    font-weight: 600;
-}
-
-.dmod-prog-pct {
-    font-size: 11px;
-    font-weight: 600;
-}
-
-.pp-green {
-    color: #3B6D11;
-}
-
-.pp-red {
-    color: #A32D2D;
-}
-
-.pp-amber {
-    color: #BA7517;
-}
-
-.pp-orange {
-    color: #993C1D;
-}
-
-.pp-gray {
-    color: #888780;
-}
-
-.dmod-prog-bar {
-    height: 5px;
-    background: var(--bg-page);
-    border-radius: 100px;
-    overflow: hidden;
-    margin-bottom: 5px;
-}
-
-.dmod-pb-fill {
-    height: 100%;
-    border-radius: 100px;
-    transition: width .4s ease;
-}
-
-.dmod-prog-markers {
-    display: flex;
-    justify-content: space-between;
-    font-size: 10px;
-    color: var(--text-secondary);
-}
-
-/* Achievement detail section inside plan card */
-.dmod-ach-section {
-    padding: 9px 14px 12px;
-    border-top: 0.5px solid var(--border-default);
-}
-
-.dmod-ach-lbl {
-    font-size: 10px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--text-secondary);
-    margin-bottom: 6px;
-    display: flex;
-    align-items: center;
-    gap: 5px;
-}
-
-.dmod-ach-text {
-    font-size: 12.5px;
-    color: var(--text-primary);
-    background: var(--bg-page);
-    border-radius: 7px;
-    padding: 8px 11px;
-    line-height: 1.5;
-}
-
-.dmod-ach-empty {
-    font-size: 12px;
-    color: var(--text-muted);
-    font-style: italic;
-    background: var(--bg-page);
-    border: 0.5px dashed var(--border-default);
-    border-radius: 7px;
-    padding: 8px 11px;
-}
-
-/* Legacy achievement block */
-.dmod-legacy-ach {
-    padding: 12px 14px;
-    background: var(--bg-page);
-    border: 0.5px solid var(--border-default);
-    border-radius: 10px;
-}
-
-/* ── No achievement block ── */
-.dmod-no-ach-block {
-    border: 0.5px dashed var(--border-default);
-    border-radius: 10px;
-    padding: 18px;
+/* ── No achievement state ── */
+.dmod-no-ach {
+    border: 1px dashed #E2E8F0;
+    border-radius: 12px;
+    padding: 24px;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 10px;
-    background: var(--bg-page);
+    gap: 8px;
+    background: #FAFBFC;
+    text-align: center;
 }
 
-.dmod-no-ach-icon {
-    width: 38px;
-    height: 38px;
+.dmod-no-ach-icon-wrap {
+    width: 36px;
+    height: 36px;
     border-radius: 50%;
-    background: var(--bg-card);
-    border: 0.5px solid var(--border-default);
+    background: #F1F5F9;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--text-muted);
+    color: #94A3B8;
 }
 
-.dmod-no-ach-text {
-    font-size: 12.5px;
-    color: var(--text-secondary);
-    text-align: center;
+.dmod-no-ach p {
+    font-size: 13px;
+    color: #94A3B8;
+    margin: 0;
     line-height: 1.5;
 }
 
-.dmod-add-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 8px 18px;
-    background: #E85523;
-    color: #fff;
-    border: none;
-    border-radius: 8px;
-    font-size: 12.5px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all .15s;
-}
-
-.dmod-add-btn:hover {
-    background: #D04518;
-}
-
 /* ── Additional achievements ── */
-.dmod-extras-card {
-    border: 0.5px solid var(--border-default);
+.dmod-extra-list {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid #E2E8F0;
     border-radius: 10px;
     overflow: hidden;
-}
-
-.dmod-extras-hdr {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 10px 14px;
-    background: #FFF8F5;
-    border-bottom: 0.5px solid #F5C4B3;
-}
-
-.dmod-extras-title {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    font-size: 12.5px;
-    font-weight: 600;
-    color: #633806;
-}
-
-.dmod-extras-badge {
-    background: #FAEEDA;
-    color: #633806;
-    font-size: 10px;
-    padding: 2px 8px;
-    border-radius: 5px;
-    font-weight: 600;
 }
 
 .dmod-extra-item {
     display: flex;
     align-items: flex-start;
     gap: 10px;
-    padding: 10px 14px;
-    border-bottom: 0.5px solid var(--border-default);
+    padding: 13px 16px;
+    background: #FFFFFF;
+    border-bottom: 1px solid #F1F5F9;
 }
 
 .dmod-extra-item:last-child {
@@ -1639,8 +1479,8 @@
     height: 20px;
     min-width: 20px;
     border-radius: 50%;
-    background: #FAEEDA;
-    color: #633806;
+    background: #FEF3C7;
+    color: #92400E;
     font-size: 10px;
     font-weight: 600;
     display: flex;
@@ -1657,620 +1497,161 @@
 
 .dmod-extra-text {
     font-size: 12.5px;
-    color: var(--text-primary);
-    line-height: 1.4;
-    margin-bottom: 6px;
+    color: #374151;
+    margin: 0 0 8px;
+    line-height: 1.5;
 }
 
-.dmod-extra-prog-row {
+/* ── RA Evaluation ── */
+.dmod-ra-section {
+    border: 1px solid #E2E8F0;
+    border-radius: 12px;
+    padding: 16px 18px;
+    background: #F8FAFC;
+}
+
+.dmod-ra-section--done {
+    background: #F0F9FF;
+    border-color: #BAE6FD;
+}
+
+.dmod-ra-hdr {
     display: flex;
     align-items: center;
-    gap: 9px;
+    gap: 8px;
+    margin-bottom: 10px;
 }
 
-.dmod-extra-bar {
-    flex: 1;
-    height: 4px;
-    background: var(--bg-page);
-    border-radius: 100px;
-    overflow: hidden;
-}
-
-.dmod-extra-bar-fill {
-    height: 100%;
-    border-radius: 100px;
-    background: #BA7517;
-}
-
-.dmod-extra-pct-lbl {
-    font-size: 10px;
-    font-weight: 600;
-    color: #854F0B;
-    white-space: nowrap;
-}
-
-/* ── RA evaluation box ── */
-.dmod-ra-box {
-    background: var(--bg-page);
-    border: 0.5px solid var(--border-default);
-    border-radius: 10px;
-    padding: 12px 14px;
-    display: flex;
-    align-items: flex-start;
-    gap: 11px;
-}
-
-.dmod-ra-icon {
-    width: 30px;
-    height: 30px;
-    min-width: 30px;
+.dmod-ra-check-icon {
+    width: 20px;
+    height: 20px;
     border-radius: 50%;
-    background: #E6F1FB;
-    border: 0.5px solid #B5D4F4;
+    background: #DCFCE7;
+    color: #16A34A;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    margin-top: 1px;
 }
 
-.dmod-ra-info {
-    flex: 1;
-    min-width: 0;
-}
-
-.dmod-ra-lbl {
-    font-size: 10px;
+.dmod-ra-title-text {
+    font-size: 13px;
     font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--text-secondary);
-    margin-bottom: 3px;
+    color: #1E293B;
+    flex: 1;
 }
 
-.dmod-ra-pending {
-    font-size: 12.5px;
-    color: var(--text-muted);
-    font-style: italic;
-}
-
-.dmod-ra-done {
-    font-size: 12.5px;
-    color: var(--text-primary);
-    line-height: 1.5;
-}
-
-.dmod-ra-score {
-    font-size: 12px;
-    color: var(--primary);
-    margin-top: 4px;
-}
-
-.dmod-ra-score strong {
-    font-size: 14px;
-}
-
-.dmod-ra-date {
+.dmod-ra-date-tag {
     display: flex;
     align-items: center;
     gap: 4px;
     font-size: 11px;
-    color: var(--text-muted);
-    margin-top: 5px;
+    color: #94A3B8;
+    white-space: nowrap;
 }
 
-.dmod-score-chip {
-    padding: 5px 12px;
-    background: #EAF3DE;
-    border: 0.5px solid #97C459;
-    border-radius: 8px;
-    font-size: 14px;
-    font-weight: 700;
-    color: #27500A;
-    flex-shrink: 0;
-    align-self: center;
+.dmod-ra-quote {
+    margin: 0;
+    padding: 10px 14px;
+    background: #FFFFFF;
+    border-left: 3px solid #38BDF8;
+    border-radius: 0 8px 8px 0;
+    font-size: 13px;
+    color: #334155;
+    line-height: 1.65;
+    font-style: italic;
+}
+
+.dmod-ra-pending {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #94A3B8;
 }
 
 /* ── Footer ── */
 .dmod-footer {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding: 12px 22px;
-    border-top: 1px solid var(--border-default);
-    background: var(--bg-page);
-    position: sticky;
-    bottom: 0;
-    z-index: 2;
-}
-
-.dmod-ftr-state {
-    font-size: 11px;
-    color: var(--text-secondary);
-    background: var(--bg-card);
-    border: 0.5px solid var(--border-default);
-    border-radius: 6px;
-    padding: 4px 10px;
+    justify-content: flex-end;
+    padding: 14px 28px;
+    border-top: 1px solid #F1F5F9;
+    background: #FFFFFF;
+    flex-shrink: 0;
 }
 
 .dmod-btn-close {
-    padding: 7px 16px;
-    background: transparent;
-    border: 0.5px solid var(--border-default);
+    padding: 8px 20px;
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
     border-radius: 8px;
-    font-size: 12.5px;
-    font-weight: 600;
-    color: var(--text-primary);
+    font-size: 13px;
+    font-weight: 500;
+    color: #374151;
     cursor: pointer;
     transition: all .15s;
 }
 
 .dmod-btn-close:hover {
-    background: var(--bg-muted);
+    background: #F8FAFC;
+    border-color: #CBD5E1;
+    color: #111827;
 }
 
-.dmod-btn-primary {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 7px 16px;
-    background: #E85523;
-    color: #fff;
-    border: none;
-    border-radius: 8px;
-    font-size: 12.5px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all .15s;
-}
+/* ── Responsive ── */
+@media (max-width: 720px) {
+    .dmod {
+        max-width: 100%;
+        border-radius: 12px;
+        max-height: 94vh;
+    }
 
-.dmod-btn-primary:hover {
-    background: #D04518;
+    .dmod-hdr-top {
+        padding: 14px 16px 12px;
+        gap: 10px;
+    }
+
+    .dmod-month-chip {
+        width: 46px;
+        min-width: 46px;
+        height: 46px;
+        border-radius: 10px;
+    }
+
+    .dmod-month-chip-yr {
+        font-size: 17px;
+    }
+
+    .dmod-stepper {
+        padding: 10px 16px 14px;
+    }
+
+    .dmod-body {
+        padding: 14px 16px;
+        gap: 14px;
+    }
+
+    .dmod-footer {
+        padding: 12px 16px;
+    }
+
+    .dmod-overview {
+        grid-template-columns: 1fr;
+    }
+
+    .dmod-ov-pct {
+        font-size: 28px;
+    }
+
+    .dmod-title {
+        font-size: 16px;
+    }
 }
 
 /* ============================================================
-   ACHIEVEMENT MODAL (original styles preserved)
+   ACHIEVEMENT MODAL
 ============================================================ */
-.mp-modal {
-    background: var(--bg-card);
-    border-radius: var(--radius-lg);
-    width: 100%;
-    max-width: 680px;
-    max-height: 90vh;
-    overflow-y: auto;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, .25);
-    animation: scaleUp .2s ease-out;
-}
-
-.mp-modal--xl {
-    max-width: 1000px;
-}
-
-.mp-modal--wide {
-    max-width: 780px;
-}
-
-.mp-modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    padding: 20px 28px;
-    border-bottom: 1px solid var(--border-default);
-    background: linear-gradient(135deg, rgba(255, 107, 53, .04) 0%, rgba(168, 85, 247, .04) 100%);
-    position: sticky;
-    top: 0;
-    z-index: 2;
-}
-
-.mp-modal-header h2 {
-    margin: 0 0 4px;
-    font-size: 1.25rem;
-}
-
-.mp-modal-meta {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    font-size: .6875rem;
-    color: var(--text-muted);
-    flex-wrap: wrap;
-}
-
-.mp-modal-meta-sep {
-    margin: 0 2px;
-    opacity: .5;
-}
-
-.mp-modal-close {
-    background: none;
-    border: none;
-    font-size: 1.25rem;
-    color: var(--text-muted);
-    cursor: pointer;
-    padding: 4px;
-}
-
-.mp-modal-close:hover {
-    color: var(--text-primary);
-}
-
-.mp-modal-progress {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 20px 28px;
-    gap: 0;
-    border-bottom: 1px solid var(--border-default);
-    background: var(--bg-page);
-}
-
-.mp-prog-step {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
-    font-size: .625rem;
-    font-weight: 600;
-    color: var(--text-muted);
-}
-
-.mp-prog-step.done {
-    color: var(--success, #22C55E);
-}
-
-.mp-prog-step.active {
-    color: var(--primary);
-}
-
-.mp-prog-dot {
-    width: 34px;
-    height: 34px;
-    border-radius: 50%;
-    background: var(--bg-muted);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: .9rem;
-    transition: all .3s ease;
-}
-
-.mp-prog-step.done .mp-prog-dot {
-    background: var(--success, #22C55E);
-    color: #fff;
-}
-
-.mp-prog-step.active .mp-prog-dot {
-    background: var(--primary);
-    color: #fff;
-}
-
-.mp-prog-line {
-    width: 80px;
-    height: 2px;
-    background: var(--border-default);
-    margin: 0 4px;
-    margin-bottom: 18px;
-}
-
-.mp-prog-line.done {
-    background: var(--success, #22C55E);
-}
-
-.mp-modal-body {
-    padding: 24px 28px;
-}
-
-.mp-modal-body--two-col {
-    display: grid;
-    grid-template-columns: 1fr 1.4fr;
-    gap: 24px;
-    align-items: start;
-}
-
-.mp-modal-col {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-}
-
-.mp-section-head {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 12px;
-    flex-wrap: wrap;
-}
-
-.mp-section-head h4 {
-    margin: 0;
-    font-size: .875rem;
-    font-weight: 700;
-}
-
-.mp-modal-section-count {
-    font-size: .625rem;
-    font-weight: 700;
-    padding: 2px 8px;
-    border-radius: 100px;
-    background: rgba(255, 107, 53, .1);
-    color: var(--primary);
-    margin-left: auto;
-}
-
-.mp-section-icon {
-    width: 28px;
-    height: 28px;
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: .75rem;
-}
-
-.mp-section-icon.orange {
-    background: rgba(255, 107, 53, .1);
-    color: var(--primary);
-}
-
-.mp-section-icon.green {
-    background: rgba(34, 197, 94, .1);
-    color: #22C55E;
-}
-
-.mp-section-icon.blue {
-    background: rgba(59, 130, 246, .1);
-    color: #3B82F6;
-}
-
-.mp-section-content {
-    font-size: .8125rem;
-    color: var(--text-primary);
-    line-height: 1.6;
-    white-space: pre-wrap;
-}
-
-.mp-section-pending {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: .75rem;
-    color: var(--text-muted);
-    font-style: italic;
-}
-
-.mp-modal-plan-list {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.mp-modal-plan-item {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    padding: 10px 12px;
-    background: var(--bg-muted);
-    border-radius: var(--radius-md);
-    border-left: 3px solid rgba(255, 107, 53, .3);
-}
-
-.mp-modal-ach-overall-bar-wrap {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    margin-bottom: 12px;
-    padding: 10px 12px;
-    background: var(--bg-page);
-    border-radius: var(--radius-md);
-    border: 1px solid var(--border-default);
-}
-
-.mp-modal-ach-overall-text {
-    font-size: .6875rem;
-    font-weight: 600;
-    color: var(--text-secondary);
-}
-
-.mp-modal-ach-overall-pill {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-left: auto;
-    background: var(--bg-muted);
-    border-radius: 100px;
-    padding: 4px 10px;
-    font-size: .6875rem;
-    font-weight: 600;
-    color: var(--text-secondary);
-    flex-shrink: 0;
-}
-
-.mp-modal-ach-overall-bar {
-    width: 60px;
-    height: 5px;
-    background: var(--border-default);
-    border-radius: 99px;
-    overflow: hidden;
-}
-
-.mp-modal-ach-list {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    margin-bottom: 12px;
-}
-
-.mp-modal-ach-item {
-    padding: 14px 16px;
-    background: var(--bg-page);
-    border-radius: var(--radius-md);
-    border: 1px solid var(--border-default);
-    border-left-width: 4px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.mp-modal-ach-item-header {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-}
-
-.mp-modal-ach-item-info {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-
-.mp-modal-ach-item-plan-label {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-}
-
-.mp-modal-ach-plan-text {
-    font-size: .8125rem;
-    color: var(--text-secondary);
-    line-height: 1.4;
-    flex: 1;
-}
-
-.mp-modal-ach-item-meta {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.mp-modal-ach-pct-text {
-    font-size: .75rem;
-    font-weight: 700;
-    margin-left: auto;
-}
-
-.mp-modal-ach-detail-box {
-    background: rgba(255, 107, 53, .04);
-    border: 1px solid rgba(255, 107, 53, .12);
-    border-radius: var(--radius-md);
-    padding: 10px 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-}
-
-.mp-modal-ach-detail-label {
-    font-size: .5625rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: .4px;
-    color: var(--text-muted);
-}
-
-.mp-modal-ach-detail-text {
-    font-size: .8125rem;
-    color: var(--text-primary);
-    line-height: 1.6;
-    white-space: pre-wrap;
-}
-
-.mp-modal-ach-detail-empty {
-    font-size: .75rem;
-    color: var(--text-muted);
-    font-style: italic;
-    padding: 4px 0;
-}
-
-.mp-modal-additional-ach {
-    background: rgba(245, 158, 11, .05);
-    border: 1px solid rgba(245, 158, 11, .2);
-    border-radius: var(--radius-md);
-    padding: 12px 14px;
-    margin-top: 4px;
-}
-
-.mp-modal-additional-header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 8px;
-}
-
-.mp-additional-icon-wrap {
-    width: 22px;
-    height: 22px;
-    border-radius: 50%;
-    background: rgba(245, 158, 11, .15);
-    color: #D97706;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: .6875rem;
-    flex-shrink: 0;
-}
-
-.mp-additional-title {
-    font-size: .8125rem;
-    font-weight: 700;
-    color: var(--text-primary);
-    flex: 1;
-}
-
-.mp-additional-count {
-    font-size: .625rem;
-    font-weight: 700;
-    padding: 2px 7px;
-    border-radius: 100px;
-    background: rgba(245, 158, 11, .15);
-    color: #B45309;
-}
-
-.mp-modal-additional-list {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-
-.mp-modal-additional-item {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    padding: 6px 0;
-}
-
-.mp-eval-box {
-    background: var(--bg-muted);
-    border-radius: var(--radius-md);
-    padding: 12px;
-    border-left: 3px solid #22C55E;
-}
-
-.mp-eval-label {
-    font-size: .625rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: .4px;
-    color: var(--text-muted);
-    margin-bottom: 4px;
-}
-
-.mp-eval-text {
-    font-size: .8125rem;
-    color: var(--text-primary);
-    line-height: 1.5;
-}
-
-.mp-eval-score {
-    margin-top: 8px;
-    font-size: .8125rem;
-    color: var(--primary);
-}
-
-.mp-eval-score strong {
-    font-size: 1rem;
-}
-
-/* ── Achievement modal ── */
 .mp-ach-modal {
     background: var(--bg-card);
     border-radius: var(--radius-lg);
@@ -2386,7 +1767,6 @@
     border-bottom: 1px solid var(--border-default);
 }
 
-/* Achievement section count — text pill, not orange circle */
 .mp-ach-section-count {
     margin-left: auto;
     font-size: 0.625rem;
@@ -2455,7 +1835,6 @@
     gap: 10px;
 }
 
-/* ── Progress slider styled as a progress bar ── */
 .mp-ach-slider-wrap {
     display: flex;
     align-items: center;
@@ -2470,7 +1849,6 @@
     align-items: center;
 }
 
-/* Base empty track */
 .mp-ach-slider-track-bg::before {
     content: '';
     position: absolute;
@@ -2484,7 +1862,6 @@
     z-index: 0;
 }
 
-/* The progress fill behind the slider */
 .mp-ach-slider-fill {
     position: absolute;
     left: 0;
@@ -2497,7 +1874,6 @@
     z-index: 1;
 }
 
-/* The range input overlaid on top */
 .mp-ach-range {
     position: relative;
     width: 100%;
@@ -2508,7 +1884,6 @@
     outline: none;
     cursor: pointer;
     z-index: 2;
-    /* transparent background so fill shows through */
     background: transparent;
 }
 
@@ -2570,8 +1945,6 @@
     display: block;
     margin-bottom: 2px;
 }
-
-/* (old .mp-ach-progress-row / .mp-ach-range-wrap / duplicate .mp-ach-range removed — see new slider CSS above) */
 
 .mp-ach-progress-btns {
     display: flex;
@@ -2698,47 +2071,28 @@
 .mp-ach-actions {
     display: flex;
     gap: 10px;
-    padding: 0 24px 20px;
+    padding: 14px 24px;
+    border-top: 1px solid var(--border-default);
+    background: var(--bg-page);
+    flex-shrink: 0;
     flex-wrap: wrap;
 }
 
-.mp-ach-form {
-    padding: 20px 24px;
-}
-
-.mp-ach-form label {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: .75rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: .4px;
+/* ── Shared modal close ── */
+.mp-modal-close {
+    background: none;
+    border: none;
+    font-size: 1.25rem;
     color: var(--text-muted);
-    margin-bottom: 8px;
+    cursor: pointer;
+    padding: 4px;
 }
 
-.mp-ach-form textarea {
-    width: 100%;
-    min-height: 180px;
-    padding: 14px;
-    border: 1px solid var(--border-default);
-    border-radius: var(--radius-md);
-    font-size: .875rem;
-    line-height: 1.6;
-    background: var(--bg-page);
+.mp-modal-close:hover {
     color: var(--text-primary);
-    resize: vertical;
-    box-sizing: border-box;
-    font-family: inherit;
 }
 
-.mp-ach-form textarea:focus {
-    outline: none;
-    border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(255, 107, 53, .1);
-}
-
+/* ── Resubmit remarks ── */
 .mp-resubmit-remarks-box {
     margin: 0 24px;
     padding: 12px;
@@ -2783,7 +2137,7 @@
     font-size: .875rem;
 }
 
-/* Draft / Rejection banners */
+/* ── Draft / Rejection banners ── */
 .mp-draft-banner {
     margin: 0 12px;
     padding: 12px;
@@ -2851,122 +2205,7 @@
     background: #791F1F;
 }
 
-/* Achievement modal sticky footer */
-.mp-ach-actions {
-    display: flex;
-    gap: 10px;
-    padding: 14px 24px;
-    border-top: 1px solid var(--border-default);
-    background: var(--bg-page);
-    flex-shrink: 0;
-    flex-wrap: wrap;
-}
-
-/* Achievement modal form area (inside resubmit modal) */
-.mp-ach-form {
-    padding: 0 24px 4px;
-}
-
-.mp-ach-form label {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 0.75rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.4px;
-    color: var(--text-muted);
-    margin-bottom: 4px;
-}
-
-/* ============================================================
-   RESPONSIVE
-============================================================ */
-@media (max-width: 720px) {
-    .dmod {
-        max-width: 100%;
-    }
-}
-
-@media (max-width: 900px) {
-    .mp-modal-body--two-col {
-        grid-template-columns: 1fr;
-    }
-
-    .mp-modal--xl {
-        max-width: 100%;
-    }
-}
-
-@media (max-width: 768px) {
-    .mp-unified-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .mp-stats-row {
-        flex-direction: column;
-    }
-
-    .mp-action-row {
-        flex-direction: column;
-        align-items: stretch;
-    }
-
-    .mp-filters {
-        flex-direction: column;
-    }
-
-    .mp-modal,
-    .mp-ach-modal {
-        max-width: 100%;
-    }
-
-    .mp-modal--wide,
-    .mp-ach-modal--wide {
-        max-width: 100%;
-    }
-
-    .mp-ach-progress-row {
-        flex-direction: column;
-        align-items: stretch;
-    }
-
-    .mp-ach-progress-btns {
-        justify-content: space-between;
-    }
-
-    .mp-ach-overall-summary {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 10px;
-    }
-
-    .mp-ach-overall-right {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        text-align: left;
-    }
-
-    .mp-form-month-row {
-        flex-direction: column;
-    }
-
-    .mp-form-group--month {
-        max-width: 100%;
-    }
-
-    .mp-prog-line {
-        width: 40px;
-    }
-
-    .dmod-footer {
-        flex-wrap: wrap;
-        gap: 8px;
-    }
-}
-
-/* ── Extra achievements on plan cards ── */
+/* ── Extra achievements on cards ── */
 .mp-card-extras-row {
     display: flex;
     flex-direction: column;
@@ -3025,4 +2264,186 @@
     font-size: 0.6875rem;
     font-weight: 700;
     flex-shrink: 0;
+}
+
+/* ============================================================
+   RESPONSIVE
+============================================================ */
+@media (max-width: 900px) {
+    .mp-modal--xl {
+        max-width: 100%;
+    }
+}
+
+@media (max-width: 768px) {
+    .mp-unified-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .mp-stats-row {
+        flex-direction: column;
+    }
+
+    .mp-action-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .mp-filters {
+        flex-direction: column;
+    }
+
+    .mp-ach-modal,
+    .mp-ach-modal--wide {
+        max-width: 100%;
+    }
+
+    .mp-ach-overall-summary {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+
+    .mp-ach-overall-right {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        text-align: left;
+    }
+
+    .mp-form-month-row {
+        flex-direction: column;
+    }
+
+    .mp-form-group--month {
+        max-width: 100%;
+    }
+
+    .dmod-footer {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+}
+
+/* ============================================================
+   DEADLINE LOCKED BANNER (Production mode — past 7th)
+============================================================ */
+.mp-deadline-locked-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 24px 20px;
+}
+
+.mp-deadline-locked-icon {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    border-radius: 12px;
+    background: #FEF2F2;
+    border: 1px solid #FECACA;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #DC2626;
+    font-size: 1.25rem;
+}
+
+.mp-deadline-locked-content {
+    flex: 1;
+}
+
+.mp-deadline-locked-content strong {
+    display: block;
+    font-size: 0.9375rem;
+    font-weight: 700;
+    color: #DC2626;
+    margin-bottom: 6px;
+}
+
+.mp-deadline-locked-content p {
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    margin: 0;
+}
+
+/* ============================================================
+   MONTH LOCKED DISPLAY (Production mode — within window)
+============================================================ */
+.mp-month-locked-display {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 14px;
+    background: rgba(22, 163, 74, .06);
+    border: 1.5px solid rgba(22, 163, 74, .3);
+    border-radius: var(--radius-md);
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: #15803D;
+    cursor: default;
+    user-select: none;
+}
+
+.mp-month-locked-badge {
+    margin-left: 6px;
+    font-size: 0.5625rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 2px 7px;
+    border-radius: 100px;
+    background: rgba(22, 163, 74, .12);
+    color: #15803D;
+}
+
+/* ============================================================
+   DEV MODE MONTH PICKER (Development mode — year + month)
+============================================================ */
+.mp-dev-month-picker {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.mp-dev-year-select,
+.mp-dev-month-select {
+    padding: 9px 12px;
+    border: 1.5px solid var(--border-default);
+    border-radius: var(--radius-md);
+    font-size: 0.875rem;
+    font-weight: 600;
+    background: var(--bg-page);
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: border-color 0.15s;
+}
+
+.mp-dev-year-select {
+    min-width: 80px;
+}
+
+.mp-dev-month-select {
+    min-width: 150px;
+}
+
+.mp-dev-year-select:focus,
+.mp-dev-month-select:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(255, 107, 53, .1);
+}
+
+.mp-dev-mode-badge {
+    font-size: 0.5625rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    padding: 3px 8px;
+    border-radius: 100px;
+    background: #FFF3CD;
+    color: #856404;
+    border: 1px solid #FFEAA7;
 }

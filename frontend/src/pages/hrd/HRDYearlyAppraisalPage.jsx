@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
     FiArrowLeft, FiAward, FiBriefcase, FiCalendar, FiCheckCircle,
     FiChevronDown, FiChevronUp, FiClock, FiEdit3, FiEye,
     FiFileText, FiPenTool, FiPlus, FiStar, FiTarget, FiUsers,
     FiXCircle, FiAlertTriangle, FiTrendingUp, FiZap, FiBarChart2,
-    FiRefreshCw,
+    FiRefreshCw, FiColumns,
 } from 'react-icons/fi';
 import api from '../../services/api';
 import '../ra/RAYearlyAppraisalPage.css';
@@ -33,29 +33,57 @@ const formatDate = (value) => {
 
 const getStatusInfo = (status) => {
     const map = {
-        PENDING:              { label: 'Pending Assessment', cls: 'pending',   icon: <FiClock /> },
-        SUBMITTED:            { label: 'Submitted',          cls: 'pending',   icon: <FiClock /> },
-        APPROVED:             { label: 'MD Approved',        cls: 'approved',  icon: <FiCheckCircle /> },
-        REJECTED:             { label: 'MD Rejected',        cls: 'rejected',  icon: <FiXCircle /> },
-        EDITED:               { label: 'Edited Before Approval', cls: 'edited',    icon: <FiEdit3 /> },
-        EDITED_AFTER_APPROVAL:{ label: 'Edited After Approval', cls: 'edited', icon: <FiEdit3 /> },
-        RA_EVALUATED:         { label: 'RA Evaluated',       cls: 'ra-done',   icon: <FiCheckCircle /> },
-        HRD_EVALUATED:        { label: 'HRD Evaluated',      cls: 'hrd-done',  icon: <FiCheckCircle /> },
-        MD_EVALUATED:         { label: 'MD Evaluated',       cls: 'completed', icon: <FiCheckCircle /> },
-        COMPLETED:            { label: 'Completed',          cls: 'completed', icon: <FiCheckCircle /> },
+        PENDING: { label: 'Pending Assessment', cls: 'pending', icon: <FiClock /> },
+        SUBMITTED: { label: 'Submitted', cls: 'pending', icon: <FiClock /> },
+        APPROVED: { label: 'MD Approved', cls: 'approved', icon: <FiCheckCircle /> },
+        REJECTED: { label: 'MD Rejected', cls: 'rejected', icon: <FiXCircle /> },
+        EDITED: { label: 'Edited Before Approval', cls: 'edited', icon: <FiEdit3 /> },
+        EDITED_AFTER_APPROVAL: { label: 'Edited After Approval', cls: 'edited', icon: <FiEdit3 /> },
+        RA_EVALUATED: { label: 'RA Evaluated', cls: 'ra-done', icon: <FiCheckCircle /> },
+        HRD_EVALUATED: { label: 'HRD Evaluated', cls: 'hrd-done', icon: <FiCheckCircle /> },
+        MD_EVALUATED: { label: 'MD Evaluated', cls: 'completed', icon: <FiCheckCircle /> },
+        COMPLETED: { label: 'Completed', cls: 'completed', icon: <FiCheckCircle /> },
     };
     return map[status] || { label: status || 'Unknown', cls: 'pending', icon: <FiClock /> };
 };
 
 /* Workflow stepper config */
 const getWorkflowStep = (status) => {
-    if (!status || status === 'PENDING' || status === 'SUBMITTED') return 0;
-    if (status === 'REJECTED') return -1;
-    if (status === 'APPROVED' || status === 'EDITED_AFTER_APPROVAL') return 1;
+    if (!status || status === 'SUBMITTED') return 1;
     if (status === 'RA_EVALUATED') return 2;
     if (status === 'HRD_EVALUATED') return 3;
-    if (status === 'MD_EVALUATED' || status === 'COMPLETED') return 4;
-    return 0;
+    if (status === 'MD_EVALUATED') return 4;
+    if (status === 'COMPLETED') return 5;
+
+    // For plans
+    if (status === 'PENDING') return 0;
+    if (status === 'REJECTED') return -1;
+    if (status === 'APPROVED' || status === 'EDITED_AFTER_APPROVAL') return 1;
+
+    return 1;
+};
+
+const getPlanStatusInfo = (status) => {
+    if (!status) return null;
+    if (status === 'APPROVED') return {
+        variant: 'approved',
+        label: 'Approved Plan',
+        icon: '✅',
+        badge: 'Approved',
+    };
+    if (status === 'PENDING' || status === 'SUBMITTED') return {
+        variant: 'pending',
+        label: 'Pending MD Review',
+        icon: '⏳',
+        badge: 'Pending MD Review',
+    };
+    if (status === 'EDITED') return {
+        variant: 'edited',
+        label: 'Edited Before Approval',
+        icon: '✏️',
+        badge: 'Edited Before Approval',
+    };
+    return { variant: 'pending', label: status, icon: '⏳', badge: status };
 };
 
 /* ══════════════════════════════════════════════════════════
@@ -101,16 +129,126 @@ const ScoreCard = ({ label, value, max, color = 'primary', highlight = false }) 
     );
 };
 
+/* Phase 3 — baseline banner shown below hero */
+const PlanBaselineBanner = ({ plan }) => {
+    if (!plan) {
+        return (
+            <div className="yap-baseline-banner yap-baseline-banner--neutral">
+                <FiInfo size={14} />
+                <span>ℹ️ No yearly plan linked. Evaluating based on self-reported KRA only.</span>
+            </div>
+        );
+    }
+    const s = plan.status;
+    if (s === 'APPROVED') {
+        return (
+            <div className="yap-baseline-banner yap-baseline-banner--approved">
+                <FiCheckCircle size={14} />
+                <span>✅ Evaluated against approved yearly plan (FY {plan.financialYear}, v{plan.version || 1})</span>
+            </div>
+        );
+    }
+    return (
+        <div className="yap-baseline-banner yap-baseline-banner--warning">
+            <FiAlertTriangle size={14} />
+            <span>⚠️ Yearly plan is still pending MD approval. You are evaluating against an unconfirmed baseline.</span>
+        </div>
+    );
+};
+
+
+
+const YearlyPlanTab = ({ plan, showHistory, setShowHistory }) => {
+    if (!plan) {
+        return (
+            <div className="yap-plan-tab-empty">
+                <div className="yap-plan-tab-empty-icon"><FiFileText /></div>
+                <p>No yearly plan was linked when this appraisal was submitted.</p>
+                <span>Evaluate based on the KRA text provided by the employee.</span>
+            </div>
+        );
+    }
+    const ps = getPlanStatusInfo(plan.status);
+    return (
+        <div className="yap-plan-tab">
+            <div className="yap-plan-tab-meta">
+                <span className={`yap-plan-status-badge yap-plan-status-badge--${ps.variant}`}>
+                    {ps.icon} {ps.badge}
+                </span>
+                <span className="yap-plan-tab-fy">FY {plan.financialYear} · v{plan.version || 1}</span>
+            </div>
+
+            {plan.status !== 'APPROVED' && (
+                <div className="yap-plan-tab-warning">
+                    <FiAlertTriangle size={13} />
+                    Yearly plan is still pending MD approval. You are evaluating against an unconfirmed baseline.
+                </div>
+            )}
+            {plan.status === 'APPROVED' && (
+                <div className="yap-plan-tab-approved">
+                    <FiCheckCircle size={13} />
+                    Approved plan — reliable baseline
+                </div>
+            )}
+
+            <div className="yap-block" style={{ marginTop: 12 }}>
+                <div className="yap-block-header">
+                    <div className="yap-block-icon yap-block-icon--blue"><FiTarget /></div>
+                    <div><h3>Plan & Objectives</h3><p>Submitted yearly goals</p></div>
+                </div>
+                <div style={{ padding: '14px 18px', fontSize: '0.875rem', lineHeight: 1.8 }}>
+                    {plan.planAndObjectives
+                        ? <pre className="yap-pre">{plan.planAndObjectives}</pre>
+                        : <span className="yap-muted">No objectives submitted.</span>}
+                </div>
+            </div>
+
+            {plan.editHistory?.length > 0 && (
+                <div className="yap-block" style={{ marginTop: 10 }}>
+                    <div
+                        className="yap-block-header yap-block-header--clickable"
+                        onClick={() => setShowHistory(!showHistory)}
+                    >
+                        <div className="yap-block-icon yap-block-icon--amber"><FiPenTool /></div>
+                        <div>
+                            <h3>Edit History</h3>
+                            <p>{plan.editHistory.length} revision{plan.editHistory.length !== 1 ? 's' : ''}</p>
+                        </div>
+                        <div className="yap-toggle-icon">{showHistory ? <FiChevronUp /> : <FiChevronDown />}</div>
+                    </div>
+                    {showHistory && (
+                        <ul className="yap-history-list">
+                            {plan.editHistory.map((edit, i) => (
+                                <li key={i} className="yap-history-item">
+                                    <div className="yap-history-num">{i + 1}</div>
+                                    <div>
+                                        <div className="yap-history-note">{edit.note || 'Plan updated'}</div>
+                                        <div className="yap-history-date">{new Date(edit.editedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
+                                    </div>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+};
+
 /* Workflow Stepper */
-const WorkflowStepper = ({ status }) => {
+const WorkflowStepper = ({ status, isReport = false }) => {
     const step = getWorkflowStep(status);
     const rejected = status === 'REJECTED';
-    const steps = [
+
+    const steps = isReport ? [
+        { icon: <FiFileText />, label: 'Report Submitted' },
+        { icon: <FiStar />, label: 'RA Evaluation' },
+        { icon: <FiUsers />, label: 'HRD Evaluation' },
+        { icon: <FiAward />, label: 'MD Final' },
+        { icon: <FiCheckCircle />, label: 'Completed' },
+    ] : [
         { icon: <FiFileText />, label: 'Plan Submitted' },
-        { icon: <FiCheckCircle />, label: 'MD Review' },
-        { icon: <FiStar />, label: 'RA Eval' },
-        { icon: <FiAward />, label: 'HRD Eval' },
-        { icon: <FiAward />, label: 'Finalized' },
+        { icon: <FiCheckCircle />, label: 'MD Review' }
     ];
 
     return (
@@ -197,31 +335,178 @@ const SummaryPanel = ({ plans, reports }) => {
 };
 
 /* ══════════════════════════════════════════════════════════
+   RESIZE HOOKS
+══════════════════════════════════════════════════════════ */
+const SPLIT_KEY = 'hrd_yap_split_pct';
+const DEFAULT_PCT = 68;
+const MIN_PCT = 40;
+const MAX_PCT = 80;
+
+const useSplitPane = () => {
+    const [leftPct, setLeftPct] = useState(() => {
+        const saved = localStorage.getItem(SPLIT_KEY);
+        const n = Number(saved);
+        return (n >= MIN_PCT && n <= MAX_PCT) ? n : DEFAULT_PCT;
+    });
+    const containerRef = useRef(null);
+    const dragging = useRef(false);
+
+    const onMouseMove = useCallback((e) => {
+        if (!dragging.current || !containerRef.current) return;
+        const rect = containerRef.current.getBoundingClientRect();
+        const rawPct = ((e.clientX - rect.left) / rect.width) * 100;
+        const clamped = Math.min(MAX_PCT, Math.max(MIN_PCT, rawPct));
+        setLeftPct(clamped);
+    }, []);
+
+    const onMouseUp = useCallback(() => {
+        if (!dragging.current) return;
+        dragging.current = false;
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        document.body.style.pointerEvents = '';
+        localStorage.setItem(SPLIT_KEY, String(Math.round(leftPct)));
+    }, [leftPct]);
+
+    useEffect(() => {
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
+        return () => {
+            window.removeEventListener('mousemove', onMouseMove);
+            window.removeEventListener('mouseup', onMouseUp);
+        };
+    }, [onMouseMove, onMouseUp]);
+
+    const onDividerMouseDown = useCallback((e) => {
+        e.preventDefault();
+        dragging.current = true;
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        document.body.style.pointerEvents = 'none';
+    }, []);
+
+    const onDividerDblClick = useCallback(() => {
+        setLeftPct(DEFAULT_PCT);
+        localStorage.setItem(SPLIT_KEY, String(DEFAULT_PCT));
+    }, []);
+
+    return { leftPct, containerRef, onDividerMouseDown, onDividerDblClick };
+};
+
+const COMPARE_SPLIT_KEY = 'hrd_yap_compare_split';
+const MIN_COMPARE_PCT = 20;
+
+const useCompareSplitPane = () => {
+    const [splits, setSplits] = useState(() => {
+        const saved = localStorage.getItem(COMPARE_SPLIT_KEY);
+        if (saved) {
+            try {
+                const parsed = JSON.parse(saved);
+                if (parsed.left >= MIN_COMPARE_PCT && parsed.mid >= MIN_COMPARE_PCT) return parsed;
+            } catch (e) { }
+        }
+        return { left: 33.33, mid: 33.33 };
+    });
+
+    const containerRef = useRef(null);
+    const draggingRef = useRef(null);
+
+    const onMouseMove = useCallback((e) => {
+        if (!draggingRef.current || !containerRef.current) return;
+        const rect = containerRef.current.getBoundingClientRect();
+        const rawPct = ((e.clientX - rect.left) / rect.width) * 100;
+
+        setSplits(prev => {
+            let next = { ...prev };
+            if (draggingRef.current === 'left') {
+                next.left = Math.min(Math.max(MIN_COMPARE_PCT, rawPct), 100 - prev.mid - MIN_COMPARE_PCT);
+            } else if (draggingRef.current === 'right') {
+                const midPct = rawPct - prev.left;
+                next.mid = Math.min(Math.max(MIN_COMPARE_PCT, midPct), 100 - prev.left - MIN_COMPARE_PCT);
+            }
+            return next;
+        });
+    }, []);
+
+    const onMouseUp = useCallback(() => {
+        if (!draggingRef.current) return;
+        draggingRef.current = null;
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        document.body.style.pointerEvents = '';
+        setSplits(current => {
+            localStorage.setItem(COMPARE_SPLIT_KEY, JSON.stringify(current));
+            return current;
+        });
+    }, []);
+
+    useEffect(() => {
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
+        return () => {
+            window.removeEventListener('mousemove', onMouseMove);
+            window.removeEventListener('mouseup', onMouseUp);
+        };
+    }, [onMouseMove, onMouseUp]);
+
+    const onDividerMouseDown = useCallback((e, divider) => {
+        e.preventDefault();
+        draggingRef.current = divider;
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        document.body.style.pointerEvents = 'none';
+    }, []);
+
+    const onDividerDblClick = useCallback(() => {
+        const def = { left: 33.33, mid: 33.33 };
+        setSplits(def);
+        localStorage.setItem(COMPARE_SPLIT_KEY, JSON.stringify(def));
+    }, []);
+
+    return { splits, containerRef, onDividerMouseDown, onDividerDblClick };
+};
+
+/* ══════════════════════════════════════════════════════════
    MAIN COMPONENT
 ══════════════════════════════════════════════════════════ */
 const HRDYearlyAppraisalPage = () => {
-    const [activeTab, setActiveTab]       = useState('plans');
-    const [year, setYear]                 = useState(getCurrentFinancialYear());
-    const [plans, setPlans]               = useState([]);
-    const [reports, setReports]           = useState([]);
-    const [loading, setLoading]           = useState(true);
+    const [activeTab, setActiveTab] = useState('plans');
+    const [year, setYear] = useState(getCurrentFinancialYear());
+    const [plans, setPlans] = useState([]);
+    const [reports, setReports] = useState([]);
+    const [loading, setLoading] = useState(true);
     const [selectedView, setSelectedView] = useState(null);
-    const [showHistory, setShowHistory]   = useState(false);
-    
+    const [showHistory, setShowHistory] = useState(false);
+
     // HRD Evaluation State
     const [isEvaluating, setIsEvaluating] = useState(false);
-    const [hrdScore, setHrdScore]         = useState('');
-    const [hrdRemarks, setHrdRemarks]     = useState('');
-    const [submitting, setSubmitting]     = useState(false);
+    const [hrdScore, setHrdScore] = useState('');
+    const [hrdRemarks, setHrdRemarks] = useState('');
+    const [submitting, setSubmitting] = useState(false);
+
+    // Compare Mode states
+    const [compareMode, setCompareMode] = useState(false);
+    const [syncScroll, setSyncScroll] = useState(false);
+    const leftCompareRef = useRef(null);
+    const midCompareRef = useRef(null);
+    const [rightTab, setRightTab] = useState('scoring');
+
+    const { leftPct, containerRef, onDividerMouseDown, onDividerDblClick } = useSplitPane();
+    const {
+        splits: compareSplits,
+        containerRef: compareContainerRef,
+        onDividerMouseDown: onCompareDividerMouseDown,
+        onDividerDblClick: onCompareDividerDblClick
+    } = useCompareSplitPane();
 
     const fetchData = async () => {
         setLoading(true);
         try {
             const [plansRes, reportsRes] = await Promise.all([
-                api.get('/hrd/yearly-plans',   { params: { financialYear: year } }),
+                api.get('/hrd/yearly-plans', { params: { financialYear: year } }),
                 api.get('/hrd/yearly-reports', { params: { financialYear: year } }),
             ]);
-            setPlans(plansRes.data   || []);
+            setPlans(plansRes.data || []);
             setReports(reportsRes.data || []);
 
             if (selectedView) {
@@ -272,7 +557,7 @@ const HRDYearlyAppraisalPage = () => {
         }
         setSubmitting(true);
         try {
-            await api.put(`/hrd/yearly-report/${selectedView._id}`, { 
+            await api.put(`/hrd/yearly-report/${selectedView._id}`, {
                 hrdTotalScore: score,
                 hrdRemarks: hrdRemarks
             });
@@ -366,7 +651,7 @@ const HRDYearlyAppraisalPage = () => {
                     <div className="yap-cards-grid">
                         {items.map((item) => {
                             const employee = item.employeeId;
-                            const isPlan   = activeTab === 'plans';
+                            const isPlan = activeTab === 'plans';
                             const needsEval = !isPlan && item.status === 'RA_EVALUATED';
 
                             return (
@@ -466,7 +751,7 @@ const HRDYearlyAppraisalPage = () => {
                 </button>
 
                 {/* Workflow Stepper */}
-                {!isPlan && <WorkflowStepper status={item.status} />}
+                <WorkflowStepper status={item.status} isReport={!isPlan} />
 
                 {/* Hero Header */}
                 <div className="yap-hero">
@@ -490,6 +775,16 @@ const HRDYearlyAppraisalPage = () => {
                         </div>
                     </div>
                     <div className="yap-hero-right">
+                        {!isPlan && item.yearlyPlanId && (
+                            <button
+                                className={`yap-compare-btn${compareMode ? ' yap-compare-btn--active' : ''}`}
+                                onClick={() => setCompareMode(m => !m)}
+                                title="Toggle Compare Mode"
+                            >
+                                {compareMode ? <FiXCircle size={14} /> : <FiColumns size={14} />}
+                                {compareMode ? '✖ Exit Compare Mode' : '📊 Compare with Plan'}
+                            </button>
+                        )}
                         {isPlan ? (
                             <div className="yap-hero-meta-stack">
                                 <div className="yap-hero-meta-item">
@@ -502,7 +797,11 @@ const HRDYearlyAppraisalPage = () => {
                                 </div>
                             </div>
                         ) : (
-                            canEvaluate && !hasHRDEval ? (
+                            isLocked ? (
+                                <span className="yap-locked-badge">
+                                    <FiCheckCircle size={13} /> Finalized - Read Only
+                                </span>
+                            ) : canEvaluate && !hasHRDEval ? (
                                 <button className="yap-cta-btn" onClick={() => startEvaluation(item)}>
                                     <FiStar size={14} /> Start HRD Evaluation
                                 </button>
@@ -522,10 +821,204 @@ const HRDYearlyAppraisalPage = () => {
             </div>
 
             {/* ══ SCROLLABLE SPLIT-PANE BODY ══ */}
-            <div className="yap-detail-body">
+            {compareMode && !isPlan ? (
+                /* ═══ 3-COLUMN COMPARE MODE ═══ */
+                <div className="yap-compare-body" ref={compareContainerRef}>
+                    {/* Left: Yearly Plan pane */}
+                    <div 
+                        className="yap-compare-pane yap-compare-pane--plan" 
+                        ref={leftCompareRef} 
+                        style={{ flexBasis: `${compareSplits.left}%`, flexGrow: 0, flexShrink: 0 }}
+                        onScroll={(e) => {
+                            if (!syncScroll || !midCompareRef.current) return;
+                            if (Math.abs(midCompareRef.current.scrollTop - e.target.scrollTop) > 5) {
+                                midCompareRef.current.scrollTop = e.target.scrollTop;
+                            }
+                        }}
+                    >
+                        <div className="yap-compare-pane-hd">📋 YEARLY PLAN</div>
+                        {item.yearlyPlanId?.planAndObjectives
+                            ? <pre className="yap-pre" style={{ padding: '16px 20px' }}>{item.yearlyPlanId.planAndObjectives}</pre>
+                            : <span className="yap-muted" style={{ padding: 20, display: 'block' }}>No plan objectives linked.</span>
+                        }
+                    </div>
+
+                    {/* DIVIDER 1 */}
+                    <div
+                        className="yap-split-divider"
+                        onMouseDown={(e) => onCompareDividerMouseDown(e, 'left')}
+                        onDoubleClick={onCompareDividerDblClick}
+                        title="Drag to resize · Double-click to reset"
+                    />
+
+                    {/* Middle: Appraisal Report pane */}
+                    <div 
+                        className="yap-compare-pane yap-compare-pane--report" 
+                        ref={midCompareRef} 
+                        style={{ flexBasis: `${compareSplits.mid}%`, flexGrow: 0, flexShrink: 0 }}
+                        onScroll={(e) => {
+                            if (!syncScroll || !leftCompareRef.current) return;
+                            if (Math.abs(leftCompareRef.current.scrollTop - e.target.scrollTop) > 5) {
+                                leftCompareRef.current.scrollTop = e.target.scrollTop;
+                            }
+                        }}
+                    >
+                        <div className="yap-compare-pane-hd" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span>📝 APPRAISAL REPORT</span>
+                            <button
+                                className={`yap-sync-btn${syncScroll ? ' yap-sync-btn--on' : ''}`}
+                                onClick={() => setSyncScroll(s => !s)}
+                                style={{ margin: '-4px 0' }}
+                            >
+                                <FiRefreshCw size={12} />
+                                Sync Scroll: {syncScroll ? 'ON' : 'OFF'}
+                            </button>
+                        </div>
+                        <div style={{ padding: '0 20px 40px' }}>
+                            <div className="yap-section">
+                                <div className="yap-section-hd yap-section-hd--blue">
+                                    <div className="yap-section-hd-icon"><FiBriefcase /></div>
+                                    <div>
+                                        <div className="yap-section-hd-title">Works as per KRA</div>
+                                        <div className="yap-section-hd-sub">Self-assessment against mapped KRA goals</div>
+                                    </div>
+                                </div>
+                                <div className="yap-section-body">
+                                    {item.workKRA
+                                        ? <pre className="yap-pre">{item.workKRA}</pre>
+                                        : <span className="yap-muted">No data provided.</span>}
+                                </div>
+                            </div>
+
+                            {item.additionalAssignments && (
+                                <div className="yap-section">
+                                    <div className="yap-section-hd yap-section-hd--teal">
+                                        <div className="yap-section-hd-icon"><FiPlus /></div>
+                                        <div>
+                                            <div className="yap-section-hd-title">Additional Assignments</div>
+                                            <div className="yap-section-hd-sub">Extracurricular work beyond KRA</div>
+                                        </div>
+                                    </div>
+                                    <div className="yap-section-body">
+                                        <pre className="yap-pre">{item.additionalAssignments}</pre>
+                                    </div>
+                                </div>
+                            )}
+
+                            {(item.raRemarks || item.mdRemarks) && (
+                                <div className="yap-section">
+                                    <div className="yap-section-hd yap-section-hd--purple">
+                                        <div className="yap-section-hd-icon"><FiFileText /></div>
+                                        <div>
+                                            <div className="yap-section-hd-title">Evaluator Remarks</div>
+                                            <div className="yap-section-hd-sub">Notes left by authorities</div>
+                                        </div>
+                                    </div>
+                                    {[
+                                        { role: 'RA Remarks', cls: 'ra', text: item.raRemarks },
+                                        { role: 'MD Remarks', cls: 'md', text: !isPlan ? item.mdRemarks : null },
+                                    ].filter(r => r.text).map(({ role, cls, text }) => (
+                                        <div key={cls} className={`yap-remark-item yap-remark-item--${cls}`}>
+                                            <div className="yap-remark-item-hd">{role}</div>
+                                            <div className="yap-remark-item-body">{text}</div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* DIVIDER 2 */}
+                    <div
+                        className="yap-split-divider"
+                        onMouseDown={(e) => onCompareDividerMouseDown(e, 'right')}
+                        onDoubleClick={onCompareDividerDblClick}
+                        title="Drag to resize · Double-click to reset"
+                    />
+
+                    {/* Right: Scoring sidebar */}
+                    <div className="yap-compare-pane yap-compare-pane--scoring" style={{ flex: 1, minWidth: 260 }}>
+                        <div className="yap-compare-pane-hd">⭐ SCORING</div>
+                        <div style={{ padding: '0 0 40px' }}>
+                            <div className="yap-block">
+                                <div className="yap-block-header">
+                                    <div>
+                                        <h3 className="yap-block-title">Score Dashboard</h3>
+                                        <p className="yap-block-desc">Current valuation standings</p>
+                                    </div>
+                                </div>
+                                <div className="yap-block-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                    <ScoreCard label="RA Final Score" value={item.raTotalScore} max={80} color="primary" />
+                                    <ScoreCard label="HRD Score" value={item.hrdTotalScore} max={5} color="secondary" highlight />
+                                    <ScoreCard label="MD Score" value={item.mdFinalScore} max={15} color="success" />
+                                </div>
+                            </div>
+                            
+                            <div className="yap-block yap-eval-sticky">
+                                <div className="yap-block-header">
+                                    <div className="yap-block-icon yap-block-bg-secondary"><FiUsers /></div>
+                                    <div>
+                                        <h3 className="yap-block-title">HRD Final Appraisal</h3>
+                                        <p className="yap-block-desc">Provide final score (Max 5)</p>
+                                    </div>
+                                </div>
+                                <div className="yap-block-body">
+                                    {isEvaluating ? (
+                                        <form onSubmit={handleEvaluate} style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '16px' }}>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                <label style={{ fontSize: '0.85rem', fontWeight: '600' }}>Score (Max 5)<span style={{ color: 'var(--error)' }}>*</span></label>
+                                                <input 
+                                                    style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-default)', fontFamily: 'inherit' }}
+                                                    type="number" min="0" max="5" step="0.5" 
+                                                    required
+                                                    value={hrdScore}
+                                                    onChange={(e) => setHrdScore(e.target.value)}
+                                                />
+                                            </div>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                <label style={{ fontSize: '0.85rem', fontWeight: '600' }}>Remarks</label>
+                                                <textarea 
+                                                    style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-default)', width: '100%', fontFamily: 'inherit', resize: 'vertical' }}
+                                                    rows="3"
+                                                    placeholder="Optional remarks..."
+                                                    value={hrdRemarks}
+                                                    onChange={(e) => setHrdRemarks(e.target.value)}
+                                                />
+                                            </div>
+                                            <div style={{ display: 'flex', gap: '8px' }}>
+                                                <button type="submit" className="yap-cta-btn" style={{ flex: 1, justifyContent: 'center' }} disabled={submitting}>
+                                                    {submitting ? 'Saving...' : 'Submit Score'}
+                                                </button>
+                                                <button type="button" className="yap-cta-btn yap-cta-btn--secondary" onClick={() => setIsEvaluating(false)}>Cancel</button>
+                                            </div>
+                                        </form>
+                                    ) : (
+                                        <div style={{ padding: '16px' }}>
+                                            {isLocked ? (
+                                                <div style={{ padding: '12px', background: 'var(--success-bg)', color: 'var(--success)', borderRadius: '8px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                    <FiCheckCircle /> HRD Evaluation Finalized. All scoring completed.
+                                                </div>
+                                            ) : canEvaluate ? (
+                                                <button className="yap-cta-btn" style={{ width: '100%', justifyContent: 'center' }} onClick={() => startEvaluation(item)}>
+                                                    <FiAward /> Evaluate Report
+                                                </button>
+                                            ) : (
+                                                <div style={{ padding: '12px', background: 'var(--warning-bg)', color: 'var(--warning)', borderRadius: '8px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                    <FiClock /> Evaluation pending RA submission.
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            ) : (
+            <div className="yap-detail-body" ref={containerRef}>
 
                 {/* LEFT — independently scrollable */}
-                <div className="yap-detail-left">
+                <div className="yap-detail-left" style={{ flexBasis: `${leftPct}%`, flexGrow: 0, flexShrink: 0 }}>
                     {isPlan ? (
                         <>
                             {/* Plan Objectives */}
@@ -653,8 +1146,16 @@ const HRDYearlyAppraisalPage = () => {
                     )}
                 </div>
 
+                {/* DIVIDER */}
+                <div
+                    className="yap-split-divider"
+                    onMouseDown={onDividerMouseDown}
+                    onDoubleClick={onDividerDblClick}
+                    title="Drag to resize · Double-click to reset"
+                />
+
                 {/* RIGHT — Sidebar */}
-                <div className="yap-detail-right">
+                <div className="yap-detail-right" style={{ flex: 1, minWidth: 280 }}>
                     {isPlan ? (
                         /* Plan summary sidebar */
                         <div className="yap-block">
@@ -665,8 +1166,8 @@ const HRDYearlyAppraisalPage = () => {
                             <div className="yap-side-stack">
                                 {[
                                     { label: 'Financial Year', value: item.financialYear },
-                                    { label: 'Version',        value: `v${item.version || 1}` },
-                                    { label: 'Submitted',      value: formatDate(item.submittedAt) },
+                                    { label: 'Version', value: `v${item.version || 1}` },
+                                    { label: 'Submitted', value: formatDate(item.submittedAt) },
                                     { label: 'Current Status', value: getStatusInfo(item.status).label },
                                 ].map((r) => (
                                     <div key={r.label} className="yap-side-row">
@@ -678,17 +1179,40 @@ const HRDYearlyAppraisalPage = () => {
                         </div>
                     ) : (
                         <>
-                            {/* Score Dashboard */}
-                            <div className="yap-block">
+                            <div className="yap-right-tabs">
+                                <button
+                                    className={"yap-right-tab" + (rightTab === 'plan' ? ' yap-right-tab--active' : '')}
+                                    onClick={() => setRightTab('plan')}
+                                >
+                                    📋 Yearly Plan
+                                </button>
+                                <button
+                                    className={"yap-right-tab" + (rightTab === 'scoring' ? ' yap-right-tab--active' : '')}
+                                    onClick={() => setRightTab('scoring')}
+                                >
+                                    ⭐ Scoring
+                                </button>
+                            </div>
+
+                            {rightTab === 'plan' ? (
+                                <YearlyPlanTab
+                                    plan={item.yearlyPlanId}
+                                    showHistory={showHistory}
+                                    setShowHistory={setShowHistory}
+                                />
+                            ) : (
+                                <>
+                                    {/* Score Dashboard */}
+                                    <div className="yap-block">
                                 <div className="yap-block-header">
                                     <div className="yap-block-icon yap-block-icon--orange"><FiTrendingUp /></div>
                                     <div><h3>Score Dashboard</h3><p>Evaluation scores across stages</p></div>
                                 </div>
                                 <div className="yap-score-grid">
-                                    <ScoreCard label="RA Score"    value={item.raTotalScore}  max={80} color="primary" />
-                                    <ScoreCard label="HRD Score"   value={item.hrdTotalScore} max={5}  color="teal"    />
-                                    <ScoreCard label="MD Score"    value={item.mdFinalScore}  max={15} color="indigo"  />
-                                    <ScoreCard label="Grand Total" value={item.grandTotal}    max={100} color="success" highlight />
+                                    <ScoreCard label="RA Score" value={item.raTotalScore} max={80} color="primary" />
+                                    <ScoreCard label="HRD Score" value={item.hrdTotalScore} max={5} color="teal" />
+                                    <ScoreCard label="MD Score" value={item.mdFinalScore} max={15} color="indigo" />
+                                    <ScoreCard label="Grand Total" value={item.grandTotal} max={100} color="success" highlight />
                                 </div>
                             </div>
 
@@ -773,8 +1297,11 @@ const HRDYearlyAppraisalPage = () => {
                             )}
                         </>
                     )}
-                </div>
-            </div>
+                </>
+            )}
+        </div>
+    </div>
+)}
         </div>
     );
 };
