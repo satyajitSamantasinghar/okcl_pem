@@ -1,13 +1,16 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { useLocation } from 'react-router-dom';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
 import './RAMonthlyEvaluation.css';
+import ExtendDeadlineModal from './ExtendDeadlineModal';
 import {
     FiFilter, FiSearch, FiStar, FiEye, FiX, FiUsers, FiClock,
     FiCheckCircle, FiTrendingUp, FiClipboard, FiMessageSquare,
     FiDownload, FiChevronUp, FiChevronDown, FiChevronLeft,
     FiChevronRight, FiAward, FiCalendar, FiAlertCircle, FiFileText,
+    FiXCircle, FiAlertTriangle,
 } from 'react-icons/fi';
 import { FaFile } from 'react-icons/fa';
 
@@ -402,8 +405,9 @@ const PlanContextPanel = ({ plan, achievement, className = '' }) => {
 
 /* ─────────────────────────────────────────
    DETAIL MODAL (View button)
+   New prop: isMissedDeadline (boolean) — changes footer
 ───────────────────────────────────────── */
-const DetailModal = ({ ev, detail, detailLoading, onClose, onEvaluate }) => {
+const DetailModal = ({ ev, detail, detailLoading, onClose, onEvaluate, onReject, isMissedDeadline, onExtendDeadline }) => {
     if (!ev) return null;
 
     const planItems = detail ? getPlanItems(detail.plan) : [];
@@ -474,7 +478,25 @@ const DetailModal = ({ ev, detail, detailLoading, onClose, onEvaluate }) => {
                         </div>
                     ) : detail ? (
                         <>
+                            {/* Rejection alert — shown when RA has rejected this plan */}
+                            {(ev.monthlyPlanId?.status === 'REJECTED' || detail?.plan?.status === 'REJECTED') && (
+                                <div className="meval-rejection-alert">
+                                    <div className="meval-rejection-alert-header">
+                                        <FiXCircle size={14} />
+                                        <strong>Plan Rejected by RA</strong>
+                                    </div>
+                                    <div className="meval-rejection-alert-reason">
+                                        <span className="meval-rejection-reason-label">Rejection Reason:</span>
+                                        {detail?.plan?.raRemarks || ev.monthlyPlanId?.raRemarks || '—'}
+                                    </div>
+                                    <div className="meval-rejection-alert-hint">
+                                        The employee will need to revise and resubmit this plan before evaluation can proceed.
+                                    </div>
+                                </div>
+                            )}
+
                             <PlanContextPanel plan={detail.plan} achievement={detail.achievement} />
+
 
                             {/* RA Evaluation box */}
                             <div className="meval-ra-box">
@@ -509,17 +531,46 @@ const DetailModal = ({ ev, detail, detailLoading, onClose, onEvaluate }) => {
 
                 {/* Footer */}
                 <div className="meval-vmodal-footer">
-                    <span className="meval-vmodal-ftr-state">
-                        {isEvaluated ? 'Evaluated' : hasAch ? 'Awaiting RA review' : 'Achievement pending'}
-                    </span>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                        {!isEvaluated && hasAch && onEvaluate && (
-                            <button className="btn btn-primary" onClick={onEvaluate}>
-                                <FiStar size={13} /> Evaluate
-                            </button>
-                        )}
-                        <button className="btn btn-secondary" onClick={onClose}>Close</button>
-                    </div>
+                    {isMissedDeadline ? (
+                        /* ── Missed deadline footer ── */
+                        <>
+                            <span style={{ color: '#B91C1C', fontSize: '13px', fontWeight: 500 }}>
+                                ⚠️ Deadline passed — submission missing
+                            </span>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <button
+                                    className="btn btn-secondary"
+                                    style={{ border: '1px solid #FDBA74', color: '#C2410C', background: '#FFF7ED', fontSize: '13px', fontWeight: 500 }}
+                                    onClick={onExtendDeadline}
+                                    onMouseEnter={e => { e.currentTarget.style.background = '#FFEDD5'; }}
+                                    onMouseLeave={e => { e.currentTarget.style.background = '#FFF7ED'; }}
+                                >
+                                    ⏱ Extend Deadline
+                                </button>
+                                <button className="btn btn-secondary" onClick={onClose}>Close</button>
+                            </div>
+                        </>
+                    ) : (
+                        /* ── Normal footer ── */
+                        <>
+                            <span className="meval-vmodal-ftr-state">
+                                {isEvaluated ? 'Evaluated' : hasAch ? 'Awaiting RA review' : 'Achievement pending'}
+                            </span>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                {!isEvaluated && hasAch && onEvaluate && (
+                                    <button className="btn btn-primary" onClick={onEvaluate}>
+                                        <FiStar size={13} /> Evaluate
+                                    </button>
+                                )}
+                                {!isEvaluated && ev.monthlyPlanId?.status !== 'REJECTED' && onReject && (
+                                    <button className="btn btn-danger" onClick={onReject}>
+                                        <FiXCircle size={13} /> Reject Plan
+                                    </button>
+                                )}
+                                <button className="btn btn-secondary" onClick={onClose}>Close</button>
+                            </div>
+                        </>
+                    )}
                 </div>
             </div>
         </div>,
@@ -677,16 +728,181 @@ const EvaluateModal = ({ item, onClose, onSubmit, submitting }) => {
 };
 
 /* ─────────────────────────────────────────
+   REJECT MODAL
+───────────────────────────────────────── */
+const RejectModal = ({ item, planStatus, planRemarks, onClose, onSubmit, submitting }) => {
+    const [step, setStep] = useState(1); // 1=confirm, 2=remarks+plan
+    const [raRemarks, setRaRemarks] = useState('');
+    const [ctxDetail, setCtxDetail] = useState(null);
+    const MIN_CHARS = 10;
+    const MAX_CHARS = 500;
+    const isValid = raRemarks.trim().length >= MIN_CHARS;
+
+    // Fetch plan + achievement context (same endpoint as EvaluateModal)
+    useEffect(() => {
+        if (!item) return;
+        api.get(`/ra/monthly-evaluations/${item._id}`)
+            .then(res => setCtxDetail(res.data))
+            .catch(() => setCtxDetail(null));
+    }, [item]);
+
+    const handleSubmit = () => {
+        if (!isValid) { toast.error(`Please provide a reason (at least ${MIN_CHARS} characters).`); return; }
+        onSubmit({ raRemarks: raRemarks.trim() });
+    };
+
+    return createPortal(
+        <div className="meval-overlay" onClick={onClose}>
+            <div
+                className={`meval-reject-modal${step === 2 ? ' meval-reject-modal--wide' : ''}`}
+                onClick={e => e.stopPropagation()}
+            >
+
+                {/* Header */}
+                <div className="meval-reject-hdr">
+                    <div className="meval-reject-hdr-left">
+                        <div className="meval-reject-icon-wrap">
+                            <FiXCircle size={18} />
+                        </div>
+                        <div>
+                            <h2 className="meval-reject-title">Reject Monthly Plan</h2>
+                            <p className="meval-reject-subtitle">
+                                {item?.employee?.name} &bull; {formatMonthLabel(item?.month)}
+                            </p>
+                        </div>
+                    </div>
+                    <button className="meval-modal-close" onClick={onClose}><FiX /></button>
+                </div>
+
+                {step === 1 ? (
+                    /* ── Step 1: Confirmation ── */
+                    <div className="meval-reject-body">
+                        <div className="meval-reject-warn-banner">
+                            <FiAlertTriangle size={16} />
+                            <div>
+                                <div className="meval-reject-warn-title">Are you sure you want to reject this plan?</div>
+                                <div className="meval-reject-warn-sub">
+                                    The employee will be notified and must revise and resubmit their plan.
+                                    This action cannot be undone without employee resubmission.
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Plan preview */}
+                        <div className="meval-reject-plan-preview">
+                            <div className="meval-reject-preview-label">
+                                <FiFileText size={11} /> Plan being rejected
+                            </div>
+                            <div className="meval-reject-preview-month">{formatMonthLabel(item?.month)}</div>
+                            <div className="meval-reject-preview-employee">
+                                {item?.employee?.name} &bull; {item?.employee?.employeeCode} &bull; {item?.employee?.department}
+                            </div>
+                        </div>
+
+                        <div className="meval-reject-step1-actions">
+                            <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+                            <button className="btn btn-danger" onClick={() => setStep(2)}>
+                                <FiXCircle size={13} /> Yes, Reject & Add Reason
+                            </button>
+                        </div>
+                    </div>
+                ) : (
+                    /* ── Step 2: Two-column — Plan context LEFT, Remarks form RIGHT ── */
+                    <div className="meval-reject-step2-body">
+
+                        {/* LEFT — plan & achievement context */}
+                        <div className="meval-reject-ctx-panel">
+                            <div className="meval-reject-ctx-title">
+                                <FiFileText size={12} /> Plan Being Rejected
+                            </div>
+                            <div className="meval-reject-ctx-inner">
+                                {ctxDetail ? (
+                                    <PlanContextPanel
+                                        plan={ctxDetail.plan}
+                                        achievement={ctxDetail.achievement}
+                                    />
+                                ) : (
+                                    <div className="meval-loading">
+                                        <div className="meval-spinner" />
+                                        <p>Loading plan details…</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* RIGHT — rejection reason form */}
+                        <div className="meval-reject-form-panel">
+                            <div>
+                                <p className="meval-reject-form-title">Rejection Reason</p>
+                            </div>
+
+                            <div className="meval-reject-remarks-info">
+                                <FiMessageSquare size={13} />
+                                Provide a clear reason so the employee knows what to revise.
+                                This reason will be visible to the employee and recorded in the audit log.
+                            </div>
+
+                            <div className="meval-form-group" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                                <div className="meval-form-label-row">
+                                    <label className="meval-form-label">
+                                        Rejection Reason <span className="meval-required">*</span>
+                                    </label>
+                                    <span className={`meval-char-counter ${raRemarks.length > MAX_CHARS * 0.9 ? 'meval-char-counter--warn' : ''}`}>
+                                        {raRemarks.length}/{MAX_CHARS}
+                                    </span>
+                                </div>
+                                <textarea
+                                    className="meval-textarea meval-reject-textarea"
+                                    value={raRemarks}
+                                    onChange={e => setRaRemarks(e.target.value.slice(0, MAX_CHARS))}
+                                    placeholder="Explain why this plan is being rejected and what the employee should change when resubmitting… (min 10 characters)"
+                                    rows={6}
+                                    autoFocus
+                                    style={{ flex: 1, resize: 'none' }}
+                                />
+                                {raRemarks.trim().length > 0 && raRemarks.trim().length < MIN_CHARS && (
+                                    <div className="meval-reject-char-hint">
+                                        {MIN_CHARS - raRemarks.trim().length} more character{MIN_CHARS - raRemarks.trim().length !== 1 ? 's' : ''} needed
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="meval-reject-form-actions">
+                                <button className="btn btn-secondary" onClick={() => setStep(1)} disabled={submitting}>Back</button>
+                                <button
+                                    className="btn btn-danger"
+                                    onClick={handleSubmit}
+                                    disabled={submitting || !isValid}
+                                >
+                                    {submitting
+                                        ? <><span className="meval-btn-spinner" /> Rejecting…</>
+                                        : <><FiXCircle size={13} /> Confirm Rejection</>
+                                    }
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>,
+        document.body
+    );
+};
+
+/* ─────────────────────────────────────────
    MAIN PAGE
 ───────────────────────────────────────── */
 const ROWS_PER_PAGE = 10;
 
 const RAMonthlyEvaluationPage = () => {
+    const location = useLocation();
     const [evaluations, setEvaluations] = useState([]);
+    const [employeesList, setEmployeesList] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filterMonth, setFilterMonth] = useState(() => {
         const now = new Date();
         return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
     });
     const [search, setSearch] = useState('');
     const [sortField, setSortField] = useState('name');
@@ -696,21 +912,156 @@ const RAMonthlyEvaluationPage = () => {
     const [detailItem, setDetailItem] = useState(null);
     const [detailData, setDetailData] = useState(null);
     const [detailLoading, setDetailLoading] = useState(false);
+    const [detailIsMissed, setDetailIsMissed] = useState(false);
 
     const [evaluatingItem, setEvaluatingItem] = useState(null);
+    const [rejectingItem, setRejectingItem] = useState(null);
     const [submitting, setSubmitting] = useState(false);
+
+    /* ── Deadline Extension state ── */
+    const [isMissedSectionOpen, setIsMissedSectionOpen] = useState(false);
+    const [isExtendModalOpen, setIsExtendModalOpen] = useState(false);
+    const [selectedEmployeeForExtension, setSelectedEmployeeForExtension] = useState(null);
+    /* Track rows that have been extended: { [employeeId+type]: { newDate } } */
+    const [extendedRows, setExtendedRows] = useState({});
+    const missedSectionRef = useRef(null);
 
     const fetchEvaluations = useCallback(async () => {
         setLoading(true);
         try {
-            const res = await api.get('/ra/monthly-evaluations', { params: { month: filterMonth } });
-            setEvaluations(res.data?.data || []);
+            const [evalRes, empRes] = await Promise.all([
+                api.get('/ra/monthly-evaluations', { params: { month: filterMonth } }),
+                api.get('/ra/my-employees')
+            ]);
+            setEvaluations(evalRes.data?.data || []);
+            setEmployeesList(Array.isArray(empRes.data) ? empRes.data : []);
             setPage(1);
-        } catch { toast.error('Failed to load evaluations'); }
+        } catch { toast.error('Failed to load data'); }
         finally { setLoading(false); }
     }, [filterMonth]);
 
     useEffect(() => { fetchEvaluations(); }, [fetchEvaluations]);
+
+    /* ── Auto-expand missed section if ?filter=missed in URL ── */
+    useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        if (params.get('filter') === 'missed') {
+            setIsMissedSectionOpen(true);
+            // Scroll into view after a short delay so the section has rendered
+            setTimeout(() => {
+                if (missedSectionRef.current) {
+                    missedSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }, 300);
+        }
+    }, [location.search]);
+
+    /* ── Missed deadline employees derived from all employees ── */
+    const missedEvaluations = useMemo(() => {
+        const today = new Date();
+        const [selYear, selMonth] = filterMonth.split('-').map(Number);
+        if (!selYear || !selMonth) return [];
+
+        const planDeadline = new Date(selYear, selMonth - 1, 10, 23, 59, 59);
+        const achDeadline = new Date(selYear, selMonth - 1, 25, 23, 59, 59);
+
+        const q = search.trim().toLowerCase();
+
+        // Sets for O(1) lookups
+        const submittedSet = new Set();
+        const achievementsSet = new Set();
+
+        evaluations.forEach(ev => {
+            const empId = ev.employee?._id?.toString();
+            if (!empId) return;
+            if (ev.monthlyPlanId) submittedSet.add(empId);
+            if (ev.hasAchievement || ev.status === 'EVALUATED') achievementsSet.add(empId);
+        });
+
+        return employeesList.map(emp => {
+            const empId = emp._id?.toString();
+            const hasPlan = submittedSet.has(empId);
+            const hasAch = achievementsSet.has(empId);
+
+            let missingType = null;
+            let originalDeadline = null;
+
+            if (!hasPlan && today > planDeadline) {
+                missingType = 'plan';
+                originalDeadline = planDeadline;
+            } else if (hasPlan && !hasAch && today > achDeadline) {
+                missingType = 'achievement';
+                originalDeadline = achDeadline;
+            }
+
+            if (!missingType) return null;
+
+            // Apply search filter
+            if (q) {
+                const matchable = [
+                    emp.name,
+                    emp.employeeCode,
+                    emp.department,
+                ].filter(Boolean);
+                if (!matchable.some(v => v.toLowerCase().includes(q))) return null;
+            }
+
+            // Return shape expected by table and ExtendModal
+            const existingEv = evaluations.find(e => e.employee?._id?.toString() === empId) || {};
+
+            return {
+                ...existingEv,
+                _id: existingEv._id || `missed-${empId}`,
+                employee: emp,
+                missingType,
+                originalDeadline
+            };
+        }).filter(Boolean);
+    }, [employeesList, evaluations, filterMonth, search]);
+
+    /* ── Parsed filterMonth for the modal ── */
+    const filterMonthYear = useMemo(() => {
+        const [y, m] = filterMonth.split('-').map(Number);
+        return { month: m, year: y };
+    }, [filterMonth]);
+
+    /* ── Helper: open extend modal ── */
+    const openExtendModal = (emp, missingType, originalDeadline) => {
+        setSelectedEmployeeForExtension({ ...emp, missingType, originalDeadline });
+        setIsExtendModalOpen(true);
+    };
+
+    const closeExtendModal = () => {
+        setIsExtendModalOpen(false);
+        setSelectedEmployeeForExtension(null);
+    };
+
+    /* Format month label e.g. "May 2026" */
+    const filterMonthLabel = useMemo(() => {
+        const [y, m] = filterMonth.split('-').map(Number);
+        return new Date(y, m - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    }, [filterMonth]);
+
+    const handleRejectPlan = async ({ raRemarks }) => {
+        if (!rejectingItem) return;
+        const planId = rejectingItem.monthlyPlanId?._id || rejectingItem.monthlyPlanId;
+        if (!planId) { toast.error('Could not identify the monthly plan to reject.'); return; }
+        setSubmitting(true);
+        try {
+            await api.put(`/ra/monthly-plan/${planId}/reject`, { raRemarks });
+            toast.success('Monthly plan rejected. The employee has been notified.');
+            setRejectingItem(null);
+            fetchEvaluations();
+            // Refresh detail panel if it's open for the same employee/month
+            if (detailItem && detailItem._id === rejectingItem._id) {
+                const res = await api.get(`/ra/monthly-evaluations/${detailItem._id}`);
+                setDetailData(res.data);
+            }
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Failed to reject monthly plan.');
+        } finally { setSubmitting(false); }
+    };
+
 
     const total = evaluations.length;
     const evaluated = evaluations.filter(e => e.status === 'EVALUATED').length;
@@ -752,8 +1103,8 @@ const RAMonthlyEvaluationPage = () => {
             : <FiChevronDown className="meval-sort-active" />;
     };
 
-    const openDetail = async (ev) => {
-        setDetailItem(ev); setDetailData(null); setDetailLoading(true);
+    const openDetail = async (ev, isMissed = false) => {
+        setDetailItem(ev); setDetailData(null); setDetailLoading(true); setDetailIsMissed(isMissed);
         try {
             const res = await api.get(`/ra/monthly-evaluations/${ev._id}`);
             setDetailData({ ...res.data, employee: ev.employee });
@@ -761,7 +1112,7 @@ const RAMonthlyEvaluationPage = () => {
         finally { setDetailLoading(false); }
     };
 
-    const closeDetail = () => { setDetailItem(null); setDetailData(null); };
+    const closeDetail = () => { setDetailItem(null); setDetailData(null); setDetailIsMissed(false); };
 
     const handleEvaluate = async ({ score, remarks }) => {
         setSubmitting(true);
@@ -823,14 +1174,36 @@ const RAMonthlyEvaluationPage = () => {
             <div className="meval-toolbar">
                 <div className="meval-filter-group">
                     <FiFilter size={13} className="meval-filter-icon" />
-                    <label htmlFor="meval-month-filter" className="meval-filter-label">Month</label>
-                    <input
-                        id="meval-month-filter"
-                        type="month"
-                        value={filterMonth}
-                        onChange={e => setFilterMonth(e.target.value)}
-                        className="meval-month-input"
-                    />
+                    <label className="meval-filter-label">Period</label>
+                    <div className="meval-period-selectors">
+                        <select
+                            value={filterMonth.split('-')[1]}
+                            onChange={e => setFilterMonth(`${filterMonth.split('-')[0]}-${e.target.value}`)}
+                            className="meval-month-select"
+                        >
+                            <option value="01">January</option>
+                            <option value="02">February</option>
+                            <option value="03">March</option>
+                            <option value="04">April</option>
+                            <option value="05">May</option>
+                            <option value="06">June</option>
+                            <option value="07">July</option>
+                            <option value="08">August</option>
+                            <option value="09">September</option>
+                            <option value="10">October</option>
+                            <option value="11">November</option>
+                            <option value="12">December</option>
+                        </select>
+                        <select
+                            value={filterMonth.split('-')[0]}
+                            onChange={e => setFilterMonth(`${e.target.value}-${filterMonth.split('-')[1]}`)}
+                            className="meval-year-select"
+                        >
+                            {Array.from({ length: 11 }, (_, i) => new Date().getFullYear() - 5 + i).map(year => (
+                                <option key={year} value={year}>{year}</option>
+                            ))}
+                        </select>
+                    </div>
                 </div>
                 <div className="meval-toolbar-divider" />
                 <div className="meval-search-wrap">
@@ -858,7 +1231,7 @@ const RAMonthlyEvaluationPage = () => {
                 <div className="meval-table-card-header">
                     <div>
                         <h3 className="meval-table-card-title">Evaluation Queue</h3>
-                        <p className="meval-table-card-sub">Click any row to view details · Use Evaluate to score</p>
+                        <p className="meval-table-card-sub">Click any row to view details · Use Evaluate to score · Use Reject to send back for revision</p>
                     </div>
                     <span className={`meval-badge ${pending > 0 ? 'meval-badge--pending' : 'meval-badge--evaluated'}`}>
                         {pending > 0 ? `${pending} Pending` : '✓ All Done'}
@@ -878,91 +1251,108 @@ const RAMonthlyEvaluationPage = () => {
                     </div>
                 ) : (
                     <>
-                        {/* Head — 7 columns now */}
-                        <div className="meval-table-head meval-table-head--v2">
-                            <div onClick={() => toggleSort('name')}>Employee <SortIcon field="name" /></div>
-                            <div onClick={() => toggleSort('month')}>Month <SortIcon field="month" /></div>
-                            <div>Plans</div>
-                            <div>Achievement</div>
-                            <div onClick={() => toggleSort('score')}>Score <SortIcon field="score" /></div>
-                            <div onClick={() => toggleSort('status')}>Status <SortIcon field="status" /></div>
-                            <div className="meval-col-actions-head">Actions</div>
-                        </div>
+                        {/* Scrollable wrapper — guarantees Actions column is always fully visible */}
+                        <div className="meval-table-scroll">
+                            {/* Head — 7 columns */}
+                            <div className="meval-table-head meval-table-head--v2">
+                                <div onClick={() => toggleSort('name')}>Employee <SortIcon field="name" /></div>
+                                <div onClick={() => toggleSort('month')}>Month <SortIcon field="month" /></div>
+                                <div>Plans</div>
+                                <div>Achievement</div>
+                                <div onClick={() => toggleSort('score')}>Score <SortIcon field="score" /></div>
+                                <div onClick={() => toggleSort('status')}>Status <SortIcon field="status" /></div>
+                                <div className="meval-col-actions-head">Actions</div>
+                            </div>
 
-                        {/* Rows */}
-                        <div className="meval-table-body">
-                            {pageRows.map((ev, idx) => {
-                                const planCount = getPlanCount(ev);
-                                const hasAch = ev.monthlyPlanId && ev.achievementSubmitted; // may not exist - we'll just show a badge
+                            {/* Rows */}
+                            <div className="meval-table-body">
+                                {pageRows.map((ev, idx) => {
+                                    const planCount = getPlanCount(ev);
+                                    const hasAch = ev.monthlyPlanId && ev.achievementSubmitted; // may not exist - we'll just show a badge
 
-                                return (
-                                    <div
-                                        key={ev._id}
-                                        className="meval-table-row meval-table-row--v2"
-                                        onClick={() => openDetail(ev)}
-                                        style={{ animationDelay: `${idx * 35}ms` }}
-                                    >
-                                        {/* Employee */}
-                                        <div className="meval-cell meval-cell--employee">
-                                            <div className="meval-avatar">{getInitials(ev.employee?.name)}</div>
-                                            <div className="meval-employee-info">
-                                                <strong>{ev.employee?.name || 'Unknown'}</strong>
-                                                <span>{ev.employee?.employeeCode} &bull; {ev.employee?.department}</span>
+                                    return (
+                                        <div
+                                            key={ev._id}
+                                            className="meval-table-row meval-table-row--v2"
+                                            onClick={() => openDetail(ev)}
+                                            style={{ animationDelay: `${idx * 35}ms` }}
+                                        >
+                                            {/* Employee */}
+                                            <div className="meval-cell meval-cell--employee">
+                                                <div className="meval-avatar">{getInitials(ev.employee?.name)}</div>
+                                                <div className="meval-employee-info">
+                                                    <strong>{ev.employee?.name || 'Unknown'}</strong>
+                                                    <span>{ev.employee?.employeeCode} &bull; {ev.employee?.department}</span>
+                                                </div>
+                                            </div>
+
+                                            {/* Month */}
+                                            <div className="meval-cell meval-cell--month">
+                                                <FiCalendar size={12} className="meval-cell-icon" />
+                                                {formatMonthLabel(ev.month)}
+                                            </div>
+
+                                            {/* Plans count */}
+                                            <div className="meval-cell">
+                                                {planCount != null
+                                                    ? <span className="meval-plans-pill">{planCount} plan{planCount !== 1 ? 's' : ''}</span>
+                                                    : <span className="meval-score-dash">—</span>}
+                                            </div>
+
+                                            {/* Achievement status / Plan rejection badge */}
+                                            <div className="meval-cell">
+                                                {(() => {
+                                                    const planStatus = ev.monthlyPlanId?.status;
+                                                    if (planStatus === 'REJECTED') {
+                                                        return <span className="meval-ach-badge meval-ach-badge--rejected"><FiXCircle size={10} /> Plan Rejected</span>;
+                                                    }
+                                                    if (ev.status === 'EVALUATED' || ev.hasAchievement) {
+                                                        return <span className="meval-ach-badge meval-ach-badge--submitted"><FiCheckCircle size={10} /> Submitted</span>;
+                                                    }
+                                                    return <span className="meval-ach-badge meval-ach-badge--pending"><FiClock size={10} /> Pending</span>;
+                                                })()}
+                                            </div>
+
+                                            {/* Score */}
+                                            <div className="meval-cell">
+                                                <ScoreBar score={ev.status === 'EVALUATED' ? ev.score : null} />
+                                            </div>
+
+                                            {/* Status */}
+                                            <div className="meval-cell">
+                                                <StatusBadge status={ev.status} />
+                                            </div>
+
+                                            {/* Actions */}
+                                            <div className="meval-cell meval-cell--actions" onClick={e => e.stopPropagation()}>
+                                                <button
+                                                    className="btn btn-sm btn-secondary"
+                                                    onClick={() => openDetail(ev)}
+                                                >
+                                                    <FiEye size={13} /> View
+                                                </button>
+                                                {ev.status !== 'EVALUATED' && ev.monthlyPlanId?.status !== 'REJECTED' && (
+                                                    <button
+                                                        className="btn btn-sm btn-primary"
+                                                        onClick={() => setEvaluatingItem(ev)}
+                                                    >
+                                                        <FiStar size={13} /> Evaluate
+                                                    </button>
+                                                )}
+                                                {ev.status !== 'EVALUATED' && ev.monthlyPlanId?.status !== 'REJECTED' && (
+                                                    <button
+                                                        className="btn btn-sm btn-danger"
+                                                        onClick={() => setRejectingItem(ev)}
+                                                    >
+                                                        <FiXCircle size={13} /> Reject Plan
+                                                    </button>
+                                                )}
                                             </div>
                                         </div>
-
-                                        {/* Month */}
-                                        <div className="meval-cell meval-cell--month">
-                                            <FiCalendar size={12} className="meval-cell-icon" />
-                                            {formatMonthLabel(ev.month)}
-                                        </div>
-
-                                        {/* Plans count */}
-                                        <div className="meval-cell">
-                                            {planCount != null
-                                                ? <span className="meval-plans-pill">{planCount} plan{planCount !== 1 ? 's' : ''}</span>
-                                                : <span className="meval-score-dash">—</span>}
-                                        </div>
-
-                                        {/* Achievement status */}
-                                        <div className="meval-cell">
-                                            {ev.status === 'EVALUATED' || ev.hasAchievement
-                                                ? <span className="meval-ach-badge meval-ach-badge--submitted"><FiCheckCircle size={10} /> Submitted</span>
-                                                : <span className="meval-ach-badge meval-ach-badge--pending"><FiClock size={10} /> Pending</span>
-                                            }
-                                        </div>
-
-                                        {/* Score */}
-                                        <div className="meval-cell">
-                                            <ScoreBar score={ev.status === 'EVALUATED' ? ev.score : null} />
-                                        </div>
-
-                                        {/* Status */}
-                                        <div className="meval-cell">
-                                            <StatusBadge status={ev.status} />
-                                        </div>
-
-                                        {/* Actions */}
-                                        <div className="meval-cell meval-cell--actions" onClick={e => e.stopPropagation()}>
-                                            <button
-                                                className="btn btn-sm btn-secondary"
-                                                onClick={() => openDetail(ev)}
-                                            >
-                                                <FiEye size={13} /> View
-                                            </button>
-                                            {ev.status !== 'EVALUATED' && (
-                                                <button
-                                                    className="btn btn-sm btn-primary"
-                                                    onClick={() => setEvaluatingItem(ev)}
-                                                >
-                                                    <FiStar size={13} /> Evaluate
-                                                </button>
-                                            )}
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div> {/* end meval-table-scroll */}
 
                         {/* Pagination */}
                         {totalPages > 1 && (
@@ -997,7 +1387,193 @@ const RAMonthlyEvaluationPage = () => {
                         )}
                     </>
                 )}
-            </div>
+            </div> {/* end meval-table-card */}
+
+            {/* ───────────────────────────────────────────────────
+                MISSED DEADLINE SECTION
+            ─────────────────────────────────────────────────── */}
+            {missedEvaluations.length > 0 && (
+                <div ref={missedSectionRef} style={{ marginTop: '4px' }}>
+                    {/* Collapsible header */}
+                    <div
+                        onClick={() => setIsMissedSectionOpen(o => !o)}
+                        style={{
+                            background: '#FFFBEB',
+                            borderLeft: '3px solid #F59E0B',
+                            borderRadius: '8px',
+                            padding: '12px 16px',
+                            cursor: 'pointer',
+                            border: '1px solid #FDE68A',
+                            borderLeftWidth: '3px',
+                            userSelect: 'none',
+                        }}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
+                                <span style={{ fontSize: '1rem' }}>⚠️</span>
+                                <div style={{ minWidth: 0 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                        <span style={{ fontWeight: 700, fontSize: '0.9rem', color: '#92400E' }}>
+                                            Missed Deadline Employees
+                                        </span>
+                                        <span style={{
+                                            background: '#FEF3C7', color: '#92400E',
+                                            borderRadius: '9999px', fontSize: '12px', fontWeight: 600,
+                                            padding: '2px 10px',
+                                        }}>
+                                            {missedEvaluations.length} OVERDUE
+                                        </span>
+                                    </div>
+                                    <div style={{ fontSize: '0.78rem', color: '#B45309', marginTop: '2px' }}>
+                                        These employees have not submitted within the deadline period
+                                    </div>
+                                </div>
+                            </div>
+                            <FiChevronDown
+                                size={18}
+                                style={{
+                                    color: '#B45309',
+                                    flexShrink: 0,
+                                    transform: isMissedSectionOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                                    transition: 'transform 0.2s ease',
+                                }}
+                            />
+                        </div>
+                    </div>
+
+                    {/* Expandable table */}
+                    {isMissedSectionOpen && (
+                        <div style={{
+                            background: '#fff',
+                            border: '1px solid #FDE68A',
+                            borderTop: 'none',
+                            borderRadius: '0 0 8px 8px',
+                            overflow: 'hidden',
+                        }}>
+                            {/* Table head */}
+                            <div style={{
+                                display: 'grid',
+                                gridTemplateColumns: 'minmax(200px,2.5fr) minmax(130px,1fr) minmax(140px,1fr) minmax(160px,1.2fr) minmax(160px,1.2fr)',
+                                padding: '9px 20px',
+                                background: '#FFFBEB',
+                                borderBottom: '1px solid #FDE68A',
+                                fontSize: '0.7rem',
+                                fontWeight: 700,
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.08em',
+                                color: '#92400E',
+                            }}>
+                                <div>Employee</div>
+                                <div>Month</div>
+                                <div>Missing</div>
+                                <div>Original Deadline</div>
+                                <div style={{ textAlign: 'right' }}>Action</div>
+                            </div>
+
+                            {/* Table rows */}
+                            {missedEvaluations.map(ev => {
+                                const empId = ev.employee?._id?.toString() || ev._id?.toString();
+                                const rowKey = `${empId}-${ev.missingType}`;
+                                const extended = extendedRows[rowKey];
+
+                                return (
+                                    <div
+                                        key={ev._id}
+                                        style={{
+                                            display: 'grid',
+                                            gridTemplateColumns: 'minmax(200px,2.5fr) minmax(130px,1fr) minmax(140px,1fr) minmax(160px,1.2fr) minmax(160px,1.2fr)',
+                                            padding: '12px 20px',
+                                            borderBottom: '1px solid #FEF3C7',
+                                            alignItems: 'center',
+                                        }}
+                                    >
+                                        {/* Employee */}
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                            <div className="meval-avatar" style={{ flexShrink: 0 }}>
+                                                {getInitials(ev.employee?.name)}
+                                            </div>
+                                            <div style={{ minWidth: 0 }}>
+                                                <div style={{ fontWeight: 700, fontSize: '0.875rem', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                    {ev.employee?.name || 'Unknown'}
+                                                </div>
+                                                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                                    <span>{ev.employee?.employeeCode}</span>
+                                                    {ev.employee?.department && (
+                                                        <span style={{
+                                                            background: '#FEF3C7', color: '#92400E',
+                                                            borderRadius: '4px', padding: '0 4px', fontSize: '0.68rem', fontWeight: 600,
+                                                        }}>
+                                                            {ev.employee.department}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Month */}
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.845rem', color: 'var(--text-primary)' }}>
+                                            <FiCalendar size={12} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+                                            {filterMonthLabel}
+                                        </div>
+
+                                        {/* Missing type pill */}
+                                        <div>
+                                            <span style={{
+                                                display: 'inline-flex', alignItems: 'center', gap: '4px',
+                                                padding: '3px 10px', borderRadius: '9999px', fontSize: '0.78rem', fontWeight: 600,
+                                                whiteSpace: 'nowrap',
+                                                ...(ev.missingType === 'plan'
+                                                    ? { background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE' }
+                                                    : { background: '#F5F3FF', color: '#6D28D9', border: '1px solid #DDD6FE' }),
+                                            }}>
+                                                {ev.missingType === 'plan' ? '📋 Plan' : '🏆 Achievement'}
+                                            </span>
+                                        </div>
+
+                                        {/* Original deadline */}
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.83rem', color: '#B91C1C', fontWeight: 500 }}>
+                                            <span style={{ fontSize: '0.8rem' }}>🔴</span>
+                                            {ev.originalDeadline
+                                                ? new Date(ev.originalDeadline).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })
+                                                : '—'}
+                                        </div>
+
+                                        {/* Action */}
+                                        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                                            {extended ? (
+                                                <span style={{
+                                                    background: '#F0FDF4', color: '#166534',
+                                                    border: '1px solid #BBF7D0', borderRadius: '6px',
+                                                    padding: '4px 10px', fontSize: '12px', fontWeight: 600,
+                                                    whiteSpace: 'nowrap',
+                                                }}>
+                                                    ✅ Extended → {new Date(extended.newDate).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}
+                                                </span>
+                                            ) : (
+                                                <button
+                                                    onClick={() => openExtendModal(ev.employee, ev.missingType, ev.originalDeadline)}
+                                                    style={{
+                                                        background: '#FFF7ED', color: '#C2410C',
+                                                        border: '1px solid #FDBA74', borderRadius: '6px',
+                                                        padding: '6px 14px', fontSize: '13px', fontWeight: 500,
+                                                        cursor: 'pointer', fontFamily: 'inherit',
+                                                        whiteSpace: 'nowrap',
+                                                        transition: 'background 0.15s',
+                                                    }}
+                                                    onMouseEnter={e => { e.currentTarget.style.background = '#FFEDD5'; }}
+                                                    onMouseLeave={e => { e.currentTarget.style.background = '#FFF7ED'; }}
+                                                >
+                                                    ⏱ Extend Deadline
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* Modals */}
             {detailItem && (
@@ -1006,7 +1582,13 @@ const RAMonthlyEvaluationPage = () => {
                     detail={detailData}
                     detailLoading={detailLoading}
                     onClose={closeDetail}
-                    onEvaluate={() => { closeDetail(); setEvaluatingItem(detailItem); }}
+                    isMissedDeadline={detailIsMissed}
+                    onEvaluate={detailIsMissed ? undefined : () => { closeDetail(); setEvaluatingItem(detailItem); }}
+                    onReject={detailIsMissed ? undefined : () => { closeDetail(); setRejectingItem(detailItem); }}
+                    onExtendDeadline={() => {
+                        const missed = missedEvaluations.find(m => m._id === detailItem._id);
+                        if (missed) openExtendModal(missed.employee, missed.missingType, missed.originalDeadline);
+                    }}
                 />
             )}
             {evaluatingItem && (
@@ -1015,6 +1597,33 @@ const RAMonthlyEvaluationPage = () => {
                     onClose={() => setEvaluatingItem(null)}
                     onSubmit={handleEvaluate}
                     submitting={submitting}
+                />
+            )}
+            {rejectingItem && (
+                <RejectModal
+                    item={rejectingItem}
+                    onClose={() => setRejectingItem(null)}
+                    onSubmit={handleRejectPlan}
+                    submitting={submitting}
+                />
+            )}
+
+            {/* ── Extend Deadline Modal ── */}
+            {isExtendModalOpen && selectedEmployeeForExtension && (
+                <ExtendDeadlineModal
+                    employee={selectedEmployeeForExtension}
+                    month={filterMonthLabel}
+                    monthYear={filterMonthYear}
+                    missingType={selectedEmployeeForExtension.missingType || 'plan'}
+                    originalDeadline={selectedEmployeeForExtension.originalDeadline || null}
+                    onClose={closeExtendModal}
+                    onConfirm={(newDeadline, reason, notify, empName) => {
+                        // Mark row as extended (optimistic UI)
+                        const empId = selectedEmployeeForExtension._id?.toString();
+                        const rowKey = `${empId}-${selectedEmployeeForExtension.missingType}`;
+                        setExtendedRows(prev => ({ ...prev, [rowKey]: { newDate: newDeadline } }));
+                        closeExtendModal();
+                    }}
                 />
             )}
         </div>

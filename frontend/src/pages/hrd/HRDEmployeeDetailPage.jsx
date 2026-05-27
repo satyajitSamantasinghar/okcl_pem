@@ -395,7 +395,7 @@ const HRDEmployeeDetailPage = () => {
 
     /* ── Status badge helper — UNCHANGED ── */
     const getStatusBadge = plan => {
-        if (plan.status === 'REJECTED') return <span className="hed-badge hed-badge--rejected">Rejected by MD</span>;
+        if (plan.status === 'REJECTED') return <span className="hed-badge hed-badge--rejected">Rejected by RA</span>;
         if (plan.isEval) return <span className="hed-badge hed-badge--evaluated">Evaluated</span>;
         if (plan.hasAchievement) return <span className="hed-badge hed-badge--achievement">Achievement Submitted</span>;
         return <span className="hed-badge hed-badge--submitted">Plan Submitted</span>;
@@ -511,7 +511,7 @@ const HRDEmployeeDetailPage = () => {
                         {/* MD rejection banner */}
                         {isRejected && (
                             <div className="red-status-banner red-status-banner--rejected" style={{ marginBottom: 12 }}>
-                                <FiAlertCircle /> This plan has been rejected by MD
+                                <FiAlertCircle /> This plan was rejected by the Reporting Authority (RA)
                             </div>
                         )}
 

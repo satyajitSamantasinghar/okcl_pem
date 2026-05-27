@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
@@ -39,7 +40,7 @@ function getCurrentMonth() {
 function getPrevMonth(monthStr) {
     const [y, m] = monthStr.split('-').map(Number);
     const d = new Date(y, m - 2, 1);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '00')}`;
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
 function formatMonthLabel(monthStr) {
@@ -156,6 +157,10 @@ const HRDDashboard = () => {
     const [availableEmployees, setAvailableEmployees] = useState([]);
     const [selectedEmployeeIds, setSelectedEmployeeIds] = useState(new Set());
     const [assignLoading, setAssignLoading] = useState(false);
+
+    /* ── Dismissed alerts ── */
+    const [dismissedAlerts, setDismissedAlerts] = useState(new Set());
+    const dismissAlert = (id) => setDismissedAlerts(prev => new Set([...prev, id]));
 
     const openAssignModal = async (ra) => {
         setSelectedRAForAssign(ra);
@@ -298,7 +303,7 @@ const HRDDashboard = () => {
     return (
         <div className="hrd-root fade-in">
 
-            {/* ── Page Header with month filter inline ── */}
+            {/* ── Page Header: title + search + month filter on one row ── */}
             <div className="hrd-page-header">
                 <div className="hrd-page-header-left">
                     <h1 className="hrd-page-title">HRD Dashboard</h1>
@@ -306,41 +311,42 @@ const HRDDashboard = () => {
                         Organisation-wide performance overview — {formatMonthLabel(month)}
                     </p>
                 </div>
+
+                {/* Search — integrated into header, industry-standard position */}
+                <div className="hrd-search-section hrd-header-search" ref={searchRef}>
+                    <div className="hrd-search-wrap">
+                        <FiSearch className="hrd-search-icon" />
+                        <input
+                            type="text"
+                            className="hrd-search-input"
+                            placeholder="Search employees or RAs…"
+                            value={searchQuery}
+                            onChange={e => handleSearch(e.target.value)}
+                            onFocus={() => { if (searchResults.length > 0) setSearchOpen(true); }}
+                        />
+                        {searchOpen && (
+                            <div className="hrd-search-results">
+                                {searchResults.length === 0 ? (
+                                    <div className="hrd-search-empty">No results for "{searchQuery}"</div>
+                                ) : searchResults.map(u => (
+                                    <div key={u._id} className="hrd-search-item" onClick={() => goToDetail(u._id, u.role)}>
+                                        <div className={`hrd-search-avatar ${u.role === 'RA' ? 'ra' : ''}`}>{getInitials(u.name)}</div>
+                                        <div className="hrd-search-info">
+                                            <div className="hrd-search-name">{u.name}</div>
+                                            <div className="hrd-search-meta">{u.employeeCode} · {u.department || 'N/A'}</div>
+                                        </div>
+                                        <span className={`hrd-role-tag ${u.role.toLowerCase()}`}>{u.role}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+
                 <div className="hrd-month-filter">
                     <FiCalendar style={{ fontSize: 15, color: 'var(--text-muted)' }} />
                     <label>Viewing month</label>
                     <input type="month" value={month} onChange={e => setMonth(e.target.value)} />
-                </div>
-            </div>
-
-            {/* ── Search Bar — directly below title ── */}
-            <div className="hrd-search-section" ref={searchRef}>
-                <div className="hrd-search-wrap">
-                    <FiSearch className="hrd-search-icon" />
-                    <input
-                        type="text"
-                        className="hrd-search-input"
-                        placeholder="Search employees or reporting authorities…"
-                        value={searchQuery}
-                        onChange={e => handleSearch(e.target.value)}
-                        onFocus={() => { if (searchResults.length > 0) setSearchOpen(true); }}
-                    />
-                    {searchOpen && (
-                        <div className="hrd-search-results">
-                            {searchResults.length === 0 ? (
-                                <div className="hrd-search-empty">No results for "{searchQuery}"</div>
-                            ) : searchResults.map(u => (
-                                <div key={u._id} className="hrd-search-item" onClick={() => goToDetail(u._id, u.role)}>
-                                    <div className={`hrd-search-avatar ${u.role === 'RA' ? 'ra' : ''}`}>{getInitials(u.name)}</div>
-                                    <div className="hrd-search-info">
-                                        <div className="hrd-search-name">{u.name}</div>
-                                        <div className="hrd-search-meta">{u.employeeCode} · {u.department || 'N/A'}</div>
-                                    </div>
-                                    <span className={`hrd-role-tag ${u.role.toLowerCase()}`}>{u.role}</span>
-                                </div>
-                            ))}
-                        </div>
-                    )}
                 </div>
             </div>
 
@@ -354,11 +360,18 @@ const HRDDashboard = () => {
                 </div>
             )}
 
-            {/* ── Alert / Insight Strip — now BELOW KPI cards ── */}
-            {alerts.length > 0 && (
-                <div className="hrd-alert-strip">
-                    {alerts.map(alert => (
-                        <div key={alert.id} className={`hrd-alert-pill hrd-alert-${alert.type}`}>
+            {/* ── Alert Panel — stacked dismissible banners (industry standard) ── */}
+            {alerts.filter(a => !dismissedAlerts.has(a.id)).length > 0 && (
+                <div className="hrd-alert-panel">
+                    <div className="hrd-alert-panel-header">
+                        <span className="hrd-alert-panel-title">
+                            <FiAlertCircle />
+                            Action Required
+                            <span className="hrd-alert-panel-count">{alerts.filter(a => !dismissedAlerts.has(a.id)).length}</span>
+                        </span>
+                    </div>
+                    {alerts.filter(a => !dismissedAlerts.has(a.id)).map(alert => (
+                        <div key={alert.id} className={`hrd-alert-item hrd-alert-${alert.type}`}>
                             <span className="hrd-alert-icon">
                                 {alert.type === 'warning' && <FiAlertTriangle />}
                                 {alert.type === 'pending' && <FiClock />}
@@ -366,7 +379,16 @@ const HRDDashboard = () => {
                                 {alert.type === 'danger' && <FiAlertCircle />}
                             </span>
                             <span className="hrd-alert-msg">{alert.message}</span>
-                            <button className="hrd-alert-cta">{alert.cta}</button>
+                            <div className="hrd-alert-actions">
+                                <button className="hrd-alert-cta">{alert.cta}</button>
+                                <button
+                                    className="hrd-alert-dismiss"
+                                    title="Dismiss"
+                                    onClick={() => dismissAlert(alert.id)}
+                                >
+                                    <FiX />
+                                </button>
+                            </div>
                         </div>
                     ))}
                 </div>
@@ -608,7 +630,7 @@ const HRDDashboard = () => {
             })()}
 
             {/* ── Assign Employees Modal ── */}
-            {assignModalOpen && selectedRAForAssign && (
+            {assignModalOpen && selectedRAForAssign && createPortal(
                 <div className="hrd-modal-overlay fade-in" onClick={() => setAssignModalOpen(false)}>
                     <div className="hrd-assign-modal" onClick={e => e.stopPropagation()}>
                         <div className="hrd-assign-header">
@@ -650,7 +672,8 @@ const HRDDashboard = () => {
                             </button>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

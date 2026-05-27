@@ -2447,3 +2447,57 @@
     color: #856404;
     border: 1px solid #FFEAA7;
 }
+
+/* ============================================================
+   DETAIL MODAL — REJECTION ALERT (dmod)
+   Shown inside the renderDetailModal when plan.status === 'REJECTED'
+============================================================ */
+.dmod-rejection-alert {
+    background: #FEF2F2;
+    border: 1.5px solid rgba(220, 38, 38, 0.3);
+    border-radius: 10px;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.dmod-rejection-alert-hdr {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.875rem;
+    font-weight: 800;
+    color: #7F1D1D;
+}
+
+.dmod-rejection-alert-hdr svg {
+    color: #DC2626;
+    flex-shrink: 0;
+}
+
+.dmod-rejection-alert-reason {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    font-size: 0.8125rem;
+    color: #991B1B;
+    line-height: 1.55;
+}
+
+.dmod-rejection-reason-lbl {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #DC2626;
+    opacity: 0.8;
+}
+
+.dmod-rejection-alert-cta {
+    font-size: 0.78rem;
+    color: #B91C1C;
+    font-style: italic;
+    opacity: 0.85;
+}

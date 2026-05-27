@@ -1276,6 +1276,9 @@
     border-radius: 6px;
     white-space: nowrap;
     flex-shrink: 0;
+    min-width: 34px;
+    /* reserves a stable slot — prevents layout shift on hover-swap */
+    text-align: center;
 }
 
 .lb-score-full {
@@ -1713,4 +1716,77 @@
     .ra-lb-steps {
         display: none;
     }
+}
+
+/* ══════════════════════════════════════════
+   DEADLINE EXTENSION — HOVER-REVEAL PATTERN
+   (Linear / Notion / Jira style)
+   ══════════════════════════════════════════ */
+
+/* Missed-deadline step badge variant — ⚠ Plan / ⚠ Ach. pill */
+.ra-lb-step-missed-deadline {
+    background: #FEE2E2;
+    color: #B91C1C;
+    border: 1px solid #FECACA;
+}
+
+/*
+ * ⏱ Extend button — lives in the same slot as the score badge.
+ * Hidden at rest; revealed on row hover via JS (hoveredRowId state).
+ * Width is fixed to match the score badge so the row layout never shifts.
+ */
+.ra-lb-extend-btn {
+    /* Fixed width matches the score badge (e.g. "3/3") so no layout shift */
+    min-width: 62px;
+    border: 1.5px solid #F59E0B;
+    color: #92400E;
+    background: #FFFBEB;
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    font-family: inherit;
+    flex-shrink: 0;
+    line-height: 1.7;
+    text-align: center;
+    /* Smooth pop-in when it swaps in */
+    animation: extendBtnReveal 0.14s cubic-bezier(0.16, 1, 0.3, 1) both;
+    transition: background 0.15s ease, border-color 0.15s ease,
+        box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+@keyframes extendBtnReveal {
+    from {
+        opacity: 0;
+        transform: scale(0.82);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.ra-lb-extend-btn:hover {
+    background: #FEF3C7;
+    border-color: #D97706;
+    color: #78350F;
+    box-shadow: 0 2px 8px rgba(245, 158, 11, 0.28);
+    transform: translateY(-1px);
+}
+
+.ra-lb-extend-btn:active {
+    transform: translateY(0);
+    box-shadow: none;
+}
+
+/*
+ * Subtle row highlight when a missed-deadline row is hovered —
+ * gives the RA a clear signal that the Extend button is available.
+ */
+.ra-lb-row:has(.ra-lb-extend-btn--reveal) {
+    border-color: rgba(245, 158, 11, 0.35) !important;
+    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.08);
 }

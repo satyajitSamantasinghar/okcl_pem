@@ -418,7 +418,7 @@ const RAEmployeeDetailPage = () => {
 
     /* ── Status badge helper — UNCHANGED ── */
     const getStatusBadge = plan => {
-        if (plan.status === 'REJECTED') return <span className="red-badge red-badge--rejected">Rejected by MD</span>;
+        if (plan.status === 'REJECTED') return <span className="red-badge red-badge--rejected">Rejected by RA</span>;
         if (plan.isEval)                return <span className="red-badge red-badge--evaluated">Evaluated</span>;
         if (plan.hasAchievement)        return <span className="red-badge red-badge--achievement">Achievement Submitted</span>;
         return <span className="red-badge red-badge--submitted">Plan Submitted</span>;
@@ -535,7 +535,7 @@ const RAEmployeeDetailPage = () => {
                         {/* MD rejection banner */}
                         {isRejected && (
                             <div className="red-status-banner red-status-banner--rejected" style={{ marginBottom: 12 }}>
-                                <FiAlertCircle /> This plan has been rejected by MD
+                                <FiAlertCircle /> This plan was rejected by the Reporting Authority (RA)
                             </div>
                         )}
 
@@ -729,15 +729,15 @@ const RAEmployeeDetailPage = () => {
                             )}
                         </div>
 
-                        {/* MD rejection remarks */}
-                        {isRejected && plan.mdRemarks && (
+                        {/* RA rejection reason */}
+                        {isRejected && (plan.raRemarks || plan.mdRemarks) && (
                             <div className="red-modal-section red-modal-section--danger" style={{ marginTop: 12 }}>
                                 <div className="red-modal-section-hd">
                                     <div className="red-modal-section-icon red-modal-section-icon--danger"><FiAlertCircle /></div>
-                                    <span>MD Rejection Remarks</span>
+                                    <span>RA Rejection Reason</span>
                                 </div>
                                 <div className="red-modal-section-body">
-                                    <p className="red-modal-text red-modal-text--danger">{plan.mdRemarks}</p>
+                                    <p className="red-modal-text red-modal-text--danger">{plan.raRemarks || plan.mdRemarks}</p>
                                 </div>
                             </div>
                         )}

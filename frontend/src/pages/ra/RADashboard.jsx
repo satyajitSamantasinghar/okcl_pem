@@ -16,6 +16,7 @@ import {
 } from 'recharts';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
+import ExtendDeadlineModal from './ExtendDeadlineModal';
 import './RADashboard.css';
 
 /* ── Arrow icon ── */
@@ -157,6 +158,13 @@ const RADashboard = () => {
     const [weeklyTrendData, setWeeklyTrendData] = useState(createEmptyTrendData());
     const [monthlyTrendData, setMonthlyTrendData] = useState([]);
     const [trendLoading, setTrendLoading] = useState(false);
+
+    /* ── Deadline Extension modal state ── */
+    const [isExtendModalOpen, setIsExtendModalOpen] = useState(false);
+    const [selectedEmployeeForExtension, setSelectedEmployeeForExtension] = useState(null);
+
+    /* ── Hover-reveal state for leaderboard rows ── */
+    const [hoveredRowId, setHoveredRowId] = useState(null);
 
     /* ── Primary data fetch ── */
     useEffect(() => {
@@ -334,6 +342,58 @@ const RADashboard = () => {
             })
             .sort((a, b) => b.score - a.score);
     }, [employeesList, stats.lists]);
+
+    /* ── Missed deadline employees — derived from existing data ── */
+    /* An employee is "missed" if:
+       (a) today > plan deadline (10th of month) AND no plan submitted, OR
+       (b) plan submitted BUT today > achievement deadline (25th of month) AND no achievement */
+    const missedEmployees = useMemo(() => {
+        const today = new Date();
+        const [selYear, selMonth] = (selectedMonth || '').split('-').map(Number);
+        if (!selYear || !selMonth) return [];
+
+        // Deadlines: plan = 10th, achievement = 25th of the selected month
+        const planDeadline = new Date(selYear, selMonth - 1, 10, 23, 59, 59);
+        const achDeadline = new Date(selYear, selMonth - 1, 25, 23, 59, 59);
+
+        const submittedSet = new Set((stats.lists?.submitted || []).map(id => id?.toString()));
+        const achievementsSet = new Set((stats.lists?.achievements || []).map(id => id?.toString()));
+
+        return employeesList
+            .map(emp => {
+                const empId = emp._id?.toString();
+                const submitted = submittedSet.has(empId);
+                const hasAchievement = achievementsSet.has(empId);
+                // (a) missed plan
+                if (!submitted && today > planDeadline) {
+                    return { ...emp, missingType: 'plan', originalDeadline: planDeadline };
+                }
+                // (b) missed achievement
+                if (submitted && !hasAchievement && today > achDeadline) {
+                    return { ...emp, missingType: 'achievement', originalDeadline: achDeadline };
+                }
+                return null;
+            })
+            .filter(Boolean);
+    }, [employeesList, stats.lists, selectedMonth]);
+
+    /* ── Helper: open extend modal ── */
+    const openExtendModal = (emp) => {
+        setSelectedEmployeeForExtension(emp);
+        setIsExtendModalOpen(true);
+    };
+
+    const closeExtendModal = () => {
+        setIsExtendModalOpen(false);
+        setSelectedEmployeeForExtension(null);
+    };
+
+    /* Parse selectedMonth into { month, year } for the modal */
+    const selectedMonthYear = useMemo(() => {
+        if (!selectedMonth) return null;
+        const [y, m] = selectedMonth.split('-').map(Number);
+        return { month: m, year: y };
+    }, [selectedMonth]);
 
     /* ── Modal helpers ── */
     const openModal = (title, type) => setModalConfig({ isOpen: true, title, type });
@@ -626,7 +686,7 @@ const RADashboard = () => {
             )}
 
             {/* ── 4. Quick Insights ── */}
-            {insights.length > 0 && (
+            {(insights.length > 0 || missedEmployees.length > 0) && (
                 <div className="ra-insights-section">
                     <div className="ra-insights-header">
                         <FiInfo className="ra-insights-header-icon" />
@@ -636,6 +696,52 @@ const RADashboard = () => {
                         {insights.map((item, index) => (
                             <InsightCard key={index} icon={item.icon} text={item.text} variant={item.variant} />
                         ))}
+                        {/* 4th card — Missed Deadline alert */}
+                        {missedEmployees.length > 0 && (
+                            <div className="ra-insight-item ra-insight-missed"
+                                style={{
+                                    background: '#FEF2F2',
+                                    borderLeft: '3px solid #EF4444',
+                                    border: '1px solid #FECACA',
+                                    borderLeftWidth: '3px',
+                                    color: '#991B1B',
+                                    borderRadius: '8px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    gap: '12px',
+                                    padding: '8px 14px',
+                                    flex: '1',
+                                    minWidth: '280px',
+                                }}
+                            >
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+                                    <span style={{ fontSize: '1rem', flexShrink: 0 }}>🔴</span>
+                                    <span style={{ fontSize: '0.8rem', fontWeight: 500, lineHeight: 1.4 }}>
+                                        <strong>{missedEmployees.length}</strong> employee{missedEmployees.length !== 1 ? 's' : ''} missed the plan/achievement deadline for <strong>{formatMonth(selectedMonth)}</strong>
+                                    </span>
+                                </div>
+                                <button
+                                    onClick={() => navigate('/ra/monthly-evaluation?filter=missed')}
+                                    style={{
+                                        background: 'transparent',
+                                        border: 'none',
+                                        color: '#EF4444',
+                                        fontWeight: 500,
+                                        fontSize: '0.8rem',
+                                        cursor: 'pointer',
+                                        whiteSpace: 'nowrap',
+                                        padding: '2px 0',
+                                        textDecoration: 'none',
+                                        flexShrink: 0,
+                                    }}
+                                    onMouseEnter={e => e.currentTarget.style.textDecoration = 'underline'}
+                                    onMouseLeave={e => e.currentTarget.style.textDecoration = 'none'}
+                                >
+                                    Manage Extensions →
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
@@ -830,6 +936,8 @@ const RADashboard = () => {
                                                 className={`ra-lb-row ${cfg.bgCls}`}
                                                 onClick={() => navigate(`/ra/employee/${emp._id}`)}
                                                 title={`View ${emp.name}'s details`}
+                                                onMouseEnter={() => setHoveredRowId(emp._id)}
+                                                onMouseLeave={() => setHoveredRowId(null)}
                                             >
                                                 {/* Rank */}
                                                 <span className="ra-lb-rank">#{idx + 1}</span>
@@ -851,19 +959,41 @@ const RADashboard = () => {
                                                 </div>
 
                                                 {/* Step indicators */}
-                                                <div className="ra-lb-steps">
-                                                    <span className={`ra-lb-step ${emp.submitted ? 'ra-lb-step-done' : 'ra-lb-step-miss'}`}>
-                                                        Plan
-                                                    </span>
-                                                    <span className={`ra-lb-step ${emp.hasAchievement ? 'ra-lb-step-done' : emp.submitted ? 'ra-lb-step-miss' : 'ra-lb-step-na'}`}>
-                                                        Ach.
-                                                    </span>
-                                                    <span className={`ra-lb-step ${emp.evaluated ? 'ra-lb-step-done' : emp.submitted ? 'ra-lb-step-miss' : 'ra-lb-step-na'}`}>
-                                                        Eval.
-                                                    </span>
-                                                </div>
+                                                {(() => {
+                                                    const missedInfo = missedEmployees.find(m => m._id?.toString() === emp._id?.toString());
+                                                    return (
+                                                        <div className="ra-lb-steps">
+                                                            <span className={`ra-lb-step ${
+                                                                emp.submitted ? 'ra-lb-step-done'
+                                                                : (missedInfo?.missingType === 'plan' ? 'ra-lb-step-missed-deadline' : 'ra-lb-step-miss')
+                                                            }`}
+                                                                style={missedInfo?.missingType === 'plan' && !emp.submitted ? {
+                                                                    background: '#FEE2E2', color: '#B91C1C',
+                                                                    border: '1px solid #FECACA',
+                                                                } : {}}
+                                                            >
+                                                                {missedInfo?.missingType === 'plan' && !emp.submitted ? '⚠ Plan' : 'Plan'}
+                                                            </span>
+                                                            <span className={`ra-lb-step ${
+                                                                emp.hasAchievement ? 'ra-lb-step-done'
+                                                                : emp.submitted ? (missedInfo?.missingType === 'achievement' ? 'ra-lb-step-missed-deadline' : 'ra-lb-step-miss')
+                                                                : 'ra-lb-step-na'
+                                                            }`}
+                                                                style={missedInfo?.missingType === 'achievement' && emp.submitted && !emp.hasAchievement ? {
+                                                                    background: '#FEE2E2', color: '#B91C1C',
+                                                                    border: '1px solid #FECACA',
+                                                                } : {}}
+                                                            >
+                                                                {missedInfo?.missingType === 'achievement' && emp.submitted && !emp.hasAchievement ? '⚠ Ach.' : 'Ach.'}
+                                                            </span>
+                                                            <span className={`ra-lb-step ${emp.evaluated ? 'ra-lb-step-done' : emp.submitted ? 'ra-lb-step-miss' : 'ra-lb-step-na'}`}>
+                                                                Eval.
+                                                            </span>
+                                                        </div>
+                                                    );
+                                                })()}
 
-                                                {/* Mini progress bar */}
+                                                {/* Mini progress bar + hover-reveal extend button */}
                                                 <div className="ra-lb-prog-wrap">
                                                     <div className="ra-lb-prog-track">
                                                         <div
@@ -871,9 +1001,30 @@ const RADashboard = () => {
                                                             style={{ width: `${pct}%`, background: cfg.barColor }}
                                                         />
                                                     </div>
-                                                    <span className={`ra-lb-score-badge ${cfg.cls}`}>
-                                                        {emp.score}/3
-                                                    </span>
+                                                    {/* Hover-reveal: swap score badge → Extend button for missed employees */}
+                                                    {(() => {
+                                                        const isMissed = missedEmployees.find(m => m._id?.toString() === emp._id?.toString());
+                                                        const isHovered = hoveredRowId === emp._id?.toString();
+                                                        if (isMissed && isHovered) {
+                                                            return (
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        openExtendModal({ ...emp, ...isMissed });
+                                                                    }}
+                                                                    className="ra-lb-extend-btn ra-lb-extend-btn--reveal"
+                                                                    title="Extend submission deadline"
+                                                                >
+                                                                    ⏱ Extend
+                                                                </button>
+                                                            );
+                                                        }
+                                                        return (
+                                                            <span className={`ra-lb-score-badge ${cfg.cls}`}>
+                                                                {emp.score}/3
+                                                            </span>
+                                                        );
+                                                    })()}
                                                 </div>
                                             </div>
                                         );
@@ -912,6 +1063,23 @@ const RADashboard = () => {
                     </div>
                 </div>
             </div>
+
+            {/* ── Extend Deadline Modal ── */}
+            {isExtendModalOpen && selectedEmployeeForExtension && (
+                <ExtendDeadlineModal
+                    employee={selectedEmployeeForExtension}
+                    month={formatMonth(selectedMonth)}
+                    monthYear={selectedMonthYear}
+                    missingType={selectedEmployeeForExtension.missingType || 'plan'}
+                    originalDeadline={selectedEmployeeForExtension.originalDeadline || null}
+                    onClose={closeExtendModal}
+                    onConfirm={(newDeadline, reason, notify, empName) => {
+                        // Optimistic update: remove the employee from missedEmployees by
+                        // triggering a data refresh (re-fetch dashboard data)
+                        closeExtendModal();
+                    }}
+                />
+            )}
 
         </div>
     );

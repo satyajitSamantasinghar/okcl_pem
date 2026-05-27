@@ -9,7 +9,7 @@ import {
 } from 'react-icons/fi';
 import './MonthlyPlanPage.css';
 // FISCAL YEAR FIX — shared fiscal utility
-import { getFiscalMonthOrder } from '../../utils/fiscalUtils';
+import { getFiscalMonthOrder, getCurrentFiscalYear, getFiscalYearShort } from '../../utils/fiscalUtils';
 
 /* ====================================================
    HELPERS
@@ -18,6 +18,42 @@ const currentYear = new Date().getFullYear();
 const yearOptions = Array.from({ length: 5 }, (_, i) => currentYear - 2 + i);
 // FISCAL YEAR FIX — was January-December order; now April-March (fiscal year order)
 const months = getFiscalMonthOrder();
+// Plain calendar months (Jan→Dec) — used in dev mode filters and plan picker
+const calendarMonths = [
+    { value: '01', label: 'January' },
+    { value: '02', label: 'February' },
+    { value: '03', label: 'March' },
+    { value: '04', label: 'April' },
+    { value: '05', label: 'May' },
+    { value: '06', label: 'June' },
+    { value: '07', label: 'July' },
+    { value: '08', label: 'August' },
+    { value: '09', label: 'September' },
+    { value: '10', label: 'October' },
+    { value: '11', label: 'November' },
+    { value: '12', label: 'December' },
+];
+
+// Build fiscal year options: e.g. ["2023-24", "2024-25", "2025-26", "2026-27"]
+const currentFYShort = getCurrentFiscalYear(); // e.g. "2025-26"
+const currentFYStart = parseInt(currentFYShort.split('-')[0], 10);
+const fyOptions = Array.from({ length: 5 }, (_, i) => {
+    const startY = currentFYStart - 2 + i;
+    const endY = (startY + 1).toString().slice(-2);
+    return `${startY}-${endY}`;
+});
+
+/** Returns the 12 YYYY-MM strings that belong to a given fiscal year like "2025-26" */
+function getFYMonths(fyShort) {
+    if (!fyShort) return [];
+    const startY = parseInt(fyShort.split('-')[0], 10);
+    const months = [];
+    // Apr–Dec of startYear
+    for (let m = 4; m <= 12; m++) months.push(`${startY}-${String(m).padStart(2, '0')}`);
+    // Jan–Mar of startYear+1
+    for (let m = 1; m <= 3; m++) months.push(`${startY + 1}-${String(m).padStart(2, '0')}`);
+    return months;
+}
 
 function formatMonth(monthStr) {
     if (!monthStr) return 'N/A';
@@ -229,8 +265,10 @@ const MonthlyPlanPage = () => {
     const [achievements, setAchievements] = useState([]);
     const [evaluations, setEvaluations] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [filterYear, setFilterYear] = useState(currentYear);
+    const [filterFY, setFilterFY] = useState(currentFYShort); // e.g. "2025-26"
     const [filterMonth, setFilterMonth] = useState('');
+    // Dev-mode calendar year filter (simple year, not FY)
+    const [filterYear, setFilterYear] = useState(String(currentYear));
 
     const [showPlanForm, setShowPlanForm] = useState(false);
     // In enforced mode, the month is always locked to the current month.
@@ -285,21 +323,37 @@ const MonthlyPlanPage = () => {
     }, [evaluations]);
 
     const filteredPlans = useMemo(() => {
+        if (!ENFORCE_DEADLINES) {
+            // Dev mode: simple calendar year + optional month filter
+            return plans.filter(p => {
+                if (!p.month.startsWith(filterYear)) return false;
+                if (filterMonth && !p.month.endsWith(filterMonth)) return false;
+                return true;
+            }).sort((a, b) => b.month.localeCompare(a.month));
+        }
+        // Production: fiscal year + optional month filter
+        const fyMonths = getFYMonths(filterFY); // e.g. ["2025-04",…,"2026-03"]
         return plans.filter(p => {
-            if (!p.month?.startsWith(String(filterYear))) return false;
+            if (!fyMonths.includes(p.month)) return false;
             if (filterMonth && !p.month.endsWith(filterMonth)) return false;
             return true;
         }).sort((a, b) => b.month.localeCompare(a.month));
-    }, [plans, filterYear, filterMonth]);
+    }, [plans, filterFY, filterYear, filterMonth]);
 
     const stats = useMemo(() => {
-        const yearPlans = plans.filter(p => p.month?.startsWith(String(filterYear)));
+        let yearPlans;
+        if (!ENFORCE_DEADLINES) {
+            yearPlans = plans.filter(p => p.month.startsWith(filterYear));
+        } else {
+            const fyMonths = getFYMonths(filterFY);
+            yearPlans = plans.filter(p => fyMonths.includes(p.month));
+        }
         const total = yearPlans.length;
         const withAch = yearPlans.filter(p => { const a = achievementByPlanId[p._id]; return a && a.status !== 'DRAFT'; }).length;
         const drafts = yearPlans.filter(p => { const a = achievementByPlanId[p._id]; return a && a.status === 'DRAFT'; }).length;
         const evaluated = yearPlans.filter(p => { const ev = evaluationByMonth[p.month]; return ev && ev.status === 'EVALUATED'; }).length;
         return { total, withAch, drafts, evaluated };
-    }, [plans, filterYear, achievementByPlanId, evaluationByMonth]);
+    }, [plans, filterFY, filterYear, achievementByPlanId, evaluationByMonth]);
 
     const getProgress = (plan) => {
         const ach = achievementByPlanId[plan._id];
@@ -346,7 +400,12 @@ const MonthlyPlanPage = () => {
         if (!planMonth) { toast.error('Please select a month'); return; }
         if (filled.length === 0) { toast.error('Please add at least one plan'); return; }
 
-        if (import.meta.env.VITE_ENFORCE_DEADLINES !== 'false') {
+        // INDUSTRY STANDARD: If there is an existing REJECTED plan for this month,
+        // this is a post-rejection resubmission — bypass ALL deadline checks.
+        // RA rejection creates a new submission window regardless of the date.
+        const isRejectionResubmit = plans.some(p => p.month === planMonth && p.status === 'REJECTED');
+
+        if (!isRejectionResubmit && import.meta.env.VITE_ENFORCE_DEADLINES !== 'false') {
             const today = new Date();
             const currentMonthStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
             if (planMonth !== currentMonthStr) {
@@ -354,7 +413,7 @@ const MonthlyPlanPage = () => {
                 return;
             }
             if (today.getDate() < 1 || today.getDate() > 7) {
-                toast.error("Monthly plan submission allowed only from 1st to 7th.");
+                toast.error('Monthly plan submission allowed only from 1st to 7th.');
                 return;
             }
         }
@@ -416,7 +475,12 @@ const MonthlyPlanPage = () => {
     };
 
     const handleAchSubmit = async (asDraft) => {
-        if (import.meta.env.VITE_ENFORCE_DEADLINES !== 'false') {
+        // INDUSTRY STANDARD: If the plan was resubmitted after RA rejection
+        // (version > 1), skip all deadline checks. The employee is not at fault
+        // for the delay — RA rejection creates a new submission window.
+        const isPostRejectionResubmit = (achModal?.version || 1) > 1;
+
+        if (!isPostRejectionResubmit && import.meta.env.VITE_ENFORCE_DEADLINES !== 'false') {
             const today = new Date();
             const currentMonthStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
             if (achModal.month !== currentMonthStr) {
@@ -424,7 +488,7 @@ const MonthlyPlanPage = () => {
                 return;
             }
             if (today.getDate() < 25) {
-                toast.error("Monthly achievement submission allowed from 25th onwards.");
+                toast.error('Monthly achievement submission allowed from 25th onwards.');
                 return;
             }
         }
@@ -826,6 +890,25 @@ const MonthlyPlanPage = () => {
                             </div>
                         )}
 
+                        {/* Rejection Alert — shown when RA has rejected this plan */}
+                        {selectedPlan.status === 'REJECTED' && (
+                            <div className="dmod-rejection-alert">
+                                <div className="dmod-rejection-alert-hdr">
+                                    <FiAlertCircle size={14} />
+                                    <strong>Plan Rejected by Reporting Authority (RA)</strong>
+                                </div>
+                                {(selectedPlan.raRemarks || selectedPlan.mdRemarks) && (
+                                    <div className="dmod-rejection-alert-reason">
+                                        <span className="dmod-rejection-reason-lbl">Reason given:</span>
+                                        {selectedPlan.raRemarks || selectedPlan.mdRemarks}
+                                    </div>
+                                )}
+                                <div className="dmod-rejection-alert-cta">
+                                    Please revise and resubmit your plan using the Resubmit button on the card.
+                                </div>
+                            </div>
+                        )}
+
                         {/* Plans & Achievements */}
                         <div className="dmod-section">
                             <div className="dmod-sec-hdr">
@@ -991,19 +1074,45 @@ const MonthlyPlanPage = () => {
                     <FiPlus /> Submit Monthly Plan
                 </button>
                 <div className="mp-filters">
-                    <div className="mp-filter-group">
-                        <FiCalendar />
-                        <select value={filterYear} onChange={e => setFilterYear(Number(e.target.value))}>
-                            {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
-                        </select>
-                    </div>
-                    <div className="mp-filter-group">
-                        <FiSearch />
-                        <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)}>
-                            <option value="">All Months</option>
-                            {months.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-                        </select>
-                    </div>
+                    {ENFORCE_DEADLINES ? (
+                        /* Production: Fiscal Year + fiscal-order Month */
+                        <>
+                            <div className="mp-filter-group">
+                                <FiCalendar />
+                                <select value={filterFY} onChange={e => { setFilterFY(e.target.value); setFilterMonth(''); }}>
+                                    {fyOptions.map(fy => (
+                                        <option key={fy} value={fy}>FY {fy}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="mp-filter-group">
+                                <FiSearch />
+                                <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)}>
+                                    <option value="">All Months</option>
+                                    {months.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                                </select>
+                            </div>
+                        </>
+                    ) : (
+                        /* Dev mode: plain calendar Year + calendar Month (Jan–Dec) */
+                        <>
+                            <div className="mp-filter-group">
+                                <FiCalendar />
+                                <select value={filterYear} onChange={e => { setFilterYear(e.target.value); setFilterMonth(''); }}>
+                                    {yearOptions.map(y => (
+                                        <option key={y} value={y}>{y}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="mp-filter-group">
+                                <FiSearch />
+                                <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)}>
+                                    <option value="">All Months</option>
+                                    {calendarMonths.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                                </select>
+                            </div>
+                        </>
+                    )}
                 </div>
             </div>
 
@@ -1074,7 +1183,7 @@ const MonthlyPlanPage = () => {
                                                     required
                                                 >
                                                     <option value="">— Select month —</option>
-                                                    {months.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                                                    {calendarMonths.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
                                                 </select>
                                                 {/* <span className="mp-dev-mode-badge">DEV MODE</span> */}
                                             </div>
@@ -1114,7 +1223,7 @@ const MonthlyPlanPage = () => {
                 <div className="mp-empty">
                     <div className="mp-empty-icon"><FiCalendar /></div>
                     <h3>No Plans Found</h3>
-                    <p>{filterMonth ? `No plans for ${months.find(m => m.value === filterMonth)?.label} ${filterYear}` : `No plans for ${filterYear}`}. Submit your first plan to get started.</p>
+                    <p>{filterMonth ? `No plans for ${months.find(m => m.value === filterMonth)?.label} in FY ${filterFY}` : `No plans for FY ${filterFY}`}. Submit your first plan to get started.</p>
                 </div>
             ) : (
                 <div className="mp-unified-grid">
@@ -1152,8 +1261,8 @@ const MonthlyPlanPage = () => {
                                 )}
                                 {isRejected && (
                                     <div className="mp-rejection-banner">
-                                        <div className="mp-rejection-header"><FiAlertCircle /><strong>Rejected by MD</strong></div>
-                                        {plan.mdRemarks && <div className="mp-rejection-remarks">"{plan.mdRemarks}"</div>}
+                                        <div className="mp-rejection-header"><FiAlertCircle /><strong>Rejected by Reporting Authority (RA)</strong></div>
+                                        {(plan.raRemarks || plan.mdRemarks) && <div className="mp-rejection-remarks">"{plan.raRemarks || plan.mdRemarks}"</div>}
                                         <button className="mp-resubmit-btn" onClick={e => { e.stopPropagation(); openResubmitModal(plan); }}>
                                             <FiRefreshCw /> Resubmit Plan
                                         </button>

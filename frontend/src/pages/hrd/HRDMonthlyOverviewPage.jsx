@@ -254,7 +254,7 @@ const HRDMonthlyOverviewPage = () => {
     const pageSlice  = processed.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     const getStatusInfo = (plan) => {
-        if (plan.status === 'REJECTED')            return { label: 'Rejected by MD',        cls: 'rejected' };
+        if (plan.status === 'REJECTED')            return { label: 'Rejected by RA',        cls: 'rejected' };
         if (plan.evaluationStatus === 'EVALUATED') return { label: 'Evaluated',             cls: 'evaluated' };
         if (plan.hasAchievement)                   return { label: 'Achievement Submitted', cls: 'achievement' };
         if (plan.status === 'APPROVED' || plan.status === 'ACHIEVEMENT_PENDING' || plan.status === 'EVALUATION_PENDING') return { label: 'Plan Approved', cls: 'achievement' };
@@ -387,10 +387,15 @@ const HRDMonthlyOverviewPage = () => {
                     {/* ── BODY ── */}
                     <div className="dmod-body">
 
-                        {/* MD rejection banner */}
+                        {/* RA rejection banner */}
                         {isRejected && (
                             <div className="red-status-banner red-status-banner--rejected" style={{ marginBottom: 12 }}>
-                                <FiAlertCircle /> This plan has been rejected by MD
+                                <FiAlertCircle /> This plan was rejected by the Reporting Authority (RA)
+                                {plan.raRemarks && (
+                                    <span style={{ display: 'block', marginTop: 6, fontSize: '0.82rem', fontWeight: 400, opacity: 0.85 }}>
+                                        Reason: &ldquo;{plan.raRemarks}&rdquo;
+                                    </span>
+                                )}
                             </div>
                         )}
 
@@ -582,15 +587,15 @@ const HRDMonthlyOverviewPage = () => {
                             )}
                         </div>
 
-                        {/* MD rejection remarks */}
-                        {isRejected && plan.mdRemarks && (
+                        {/* RA rejection remarks */}
+                        {isRejected && plan.raRemarks && (
                             <div className="red-modal-section red-modal-section--danger" style={{ marginTop: 12 }}>
                                 <div className="red-modal-section-hd">
                                     <div className="red-modal-section-icon red-modal-section-icon--danger"><FiAlertCircle /></div>
-                                    <span>MD Rejection Remarks</span>
+                                    <span>RA Rejection Reason</span>
                                 </div>
                                 <div className="red-modal-section-body">
-                                    <p className="red-modal-text red-modal-text--danger">{plan.mdRemarks}</p>
+                                    <p className="red-modal-text red-modal-text--danger">{plan.raRemarks}</p>
                                 </div>
                             </div>
                         )}
@@ -736,7 +741,7 @@ const HRDMonthlyOverviewPage = () => {
                         />
                         <KpiCard
                             icon={<FiAlertCircle />}
-                            label="Rejected by MD"
+                            label="Rejected by RA"
                             value={stats.rejected}
                             pct={rejPct}
                             accentColor="#EF4444"

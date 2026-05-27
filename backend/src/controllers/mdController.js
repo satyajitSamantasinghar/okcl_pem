@@ -197,56 +197,14 @@ exports.getAllEmployees = async (req, res) => {
 };
 
 /* =====================================================
-   REJECT MONTHLY PLAN
+   REJECT MONTHLY PLAN — DEPRECATED
+   Monthly plan rejection has been transferred to RA.
+   Use PUT /ra/monthly-plan/:id/reject instead.
 ===================================================== */
 exports.rejectMonthlyPlan = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { mdRemarks } = req.body;
-
-    const plan = await MonthlyPlan.findById(id);
-    if (!plan) {
-      return res.status(404).json({ message: "Monthly plan not found" });
-    }
-
-    // Check if RA already evaluated — cannot reject
-    const evaluation = await MonthlyEvaluation.findOne({
-      employeeId: plan.employeeId,
-      month: plan.month,
-      status: "EVALUATED"
-    });
-    if (evaluation) {
-      return res.status(400).json({
-        message: "Cannot reject: RA has already evaluated this monthly plan"
-      });
-    }
-
-    plan.status = "REJECTED";
-    plan.mdRemarks = mdRemarks || null;
-    await plan.save();
-
-    await AuditLog.create({
-      userId: req.user.userId,
-      action: "REJECT",
-      entityType: "MONTHLY_PLAN",
-      entityId: plan._id,
-      ipAddress: req.ip
-    });
-
-    // Create notification for employee
-    await Notification.create({
-      userId: plan.employeeId,
-      type: "MONTHLY_PLAN_REJECTED",
-      title: "Monthly Plan Rejected",
-      message: `Your monthly plan for ${plan.month} has been rejected by MD.${mdRemarks ? ' Remarks: ' + mdRemarks : ''} Please resubmit.`,
-      entityType: "MONTHLY_PLAN",
-      entityId: plan._id
-    });
-
-    res.json({ message: "Monthly plan rejected" });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+  return res.status(410).json({
+    message: "Monthly plan rejection is no longer handled by MD. This action must be performed by the Reporting Authority (RA) via PUT /ra/monthly-plan/:id/reject."
+  });
 };
 
 /* =====================================================
@@ -390,10 +348,14 @@ exports.getMonthlyPlansList = async (req, res) => {
       return {
         ...p.toObject(),
         evaluationStatus: evaluation?.status || null,
-        hasAchievement: !!achievement && achievement.status !== 'DRAFT',
         evaluationScore: evaluation?.score || null,
         evaluationRemarks: evaluation?.remarks || null,
+        evaluatedAt: evaluation?.evaluatedAt || null,
+        hasAchievement: !!achievement && achievement.status !== 'DRAFT',
+        achievementStatus: achievement?.status || null,
         achievementDetails: achievement?.achievementDetails || null,
+        planAchievements: achievement?.planAchievements || [],
+        additionalAchievement: achievement?.additionalAchievement || null,
         achievementDate: achievement?.submittedAt || null
       };
     }));

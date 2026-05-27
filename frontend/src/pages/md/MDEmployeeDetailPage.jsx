@@ -227,10 +227,7 @@ const MDEmployeeDetailPage = () => {
     const [selectedMonthDetail, setSelectedMonthDetail] = useState(null);
     const [filterYear, setFilterYear] = useState(getCurrentFiscalYear());
 
-    // MD Rejection states
-    const [rejectTarget, setRejectTarget] = useState(null);
-    const [rejectRemarks, setRejectRemarks] = useState('');
-    const [rejecting, setRejecting] = useState(false);
+    // MD rejection state removed — monthly plan rejection is now handled by RA
 
     const fetchDetail = async () => {
         setLoading(true);
@@ -249,21 +246,7 @@ const MDEmployeeDetailPage = () => {
         fetchDetail();
     }, [id, navigate]);
 
-    const handleReject = async () => {
-        if (!rejectTarget) return;
-        setRejecting(true);
-        try {
-            await api.put(`/md/monthly-plan/${rejectTarget._id}/reject`, { mdRemarks: rejectRemarks });
-            toast.success('Monthly plan rejected');
-            setRejectTarget(null);
-            setRejectRemarks('');
-            fetchDetail();
-        } catch (err) {
-            toast.error(err.response?.data?.message || 'Rejection failed');
-        } finally {
-            setRejecting(false);
-        }
-    };
+    /* NOTE: Monthly plan rejection moved to RA. MD has read-only view. */
 
     if (loading) {
         return (
@@ -404,75 +387,13 @@ const MDEmployeeDetailPage = () => {
     ];
 
     const getStatusBadge = plan => {
-        if (plan.status === 'REJECTED') return <span className="med-badge med-badge--rejected">Rejected by MD</span>;
+        if (plan.status === 'REJECTED') return <span className="med-badge med-badge--rejected">Rejected by RA</span>;
         if (plan.isEval)                return <span className="med-badge med-badge--evaluated">Evaluated</span>;
         if (plan.hasAchievement)        return <span className="med-badge med-badge--achievement">Achievement Submitted</span>;
         return <span className="med-badge med-badge--submitted">Plan Submitted</span>;
     };
 
-    /* ════════════════════════════════════════════════════
-       MD REJECTION MODAL
-    ════════════════════════════════════════════════════ */
-    const renderRejectModal = () => {
-        if (!rejectTarget) return null;
-        return createPortal(
-            <div className="med-overlay" onClick={() => setRejectTarget(null)}>
-                <div className="med-modal" style={{ height: 'auto', maxHeight: '90vh' }} onClick={e => e.stopPropagation()}>
-                    <div className="med-modal-header">
-                        <div className="med-modal-header-left">
-                            <div className="med-modal-avatar" style={{ background: '#FEE2E2', color: '#DC2626' }}><FiAlertCircle /></div>
-                            <div className="med-modal-header-info">
-                                <h2 className="med-modal-name">Reject Monthly Plan</h2>
-                                <p className="med-modal-sub">{employee.name} · {formatMonth(rejectTarget.month)}</p>
-                            </div>
-                        </div>
-                        <button className="med-modal-close-btn" onClick={() => setRejectTarget(null)}><FiX /></button>
-                    </div>
-
-                    <div className="med-modal-body" style={{ padding: '20px' }}>
-                        <div className="med-modal-section" style={{ borderLeftColor: '#E2E8F0', background: '#F8FAFC', padding: '15px', borderRadius: '8px' }}>
-                            <div className="med-modal-section-hd" style={{ background: 'transparent', padding: '0 0 10px 0', border: 'none' }}>
-                                <FiFileText style={{ color: '#64748B' }} />
-                                <span style={{ fontSize: '0.85rem', fontWeight: '700', color: '#475569' }}>Plan Preview</span>
-                            </div>
-                            <div className="med-modal-text">{rejectTarget.planDetails}</div>
-                        </div>
-
-                        <div style={{ marginTop: '20px' }}>
-                            <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: '700', color: '#1E293B', marginBottom: '8px' }}>
-                                <FiMessageSquare /> Rejection Remarks (Required)
-                            </label>
-                            <textarea
-                                placeholder="Provide your reason for rejection so the employee can resubmit appropriately..."
-                                value={rejectRemarks}
-                                onChange={e => setRejectRemarks(e.target.value)}
-                                rows={4}
-                                autoFocus
-                                style={{
-                                    width: '100%', padding: '12px', border: '1px solid #CBD5E1',
-                                    borderRadius: '8px', fontSize: '0.875rem', fontFamily: 'inherit',
-                                    resize: 'vertical', minHeight: '100px', outline: 'none'
-                                }}
-                            />
-                        </div>
-                    </div>
-
-                    <div className="med-modal-footer">
-                        <button className="med-modal-footer-close" onClick={() => setRejectTarget(null)}>Cancel</button>
-                        <button
-                            className="med-detail-btn"
-                            style={{ background: '#DC2626', color: 'white', borderColor: '#DC2626', padding: '8px 20px', borderRadius: '8px' }}
-                            onClick={handleReject}
-                            disabled={rejecting || !rejectRemarks.trim()}
-                        >
-                            <FiXCircle /> {rejecting ? 'Rejecting...' : 'Confirm Rejection'}
-                        </button>
-                    </div>
-                </div>
-            </div>,
-            document.body
-        );
-    };
+    /* Reject modal removed — MD no longer rejects monthly plans. */
 
     /* ════════════════════════════════════════════════════
        MONTHLY REVIEW MODAL
@@ -484,7 +405,7 @@ const MDEmployeeDetailPage = () => {
         const isEval     = plan.isEval;
         const ach        = plan.achievement;
         const isRejected = plan.status === 'REJECTED';
-        const canReject  = !isEval && !isRejected; // MD can reject if not evaluated and not already rejected
+        // MD detail modal is read-only — no reject capability
 
         const chipStyle  = getMonthChipStyle(plan.month);
         const planItemsList = getPlanItems(plan);
@@ -548,20 +469,6 @@ const MDEmployeeDetailPage = () => {
                             </div>
                         </div>
                         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                            {canReject && (
-                                <button
-                                    style={{
-                                        color: '#DC2626', borderColor: '#FECACA', background: '#FEF2F2',
-                                        padding: '6px 14px', borderRadius: '6px', fontSize: '13px',
-                                        fontWeight: '600', display: 'flex', alignItems: 'center',
-                                        gap: '6px', cursor: 'pointer', border: '1px solid #FECACA'
-                                    }}
-                                    className="dmod-btn-hover"
-                                    onClick={() => { setSelectedMonthDetail(null); setRejectTarget(plan); setRejectRemarks(''); }}
-                                >
-                                    <FiXCircle /> Reject Plan
-                                </button>
-                            )}
                             <button className="dmod-close" onClick={() => setSelectedMonthDetail(null)}>
                                 <FiX size={16} />
                             </button>
@@ -599,15 +506,15 @@ const MDEmployeeDetailPage = () => {
                     {/* ── BODY ── */}
                     <div className="dmod-body">
 
-                        {/* MD rejection banner */}
+                        {/* RA rejection banner */}
                         {isRejected && (
                             <div className="red-status-banner red-status-banner--rejected" style={{ marginBottom: 12 }}>
-                                <FiAlertCircle /> This plan has been rejected by MD
+                                <FiAlertCircle /> This plan was rejected by the Reporting Authority (RA)
                             </div>
                         )}
                         {isEval && (
                             <div className="med-status-banner" style={{ background: '#F0FDF4', color: '#16A34A', borderBottomColor: '#BBF7D0', marginBottom: 16 }}>
-                                <FiCheckCircle /> Evaluated by RA — cannot be rejected
+                                <FiCheckCircle /> Evaluated by RA
                             </div>
                         )}
 
@@ -801,15 +708,15 @@ const MDEmployeeDetailPage = () => {
                             )}
                         </div>
 
-                        {/* MD rejection remarks */}
-                        {isRejected && plan.mdRemarks && (
+                        {/* RA rejection reason */}
+                        {isRejected && (plan.raRemarks || plan.mdRemarks) && (
                             <div className="red-modal-section red-modal-section--danger" style={{ marginTop: 12 }}>
                                 <div className="red-modal-section-hd">
                                     <div className="red-modal-section-icon red-modal-section-icon--danger"><FiAlertCircle /></div>
-                                    <span>MD Rejection Remarks</span>
+                                    <span>RA Rejection Reason</span>
                                 </div>
                                 <div className="red-modal-section-body">
-                                    <p className="red-modal-text red-modal-text--danger">{plan.mdRemarks}</p>
+                                    <p className="red-modal-text red-modal-text--danger">{plan.raRemarks || plan.mdRemarks}</p>
                                 </div>
                             </div>
                         )}
@@ -822,18 +729,6 @@ const MDEmployeeDetailPage = () => {
                             {isEval ? 'Evaluated' : plan.hasAchievement ? 'Awaiting RA review' : 'Achievement pending'}
                         </span>
                         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                            {canReject && (
-                                <button
-                                    onClick={() => { setSelectedMonthDetail(null); setRejectTarget(plan); setRejectRemarks(''); }}
-                                    style={{
-                                        color: '#DC2626', background: 'transparent',
-                                        padding: '6px 14px', borderRadius: '6px', fontSize: '13px',
-                                        fontWeight: '600', display: 'flex', alignItems: 'center', cursor: 'pointer', border: 'none'
-                                    }}
-                                >
-                                    Reject
-                                </button>
-                            )}
                             <button className="dmod-btn-close" onClick={() => setSelectedMonthDetail(null)}>Close</button>
                         </div>
                     </div>
@@ -848,7 +743,6 @@ const MDEmployeeDetailPage = () => {
     return (
         <div className="fade-in med-page">
             {renderDetailModal()}
-            {renderRejectModal()}
 
             <button className="med-back-btn" onClick={() => navigate('/md/employees')}>
                 <FiArrowLeft /> Back to Directory

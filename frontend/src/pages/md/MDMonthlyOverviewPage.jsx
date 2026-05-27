@@ -183,11 +183,6 @@ const MDMonthlyOverviewPage = () => {
     /* detail modal */
     const [selected, setSelected] = useState(null);
 
-    /* reject modal */
-    const [rejectTarget,  setRejectTarget]  = useState(null);
-    const [rejectRemarks, setRejectRemarks] = useState('');
-    const [rejecting,     setRejecting]     = useState(false);
-
     /* ── fetch ── */
     const fetchPlans = useCallback(async () => {
         setLoading(true);
@@ -252,7 +247,7 @@ const MDMonthlyOverviewPage = () => {
     const pageSlice  = processed.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     const getStatusInfo = (plan) => {
-        if (plan.status === 'REJECTED')            return { label: 'Rejected by MD',        cls: 'rejected' };
+        if (plan.status === 'REJECTED')            return { label: 'Rejected by RA',        cls: 'rejected' };
         if (plan.evaluationStatus === 'EVALUATED') return { label: 'Evaluated',             cls: 'evaluated' };
         if (plan.hasAchievement)                   return { label: 'Achievement Submitted', cls: 'achievement' };
         if (plan.status === 'APPROVED' || plan.status === 'ACHIEVEMENT_PENDING' || plan.status === 'EVALUATION_PENDING') return { label: 'Plan Approved', cls: 'achievement' };
@@ -266,69 +261,10 @@ const MDMonthlyOverviewPage = () => {
         rejected:    processed.filter(p => p.status === 'REJECTED').length,
     };
 
-    /* ── reject handler ── */
-    const handleReject = async () => {
-        if (!rejectTarget) return;
-        setRejecting(true);
-        try {
-            await api.put(`/md/monthly-plan/${rejectTarget._id}/reject`, { mdRemarks: rejectRemarks });
-            toast.success('Monthly plan rejected');
-            setRejectTarget(null);
-            setRejectRemarks('');
-            fetchPlans();
-        } catch (err) {
-            toast.error(err.response?.data?.message || 'Rejection failed');
-        } finally {
-            setRejecting(false);
-        }
-    };
+    /* NOTE: Monthly plan rejection has been moved to RA.
+       MD's role is now read-only for monthly plans. */
 
-    /* ══════════════════════════════════════════════════
-       REJECT MODAL
-    ══════════════════════════════════════════════════ */
-    const renderRejectModal = () => {
-        if (!rejectTarget) return null;
-        return createPortal(
-            <div className="mmo-overlay" onClick={() => setRejectTarget(null)}>
-                <div className="mmo-reject-modal" onClick={e => e.stopPropagation()}>
-                    <div className="mmo-reject-modal-header">
-                        <div>
-                            <h3><FiAlertCircle /> Reject Monthly Plan</h3>
-                            <p>{rejectTarget.employeeId?.name} · {fmtMonth(rejectTarget.month)}</p>
-                        </div>
-                        <button className="mmo-modal-close" onClick={() => setRejectTarget(null)}><FiX /></button>
-                    </div>
-                    <div className="mmo-reject-modal-body">
-                        <div className="mmo-reject-plan-preview">
-                            <div className="mmo-sec-label"><FiFileText /> Plan Details</div>
-                            <div className="mmo-sec-content">{rejectTarget.planDetails}</div>
-                        </div>
-                        <div className="mmo-reject-form-group">
-                            <label><FiMessageSquare /> Rejection Remarks (optional)</label>
-                            <textarea
-                                placeholder="Provide your reason for rejection so the employee can resubmit appropriately..."
-                                value={rejectRemarks}
-                                onChange={e => setRejectRemarks(e.target.value)}
-                                rows={4}
-                                autoFocus
-                            />
-                        </div>
-                    </div>
-                    <div className="mmo-reject-modal-footer">
-                        <button
-                            className="mmo-reject-confirm-btn"
-                            onClick={handleReject}
-                            disabled={rejecting}
-                        >
-                            <FiXCircle /> {rejecting ? 'Rejecting...' : 'Confirm Rejection'}
-                        </button>
-                        <button className="mmo-reject-cancel-btn" onClick={() => setRejectTarget(null)}>Cancel</button>
-                    </div>
-                </div>
-            </div>,
-            document.body
-        );
-    };
+    /* Reject modal removed — MD no longer rejects monthly plans (moved to RA). */
 
     /* ══════════════════════════════════════════════════
        DETAIL MODAL
@@ -340,14 +276,14 @@ const MDMonthlyOverviewPage = () => {
         const ev         = { score: plan.evaluationScore, remarks: plan.evaluationRemarks, evaluatedAt: plan.evaluationDate };
         const isEval     = plan.evaluationStatus === 'EVALUATED';
         const ach        = plan.hasAchievement ? { 
-            status: 'SUBMITTED', // Or whatever non-DRAFT
+            status: 'SUBMITTED',
             achievementDetails: plan.achievementDetails,
-            planAchievements: plan.planAchievements, // might be passed from backend
+            planAchievements: plan.planAchievements,
             additionalAchievement: plan.additionalAchievement,
             submittedAt: plan.achievementDate 
         } : null;
         const isRejected = plan.status === 'REJECTED';
-        const canReject  = !isEval && !isRejected;
+        // MD no longer has reject capability — read-only view
 
         const chipStyle  = getMonthChipStyle(plan.month);
         const planItemsList = getPlanItems(plan);
@@ -378,7 +314,7 @@ const MDMonthlyOverviewPage = () => {
         const line1 = plan.hasAchievement ? 'filled' : 'empty';
         const line2 = isEval ? 'filled' : 'empty';
 
-        const stLabel = isRejected ? 'Rejected' : isEval ? 'Evaluated' : plan.hasAchievement ? 'Achievement added' : 'Plan submitted';
+        const stLabel = isRejected ? 'Rejected by RA' : isEval ? 'Evaluated' : plan.hasAchievement ? 'Achievement added' : 'Plan submitted';
         const stCls   = isRejected ? 'sp-rejected' : isEval ? 'sp-eval' : plan.hasAchievement ? 'sp-ach' : 'sp-plan';
 
         return createPortal(
@@ -404,20 +340,6 @@ const MDMonthlyOverviewPage = () => {
                             </div>
                         </div>
                         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                            {canReject && (
-                                <button
-                                    style={{
-                                        color: '#DC2626', borderColor: '#FECACA', background: '#FEF2F2',
-                                        padding: '6px 14px', borderRadius: '6px', fontSize: '13px',
-                                        fontWeight: '600', display: 'flex', alignItems: 'center',
-                                        gap: '6px', cursor: 'pointer', border: '1px solid #FECACA'
-                                    }}
-                                    className="dmod-btn-hover"
-                                    onClick={() => { setSelected(null); setRejectTarget(plan); setRejectRemarks(''); }}
-                                >
-                                    <FiXCircle /> Reject Plan
-                                </button>
-                            )}
                             <button className="dmod-close" onClick={() => setSelected(null)}>
                                 <FiX size={16} />
                             </button>
@@ -455,15 +377,20 @@ const MDMonthlyOverviewPage = () => {
                     {/* ── BODY ── */}
                     <div className="dmod-body">
 
-                        {/* MD rejection banner */}
+                        {/* RA rejection banner */}
                         {isRejected && (
                             <div className="red-status-banner red-status-banner--rejected" style={{ marginBottom: 12 }}>
-                                <FiAlertCircle /> This plan has been rejected by MD
+                                <FiAlertCircle /> This plan was rejected by the Reporting Authority (RA)
+                                {(plan.raRemarks || plan.mdRemarks) && (
+                                    <span style={{ display: 'block', marginTop: 6, fontSize: '0.82rem', fontWeight: 400, opacity: 0.85 }}>
+                                        Reason: &ldquo;{plan.raRemarks || plan.mdRemarks}&rdquo;
+                                    </span>
+                                )}
                             </div>
                         )}
                         {isEval && (
                             <div className="med-status-banner" style={{ background: '#F0FDF4', color: '#16A34A', borderBottomColor: '#BBF7D0', marginBottom: 16 }}>
-                                <FiCheckCircle /> Evaluated by RA — cannot be rejected
+                                <FiCheckCircle /> Evaluated by RA
                             </div>
                         )}
 
@@ -657,15 +584,15 @@ const MDMonthlyOverviewPage = () => {
                             )}
                         </div>
 
-                        {/* MD rejection remarks */}
-                        {isRejected && plan.mdRemarks && (
+                        {/* RA rejection reason */}
+                        {isRejected && (plan.raRemarks || plan.mdRemarks) && (
                             <div className="red-modal-section red-modal-section--danger" style={{ marginTop: 12 }}>
                                 <div className="red-modal-section-hd">
                                     <div className="red-modal-section-icon red-modal-section-icon--danger"><FiAlertCircle /></div>
-                                    <span>MD Rejection Remarks</span>
+                                    <span>RA Rejection Reason</span>
                                 </div>
                                 <div className="red-modal-section-body">
-                                    <p className="red-modal-text red-modal-text--danger">{plan.mdRemarks}</p>
+                                    <p className="red-modal-text red-modal-text--danger">{plan.raRemarks || plan.mdRemarks}</p>
                                 </div>
                             </div>
                         )}
@@ -677,21 +604,7 @@ const MDMonthlyOverviewPage = () => {
                         <span className="dmod-ftr-state">
                             {isEval ? 'Evaluated' : plan.hasAchievement ? 'Awaiting RA review' : 'Achievement pending'}
                         </span>
-                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                            {canReject && (
-                                <button
-                                    onClick={() => { setSelected(null); setRejectTarget(plan); setRejectRemarks(''); }}
-                                    style={{
-                                        color: '#DC2626', background: 'transparent',
-                                        padding: '6px 14px', borderRadius: '6px', fontSize: '13px',
-                                        fontWeight: '600', display: 'flex', alignItems: 'center', cursor: 'pointer', border: 'none'
-                                    }}
-                                >
-                                    Reject
-                                </button>
-                            )}
-                            <button className="dmod-btn-close" onClick={() => setSelected(null)}>Close</button>
-                        </div>
+                        <button className="dmod-btn-close" onClick={() => setSelected(null)}>Close</button>
                     </div>
 
                 </div>
@@ -708,7 +621,7 @@ const MDMonthlyOverviewPage = () => {
             <div className="page-header" style={{ marginBottom: '16px' }}>
                 <div>
                     <h1>Monthly Plan Overview</h1>
-                    <p>Review all employee monthly plans, achievements, and RA evaluation scores. Reject plans if needed.</p>
+                    <p>Review all employee monthly plans, achievements, and RA evaluation scores. Plans rejected by RA are shown with their reason.</p>
                 </div>
             </div>
 
@@ -810,7 +723,7 @@ const MDMonthlyOverviewPage = () => {
                         <FiX /> Clear filters
                     </button>
                 )}
-                <span className="mmo-reject-hint"><FiAlertCircle /> Click row to view details · Reject button available for plans not yet RA-evaluated</span>
+                <span className="mmo-reject-hint"><FiShield /> Click any row to view full details · Monthly plan rejection is now handled by RA</span>
             </div>
 
             {/* Table */}
@@ -847,7 +760,6 @@ const MDMonthlyOverviewPage = () => {
                                     const st = getStatusInfo(plan);
                                     const isEval     = plan.evaluationStatus === 'EVALUATED';
                                     const isRejected = plan.status === 'REJECTED';
-                                    const canReject  = !isEval && !isRejected;
                                     return (
                                         <tr key={plan._id} className={`mmo-row ${isRejected ? 'mmo-row-rejected' : ''}`} onClick={() => setSelected(plan)}>
                                             <td className="mmo-cell-num">{(page - 1) * PAGE_SIZE + idx + 1}</td>
@@ -894,19 +806,11 @@ const MDMonthlyOverviewPage = () => {
                                                         <FiEye /> View
                                                     </button>
                                                     
-                                                    {canReject ? (
-                                                        <button
-                                                            className="mmo-reject-btn"
-                                                            onClick={() => { setRejectTarget(plan); setRejectRemarks(''); }}
-                                                            title="Reject this plan"
-                                                        >
-                                                            <FiXCircle /> 
-                                                        </button>
-                                                    ) : isRejected ? (
-                                                        <span className="mmo-rejected-tag">Rejected</span>
-                                                    ) : (
-                                                        <span className="mmo-locked-tag" title="RA has evaluated — cannot reject"><FiCheckCircle /> Evaluated</span>
-                                                    )}
+                                                    {isRejected ? (
+                                                        <span className="mmo-rejected-tag">Rejected by RA</span>
+                                                    ) : isEval ? (
+                                                        <span className="mmo-locked-tag" title="RA has evaluated"><FiCheckCircle /> Evaluated</span>
+                                                    ) : null}
                                                 </div>
                                             </td>
                                         </tr>
@@ -940,7 +844,6 @@ const MDMonthlyOverviewPage = () => {
             )}
 
             {renderDetail()}
-            {renderRejectModal()}
         </div>
     );
 };

@@ -122,7 +122,7 @@ const EmployeeDashboard = () => {
                             id: `resubmit_plan_${plan._id}`,
                             type: 'danger',
                             title: `Resubmit Monthly Plan`,
-                            desc: `Your plan for ${monthDisplay} was rejected by MD.`,
+                            desc: `Your plan for ${monthDisplay} was rejected by your Reporting Authority (RA).`,
                             link: '/employee/monthly-plan',
                             btnText: 'Resubmit'
                         });
@@ -252,10 +252,12 @@ const EmployeeDashboard = () => {
                 // --- 4. Compute Latest Remarks ---
                 try {
                     plans.forEach(p => {
-                        if (p.mdRemarks && typeof p.mdRemarks === 'string' && p.mdRemarks.trim() !== '') {
+                        // Show raRemarks (new rejection reason) — fall back to mdRemarks for old data
+                        const rejectionRemark = p.raRemarks || p.mdRemarks;
+                        if (rejectionRemark && typeof rejectionRemark === 'string' && rejectionRemark.trim() !== '') {
                             const monthParts = p.month ? p.month.split('-') : [];
                             const mDisp = monthParts.length === 2 ? new Date(monthParts[0], parseInt(monthParts[1]) - 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : 'Unknown Month';
-                            remarks.push({ source: 'MD', text: p.mdRemarks, context: `Plan ${mDisp}`, date: new Date(p.updatedAt || p.submittedAt || p.createdAt || Date.now()) });
+                            remarks.push({ source: 'RA', text: rejectionRemark, context: `Plan ${mDisp} (Rejection Reason)`, date: new Date(p.updatedAt || p.submittedAt || p.createdAt || Date.now()) });
                         }
                     });
 

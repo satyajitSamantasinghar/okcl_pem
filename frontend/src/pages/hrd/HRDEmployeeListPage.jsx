@@ -204,7 +204,7 @@ const HRDEmployeeListPage = () => {
                                 </div>
                                 <div
                                     className="mel-card-avatar"
-                                    style={isRA ? { background: '#1e293b', color: '#ffffff' } : { background: '#f97316', color: '#ffffff' }}
+                                    style={isRA ? { background: '#f86f07ff', color: '#ffffff' } : { background: 'rgba(241, 165, 25, 1)', color: '#ffffff' }}
                                 >
                                     {getInitials(emp.name)}
                                 </div>
@@ -247,7 +247,7 @@ const HRDEmployeeListPage = () => {
                                             <div className="mel-row-emp">
                                                 <div
                                                     className="mel-row-avatar"
-                                                    style={isRA ? { background: '#1e293b', color: '#ffffff' } : { background: '#f97316', color: '#ffffff' }}
+                                                    style={isRA ? { background: '#1e293b', color: '#ffffff' } : { background: '#f91671ff', color: '#ffffff' }}
                                                 >
                                                     {getInitials(emp.name)}
                                                 </div>

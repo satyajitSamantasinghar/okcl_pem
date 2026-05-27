@@ -15,6 +15,11 @@ exports.getHRDDashboard = async (req, res) => {
   try {
     const month = req.query.month;
 
+    // Validate month format if provided
+    if (month && !/^\d{4}-\d{2}$/.test(month)) {
+      return res.status(400).json({ message: "Invalid month format. Use YYYY-MM." });
+    }
+
     const totalEmployees = await User.countDocuments({ role: "EMPLOYEE", isActive: true });
     const totalRAs = await User.countDocuments({ role: "RA", isActive: true });
 
@@ -54,68 +59,86 @@ exports.getHRDDashboard = async (req, res) => {
 
 /* =====================================================
    GET ALL RAs WITH EMPLOYEE COUNTS + EVAL PROGRESS
-   Enriches each employee with evaluationStatus + lastScore
+   FIX: Eliminated N+1 queries — now uses a single batch
+   fetch for all employees and all evaluations, then
+   maps them in-memory. O(RAs + Employees + Evals)
+   instead of O(RAs × DB round trips).
 ===================================================== */
 exports.getRAList = async (req, res) => {
   try {
     const month = req.query.month;
 
+    // 1. Fetch all active RAs
     const ras = await User.find({ role: "RA", isActive: true })
       .select("name employeeCode department")
       .lean();
 
-    const result = [];
+    if (ras.length === 0) return res.json([]);
 
-    for (const ra of ras) {
-      const employees = await User.find({ reportingAuthorityId: ra._id, isActive: true })
-        .select("name employeeCode department")
-        .lean();
+    const raIds = ras.map(r => r._id);
 
-      let evaluated = 0;
-      const total = employees.length;
-      let enrichedEmployees = employees;
+    // 2. Fetch ALL employees under any of these RAs in one query
+    const allEmployees = await User.find({
+      reportingAuthorityId: { $in: raIds },
+      isActive: true
+    })
+      .select("name employeeCode department reportingAuthorityId")
+      .lean();
 
-      if (month && employees.length > 0) {
-        const empIds = employees.map(e => e._id);
+    // 3. Fetch ALL evaluations for these employees in one query (if month given)
+    let evalMap = {};
+    if (month && allEmployees.length > 0) {
+      const empIds = allEmployees.map(e => e._id);
+      const evaluations = await MonthlyEvaluation.find({
+        employeeId: { $in: empIds },
+        month
+      }).select("employeeId raId status score").lean();
 
-        const evaluations = await MonthlyEvaluation.find({
-          raId: ra._id,
-          employeeId: { $in: empIds },
-          month
-        }).select("employeeId status score").lean();
+      evaluations.forEach(ev => {
+        evalMap[ev.employeeId.toString()] = {
+          status: ev.status,
+          score: ev.score
+        };
+      });
+    }
 
-        const evalMap = {};
-        evaluations.forEach(ev => {
-          evalMap[ev.employeeId.toString()] = {
-            status: ev.status,
-            score: ev.score
-          };
-        });
-
-        evaluated = evaluations.filter(ev => ev.status === "EVALUATED").length;
-
-        enrichedEmployees = employees.map(emp => {
-          const ev = evalMap[emp._id.toString()];
-          return {
-            ...emp,
-            evaluationStatus: ev
-              ? ev.status === "EVALUATED" ? "evaluated" : "pending"
-              : "not_started",
-            lastScore: ev && ev.status === "EVALUATED" ? ev.score : null
-          };
-        });
+    // 4. Group employees by RA and enrich with evaluation data — pure in-memory
+    const employeesByRA = {};
+    raIds.forEach(id => { employeesByRA[id.toString()] = []; });
+    allEmployees.forEach(emp => {
+      const raId = emp.reportingAuthorityId?.toString();
+      if (raId && employeesByRA[raId]) {
+        employeesByRA[raId].push(emp);
       }
+    });
 
-      result.push({
+    const result = ras.map(ra => {
+      const employees = employeesByRA[ra._id.toString()] || [];
+      let evaluated = 0;
+
+      const enrichedEmployees = employees.map(emp => {
+        const ev = evalMap[emp._id.toString()];
+        const isEvaluated = ev && ev.status === "EVALUATED";
+        if (isEvaluated) evaluated++;
+        return {
+          ...emp,
+          evaluationStatus: ev
+            ? isEvaluated ? "evaluated" : "pending"
+            : "not_started",
+          lastScore: isEvaluated ? ev.score : null
+        };
+      });
+
+      return {
         _id: ra._id,
         name: ra.name,
         employeeCode: ra.employeeCode,
         department: ra.department,
-        employeeCount: total,
+        employeeCount: employees.length,
         evaluated,
         employees: enrichedEmployees
-      });
-    }
+      };
+    });
 
     res.json(result);
   } catch (error) {
@@ -251,40 +274,120 @@ exports.getEmployeeDetail = async (req, res) => {
 
 /* =====================================================
    ALL MONTHLY PLANS — for HRD read-only overview
+   FIX: Replaced N+1 per-plan queries with a single
+   aggregation pipeline joining evaluations + achievements.
 ===================================================== */
 exports.getMonthlyPlansList = async (req, res) => {
   try {
     const { month, year, status } = req.query;
-    const filter = {};
+    const matchFilter = {};
+
     if (month) {
-      filter.month = month;
+      // Validate month format YYYY-MM
+      if (!/^\d{4}-\d{2}$/.test(month)) {
+        return res.status(400).json({ error: "Invalid month format. Use YYYY-MM." });
+      }
+      matchFilter.month = month;
     } else if (year) {
-      filter.month = { $regex: `^${year}` };
+      if (!/^\d{4}$/.test(year)) {
+        return res.status(400).json({ error: "Invalid year format. Use YYYY." });
+      }
+      matchFilter.month = { $regex: `^${year}` };
     }
-    if (status) filter.status = status;
 
-    const plans = await MonthlyPlan.find(filter)
-      .populate("employeeId", "name employeeCode department")
-      .sort({ month: -1, submittedAt: -1 })
-      .limit(100);
+    if (status) matchFilter.status = status;
 
-    const result = await Promise.all(plans.map(async (p) => {
-      const evaluation = await MonthlyEvaluation.findOne({
-        employeeId: p.employeeId._id,
-        month: p.month
-      });
-      const achievement = await MonthlyAchievement.findOne({
-        monthlyPlanId: p._id
-      });
-      return {
-        ...p.toObject(),
-        evaluationStatus: evaluation?.status || null,
-        hasAchievement: !!achievement && achievement.status !== "DRAFT",
-        evaluationScore: evaluation?.score || null
-      };
-    }));
+    const plans = await MonthlyPlan.aggregate([
+      { $match: matchFilter },
+      { $sort: { month: -1, submittedAt: -1 } },
+      { $limit: 100 },
 
-    res.json(result);
+      // Join employee info
+      {
+        $lookup: {
+          from: "users",
+          localField: "employeeId",
+          foreignField: "_id",
+          as: "employee",
+          pipeline: [{ $project: { name: 1, employeeCode: 1, department: 1 } }]
+        }
+      },
+      { $unwind: { path: "$employee", preserveNullAndEmptyArrays: false } },
+
+      // Join monthly evaluation (left join — plan may have no evaluation yet)
+      {
+        $lookup: {
+          from: "monthlyevaluations",
+          let: { empId: "$employeeId", m: "$month" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$employeeId", "$$empId"] },
+                    { $eq: ["$month", "$$m"] }
+                  ]
+                }
+              }
+            },
+            { $project: { status: 1, score: 1, remarks: 1, evaluatedAt: 1 } }
+          ],
+          as: "evaluation"
+        }
+      },
+      { $unwind: { path: "$evaluation", preserveNullAndEmptyArrays: true } },
+
+      // Join monthly achievement
+      {
+        $lookup: {
+          from: "monthlyachievements",
+          let: { planId: "$_id" },
+          pipeline: [
+            { $match: { $expr: { $eq: ["$monthlyPlanId", "$$planId"] } } },
+            { $project: { status: 1, achievementDetails: 1, planAchievements: 1, additionalAchievement: 1, submittedAt: 1 } }
+          ],
+          as: "achievement"
+        }
+      },
+      { $unwind: { path: "$achievement", preserveNullAndEmptyArrays: true } },
+
+      // Project final shape — mirrors the original per-plan structure
+      {
+        $project: {
+          _id: 1,
+          month: 1,
+          status: 1,
+          submittedAt: 1,
+          planItems: 1,
+          planDetails: 1,
+          mdRemarks: 1,
+          raRemarks: 1,
+          employeeId: {
+            _id: "$employee._id",
+            name: "$employee.name",
+            employeeCode: "$employee.employeeCode",
+            department: "$employee.department"
+          },
+          evaluationStatus: { $ifNull: ["$evaluation.status", null] },
+          evaluationScore: { $ifNull: ["$evaluation.score", null] },
+          evaluationRemarks: { $ifNull: ["$evaluation.remarks", null] },
+          evaluatedAt: { $ifNull: ["$evaluation.evaluatedAt", null] },
+          hasAchievement: {
+            $and: [
+              { $ne: [{ $type: "$achievement" }, "missing"] },
+              { $ne: ["$achievement.status", "DRAFT"] }
+            ]
+          },
+          achievementStatus: { $ifNull: ["$achievement.status", null] },
+          achievementDetails: { $ifNull: ["$achievement.achievementDetails", null] },
+          planAchievements: { $ifNull: ["$achievement.planAchievements", []] },
+          additionalAchievement: { $ifNull: ["$achievement.additionalAchievement", null] },
+          achievementDate: { $ifNull: ["$achievement.submittedAt", null] }
+        }
+      }
+    ]);
+
+    res.json(plans);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -320,17 +423,21 @@ exports.getAllEmployees = async (req, res) => {
 
 /* =====================================================
    SEARCH USERS (employees + RAs) — autocomplete
+   FIX: Now searches by both name AND employeeCode.
+   Added input length guard to prevent regex DoS.
 ===================================================== */
 exports.searchUsers = async (req, res) => {
   try {
     const { q } = req.query;
-    if (!q || q.length < 1) {
+    if (!q || q.trim().length < 1) {
       return res.json([]);
     }
+    // Guard against excessively long search strings (regex DoS)
+    const sanitized = q.trim().substring(0, 60);
+    const regex = new RegExp(sanitized, "i");
 
-    const regex = new RegExp(q, "i");
     const users = await User.find({
-      name: regex,
+      $or: [{ name: regex }, { employeeCode: regex }],
       role: { $in: ["EMPLOYEE", "RA"] },
       isActive: true
     })

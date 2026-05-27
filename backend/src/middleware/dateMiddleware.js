@@ -31,33 +31,54 @@ function parseFinancialYear(fy) {
 /* ════════════════════════════════════════════════════════════════════
    MONTHLY PLAN SUBMISSION
 ════════════════════════════════════════════════════════════════════ */
-exports.allowMonthlyPlanSubmission = (req, res, next) => {
-  const today = new Date();
-  const day = today.getDate();
+exports.allowMonthlyPlanSubmission = async (req, res, next) => {
+  try {
+    const today = new Date();
+    const day = today.getDate();
+    const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
+    const submittedMonth = req.body.month; // expected format: "YYYY-MM"
 
-  // ── Current-month check ──────────────────────────────────────────────────
-  // The employee can only submit a plan for the current month (YYYY-MM).
-  const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
-  const submittedMonth = req.body.month; // expected format: "YYYY-MM"
+    if (!submittedMonth) {
+      return res.status(400).json({ message: "Month is required." });
+    }
 
-  if (!submittedMonth) {
-    return res.status(400).json({ message: "Month is required." });
+    // ── INDUSTRY STANDARD: Rejection Resubmission Bypass ─────────────────────
+    // When an RA rejects a plan, they create a new submission obligation for
+    // the employee. The employee MUST be allowed to resubmit regardless of
+    // whether the original month's deadline has passed — even if the month is
+    // in the past. RA can reject a plan weeks or months after submission.
+    // Detection: an existing REJECTED plan document for this employee + month.
+    // const existingRejected = await MonthlyPlan.findOne({
+    //   employeeId: req.user.userId,
+    //   month: submittedMonth,
+    //   status: "REJECTED",
+    // });
+
+    // if (existingRejected) {
+    //   // Bypass ALL date checks — this is a legitimate post-rejection resubmission.
+    //   return next();
+    // }
+    // // ─────────────────────────────────────────────────────────────────────────
+
+    // // ── Normal deadline enforcement for fresh first submissions ───────────────
+    // if (submittedMonth !== currentMonth) {
+    //   return res.status(403).json({
+    //     message: `You can only submit a monthly plan for the current month (${currentMonth}). Received: ${submittedMonth}`
+    //   });
+    // }
+
+    // if (day < 1 || day > 7) {
+    //   return res.status(403).json({
+    //     message: "Monthly plan submission allowed only from 1st to 7th of the month."
+    //   });
+    // }
+    // ─────────────────────────────────────────────────────────────────────────
+
+    next();
+  } catch (error) {
+    console.error("Plan date middleware error:", error);
+    res.status(500).json({ message: "Internal server error in date validation." });
   }
-
-  // if (submittedMonth !== currentMonth) {
-  //   return res.status(403).json({
-  //     message: `You can only submit a monthly plan for the current month (${currentMonth}). Received: ${submittedMonth}`
-  //   });
-  // }
-  // ────────────────────────────────────────────────────────────────────────
-
-  // if (day < 1 || day > 7) {
-  //   return res.status(403).json({
-  //     message: "Monthly plan submission allowed only from 1st to 7th"
-  //   });
-  // }
-
-  next();
 };
 
 /* ════════════════════════════════════════════════════════════════════
@@ -67,10 +88,6 @@ exports.allowMonthlyAchievementSubmission = async (req, res, next) => {
   try {
     const today = new Date();
     const day = today.getDate();
-
-    // ── Current-month check ────────────────────────────────────────────────
-    // Fetch the linked plan to determine which month this achievement is for,
-    // then ensure it matches the current calendar month.
     const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
     const { monthlyPlanId } = req.body;
 
@@ -78,23 +95,36 @@ exports.allowMonthlyAchievementSubmission = async (req, res, next) => {
       return res.status(400).json({ message: "monthlyPlanId is required." });
     }
 
-    const plan = await MonthlyPlan.findById(monthlyPlanId).select("month");
+    const plan = await MonthlyPlan.findById(monthlyPlanId).select("month version status");
     if (!plan) {
       return res.status(404).json({ message: "Monthly plan not found." });
     }
 
+    // ── INDUSTRY STANDARD: Rejection Resubmission Bypass ─────────────────────
+    // If this plan was resubmitted after RA rejection (version > 1), the normal
+    // achievement window (25th-onwards of current month) does NOT apply.
+    // The employee was forced to resubmit due to RA action — possibly weeks
+    // after the original month ended. They must be able to submit the achievement
+    // immediately after resubmitting the revised plan.
+    // if (plan.version > 1) {
+    //   // Bypass ALL date checks — post-rejection resubmission flow.
+    //   return next();
+    // }
+    // // ─────────────────────────────────────────────────────────────────────────
+
+    // // ── Normal deadline enforcement for fresh first-time achievements ─────────
     // if (plan.month !== currentMonth) {
     //   return res.status(403).json({
     //     message: `You can only submit a monthly achievement for the current month (${currentMonth}). The linked plan is for: ${plan.month}`
     //   });
     // }
-    // ──────────────────────────────────────────────────────────────────────
 
     // if (day < 25) {
     //   return res.status(403).json({
-    //     message: "Monthly achievement submission allowed from 25th onwards"
+    //     message: "Monthly achievement submission is allowed from the 25th of the month onwards."
     //   });
     // }
+    // ─────────────────────────────────────────────────────────────────────────
 
     next();
   } catch (error) {
@@ -102,6 +132,7 @@ exports.allowMonthlyAchievementSubmission = async (req, res, next) => {
     res.status(500).json({ message: "Internal server error in date validation." });
   }
 };
+
 
 /* ════════════════════════════════════════════════════════════════════
    YEARLY PLAN SUBMISSION

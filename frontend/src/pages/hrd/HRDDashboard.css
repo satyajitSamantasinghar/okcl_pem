@@ -55,11 +55,12 @@
 ============================================================ */
 .hrd-page-header {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
-    margin-bottom: 12px;
+    margin-bottom: 20px;
     min-width: 0;
-    gap: 12px;
+    gap: 16px;
+    flex-wrap: wrap;
 }
 
 .hrd-page-header-left {
@@ -68,15 +69,15 @@
 }
 
 .hrd-page-title {
-    font-size: 1.375rem;
+    font-size: 1.5rem;
     font-weight: 800;
     color: var(--text-primary);
-    margin: 0 0 2px;
-    letter-spacing: -0.3px;
+    margin: 0 0 4px;
+    letter-spacing: -0.4px;
 }
 
 .hrd-page-sub {
-    font-size: 0.8rem;
+    font-size: 0.8125rem;
     color: var(--text-muted);
     margin: 0;
 }
@@ -84,8 +85,13 @@
 .hrd-month-filter {
     display: inline-flex;
     align-items: center;
-    gap: 7px;
+    gap: 8px;
     flex-shrink: 0;
+    background: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    padding: 7px 12px;
+    box-shadow: var(--shadow-card);
 }
 
 .hrd-month-filter label {
@@ -96,33 +102,39 @@
 }
 
 .hrd-month-filter input[type="month"] {
-    padding: 7px 10px;
-    border: 1px solid var(--border-default);
-    border-radius: var(--radius-md);
+    padding: 0;
+    border: none;
     font-size: 0.8125rem;
-    background: var(--bg-card);
+    background: transparent;
     color: var(--text-primary);
     cursor: pointer;
+    font-weight: 600;
+    outline: none;
 }
 
 .hrd-month-filter input[type="month"]:focus {
     outline: none;
-    border-color: var(--primary);
 }
 
 /* ============================================================
-   SEARCH SECTION — full-width bar below title
+   SEARCH SECTION — integrated into header row
 ============================================================ */
 .hrd-search-section {
     position: relative;
     width: 100%;
-    margin-bottom: 14px;
+    margin-bottom: 0;
+}
+
+/* When inside header, constrain width */
+.hrd-header-search {
+    flex: 1;
+    max-width: 340px;
+    min-width: 200px;
 }
 
 .hrd-search-wrap {
     position: relative;
     width: 100%;
-    max-width: 520px;
 }
 
 .hrd-search-input {
@@ -249,89 +261,152 @@
 }
 
 /* ============================================================
-   ALERT STRIP — positioned below KPI cards via JSX order
+   ALERT PANEL — stacked dismissible banners (industry standard)
+   Replaces the old horizontal-scroll strip anti-pattern
 ============================================================ */
-.hrd-alert-strip {
+.hrd-alert-panel {
+    background: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+    margin-bottom: 20px;
+    overflow: hidden;
+}
+
+.hrd-alert-panel-header {
     display: flex;
-    gap: 8px;
-    overflow-x: auto;
-    padding-bottom: 6px;
-    margin-bottom: 14px;
-    scrollbar-width: none;
-    width: 100%;
-    -webkit-mask-image: linear-gradient(to right, black 85%, transparent 100%);
-    mask-image: linear-gradient(to right, black 85%, transparent 100%);
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border-default);
+    background: var(--bg-muted);
 }
 
-.hrd-alert-strip::-webkit-scrollbar {
-    display: none;
-}
-
-.hrd-alert-pill {
-    display: inline-flex;
+.hrd-alert-panel-title {
+    display: flex;
     align-items: center;
     gap: 7px;
-    padding: 5px 10px;
-    border-radius: 100px;
     font-size: 0.6875rem;
-    white-space: nowrap;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+}
+
+.hrd-alert-panel-count {
+    background: var(--primary);
+    color: #fff;
+    font-size: 0.5625rem;
+    font-weight: 800;
+    padding: 1px 6px;
+    border-radius: 100px;
+    letter-spacing: 0;
+    text-transform: none;
+}
+
+.hrd-alert-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 16px;
+    font-size: 0.8125rem;
+    border-bottom: 1px solid var(--border-default);
+    transition: background var(--transition-fast);
+}
+
+.hrd-alert-item:last-child {
+    border-bottom: none;
+}
+
+.hrd-alert-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
     flex-shrink: 0;
-    border: 1px solid transparent;
+}
+
+.hrd-alert-dismiss {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    color: inherit;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    cursor: pointer;
+    opacity: 0.45;
+    transition: opacity var(--transition-fast), background var(--transition-fast);
+    flex-shrink: 0;
+}
+
+.hrd-alert-dismiss:hover {
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.08);
 }
 
 .hrd-alert-warning {
-    background: #FAEEDA;
+    background: #FFFBF5;
     color: #633806;
-    border-color: rgba(186, 117, 23, .25);
+    border-left: 3px solid #BA7517;
 }
 
 .hrd-alert-pending {
-    background: #E6F1FB;
+    background: #F5F9FF;
     color: #0C447C;
-    border-color: rgba(24, 95, 165, .25);
+    border-left: 3px solid #185FA5;
 }
 
 .hrd-alert-info {
-    background: #EAF3DE;
+    background: #F6FBF0;
     color: #27500A;
-    border-color: rgba(59, 109, 17, .25);
+    border-left: 3px solid #3B6D11;
 }
 
 .hrd-alert-danger {
-    background: #FCEBEB;
+    background: #FFF5F5;
     color: #791F1F;
-    border-color: rgba(163, 45, 45, .25);
+    border-left: 3px solid #A32D2D;
 }
 
 .hrd-alert-icon {
     display: flex;
     align-items: center;
-    font-size: 12px;
+    font-size: 14px;
     flex-shrink: 0;
+    opacity: 0.8;
 }
 
 .hrd-alert-msg {
     font-weight: 500;
+    flex: 1;
+    min-width: 0;
+    line-height: 1.4;
 }
 
 .hrd-alert-cta {
-    padding: 2px 9px;
+    padding: 4px 12px;
     border-radius: 100px;
-    border: 1px solid currentColor;
+    border: 1.5px solid currentColor;
     background: transparent;
     color: inherit;
-    font-size: 0.5625rem;
+    font-size: 0.6875rem;
     font-weight: 700;
     cursor: pointer;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     opacity: 0.75;
-    transition: opacity var(--transition-fast);
+    transition: opacity var(--transition-fast), background var(--transition-fast);
     flex-shrink: 0;
+    white-space: nowrap;
 }
 
 .hrd-alert-cta:hover {
     opacity: 1;
+    background: rgba(0, 0, 0, 0.06);
 }
 
 /* ============================================================
@@ -340,8 +415,8 @@
 .hrd-kpi-grid {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 10px;
-    margin-bottom: 10px;
+    gap: 16px;
+    margin-bottom: 20px;
     width: 100%;
     overflow: hidden;
 }
@@ -350,13 +425,14 @@
     background: var(--bg-card);
     border: 1px solid var(--border-default);
     border-radius: var(--radius-lg);
-    padding: 12px 14px 10px;
+    padding: 18px 20px 16px;
     box-shadow: var(--shadow-card);
     transition: transform var(--transition-fast), box-shadow var(--transition-fast);
     position: relative;
     overflow: hidden;
     min-width: 0;
     width: 100%;
+    cursor: pointer;
 }
 
 .hrd-kpi-card::before {
@@ -402,11 +478,11 @@
 .hrd-kpi-label {
     display: flex;
     align-items: center;
-    gap: 4px;
-    font-size: 0.5625rem;
+    gap: 5px;
+    font-size: 0.625rem;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.6px;
     color: var(--text-muted);
     min-width: 0;
     flex: 1;
@@ -414,7 +490,7 @@
 }
 
 .hrd-kpi-icon {
-    font-size: 11px;
+    font-size: 12px;
     display: flex;
     align-items: center;
     flex-shrink: 0;
@@ -437,11 +513,11 @@
 }
 
 .hrd-kpi-value {
-    font-size: 1.75rem;
+    font-size: 2rem;
     font-weight: 800;
     color: var(--text-primary);
     line-height: 1;
-    margin-bottom: 8px;
+    margin-bottom: 10px;
     letter-spacing: -0.5px;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -451,7 +527,7 @@
 .hrd-kpi-footer {
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 4px;
     min-width: 0;
 }
 
@@ -459,9 +535,9 @@
     display: inline-flex;
     align-items: center;
     gap: 3px;
-    font-size: 0.5625rem;
+    font-size: 0.6875rem;
     font-weight: 600;
-    padding: 2px 6px;
+    padding: 3px 8px;
     border-radius: 100px;
     width: fit-content;
     max-width: 100%;
@@ -493,7 +569,7 @@
     display: inline-flex;
     align-items: center;
     gap: 3px;
-    font-size: 0.5625rem;
+    font-size: 0.6875rem;
     color: #BA7517;
     font-weight: 500;
     white-space: nowrap;
@@ -501,7 +577,7 @@
 }
 
 .hrd-kpi-sub-text {
-    font-size: 0.5625rem;
+    font-size: 0.6875rem;
     color: var(--text-muted);
     white-space: nowrap;
     overflow: hidden;
@@ -514,23 +590,23 @@
 .hrd-shortcuts {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 10px;
-    margin-bottom: 16px;
+    gap: 14px;
+    margin-bottom: 22px;
     width: 100%;
 }
 
 .hrd-shortcut {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 14px;
     background: var(--bg-card);
     border: 1px solid var(--border-default);
     border-radius: var(--radius-lg);
-    padding: 12px 14px;
+    padding: 16px 18px;
     text-decoration: none;
     cursor: pointer;
     transition: all var(--transition-fast);
-    min-height: 60px;
+    min-height: 68px;
     min-width: 0;
     overflow: hidden;
 }
@@ -542,14 +618,14 @@
 }
 
 .hrd-shortcut-icon {
-    width: 34px;
-    height: 34px;
-    min-width: 34px;
-    border-radius: 9px;
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    border-radius: 10px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.9rem;
+    font-size: 1rem;
     flex-shrink: 0;
     transition: transform var(--transition-fast);
 }
@@ -580,17 +656,17 @@
 }
 
 .hrd-shortcut-body h4 {
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
     font-weight: 700;
     color: var(--text-primary);
-    margin: 0 0 2px;
+    margin: 0 0 3px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
 .hrd-shortcut-body p {
-    font-size: 0.625rem;
+    font-size: 0.6875rem;
     color: var(--text-muted);
     margin: 0;
     line-height: 1.4;
@@ -616,9 +692,9 @@
 ============================================================ */
 .hrd-charts-row {
     display: grid;
-    grid-template-columns: 1fr min(300px, 40%);
-    gap: 12px;
-    margin-bottom: 22px;
+    grid-template-columns: 1fr min(320px, 40%);
+    gap: 16px;
+    margin-bottom: 28px;
     width: 100%;
     min-width: 0;
     overflow: hidden;
@@ -629,7 +705,7 @@
     background: var(--bg-card);
     border: 1px solid var(--border-default);
     border-radius: var(--radius-lg);
-    padding: 14px 16px;
+    padding: 20px 22px;
     box-shadow: var(--shadow-card);
     min-width: 0;
     overflow: hidden;
@@ -641,7 +717,7 @@
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
-    margin-bottom: 10px;
+    margin-bottom: 16px;
     min-width: 0;
     flex-shrink: 0;
 }
@@ -649,15 +725,15 @@
 .hrd-chart-title {
     display: flex;
     align-items: center;
-    gap: 6px;
-    font-size: 0.875rem;
+    gap: 7px;
+    font-size: 0.9375rem;
     font-weight: 700;
     color: var(--text-primary);
-    margin: 0 0 2px;
+    margin: 0 0 3px;
 }
 
 .hrd-chart-sub {
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     color: var(--text-muted);
     margin: 0;
 }
@@ -674,11 +750,14 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    min-height: 160px;
+    min-height: 180px;
     color: var(--text-muted);
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
+    background: var(--bg-muted);
+    border-radius: var(--radius-md);
+    border: 1.5px dashed var(--border-default);
 }
 
 .hrd-chart-skeleton {
@@ -930,25 +1009,25 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 10px;
+    margin-bottom: 14px;
     min-width: 0;
 }
 
 .hrd-section-title {
     display: flex;
     align-items: center;
-    gap: 7px;
-    font-size: 1rem;
+    gap: 8px;
+    font-size: 1.0625rem;
     font-weight: 800;
     color: var(--text-primary);
 }
 
 .hrd-section-count {
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     font-weight: 600;
     color: var(--text-muted);
     background: var(--bg-muted);
-    padding: 2px 8px;
+    padding: 3px 10px;
     border-radius: 100px;
     flex-shrink: 0;
 }
@@ -958,9 +1037,9 @@
 ============================================================ */
 .hrd-ra-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(190px, 100%), 1fr));
-    gap: 10px;
-    margin-bottom: 22px;
+    grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr));
+    gap: 14px;
+    margin-bottom: 26px;
     width: 100%;
 }
 
@@ -968,7 +1047,7 @@
     background: var(--bg-card);
     border: 1px solid var(--border-default);
     border-radius: var(--radius-lg);
-    padding: 14px 15px;
+    padding: 18px 18px 16px;
     box-shadow: var(--shadow-card);
     cursor: pointer;
     transition: all var(--transition-normal);
@@ -1003,22 +1082,22 @@
 .hrd-ra-top {
     display: flex;
     align-items: center;
-    gap: 10px;
-    margin-bottom: 10px;
+    gap: 12px;
+    margin-bottom: 14px;
     min-width: 0;
 }
 
 .hrd-ra-avatar {
-    width: 42px;
-    height: 42px;
-    min-width: 42px;
+    width: 46px;
+    height: 46px;
+    min-width: 46px;
     border-radius: 50%;
     background: linear-gradient(135deg, #534AB7, #3C3489);
     color: #fff;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.875rem;
+    font-size: 0.9375rem;
     font-weight: 700;
 }
 
@@ -1029,7 +1108,7 @@
 }
 
 .hrd-ra-name {
-    font-size: 0.875rem;
+    font-size: 0.9375rem;
     font-weight: 700;
     color: var(--text-primary);
     white-space: nowrap;
@@ -1038,11 +1117,12 @@
 }
 
 .hrd-ra-meta {
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     color: var(--text-muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    margin-top: 2px;
 }
 
 .hrd-ra-progress-badge {
@@ -1103,46 +1183,46 @@
 
 .hrd-ra-stats {
     display: flex;
-    gap: 6px;
-    margin-bottom: 10px;
+    gap: 8px;
+    margin-bottom: 12px;
 }
 
 .hrd-ra-stat {
     flex: 1;
     text-align: center;
-    padding: 6px 4px;
+    padding: 8px 4px;
     background: var(--bg-muted);
     border-radius: var(--radius-md);
     min-width: 0;
 }
 
 .hrd-ra-stat-val {
-    font-size: 1.125rem;
+    font-size: 1.25rem;
     font-weight: 800;
     color: var(--text-primary);
     line-height: 1.1;
 }
 
 .hrd-ra-stat-key {
-    font-size: 0.5rem;
+    font-size: 0.5625rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.4px;
     color: var(--text-muted);
-    margin-top: 2px;
+    margin-top: 3px;
 }
 
 .hrd-ra-progress-meta {
     display: flex;
     justify-content: space-between;
-    font-size: 0.5625rem;
+    font-size: 0.6875rem;
     font-weight: 600;
     color: var(--text-muted);
-    margin-bottom: 4px;
+    margin-bottom: 5px;
 }
 
 .hrd-ra-progress-track {
-    height: 5px;
+    height: 6px;
     background: var(--border-default);
     border-radius: 100px;
     overflow: hidden;
@@ -1938,6 +2018,7 @@
     justify-content: center;
     z-index: 1000;
     padding: 20px;
+    padding-left: calc(var(--sidebar-width, 260px) + 20px);
 }
 
 .hrd-assign-modal {
@@ -2171,5 +2252,11 @@
     .hrd-detail-profile {
         flex-direction: column;
         text-align: center;
+    }
+}
+
+@media (max-width: 1024px) {
+    .hrd-modal-overlay {
+        padding-left: 20px;
     }
 }

@@ -32,7 +32,11 @@ const monthlyPlanSchema = new mongoose.Schema({
     default: "PENDING",
   },
 
+  // MD remarks — kept for backward compat (MD still uses this on yearly plans)
   mdRemarks: String,
+
+  // RA rejection remarks — mandatory when RA rejects the monthly plan
+  raRemarks: String,
 
   version: {
     type: Number,

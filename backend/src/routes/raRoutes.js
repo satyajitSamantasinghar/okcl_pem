@@ -87,6 +87,14 @@ router.put(
   raController.updateQuarterlyRemarks
 );
 
+/* RA: Reject a monthly plan */
+router.put(
+  "/monthly-plan/:id/reject",
+  verifyToken,
+  authorizeRoles("RA"),
+  raController.rejectMonthlyPlan
+);
+
 /* Yearly Appraisal Report Evaluation */
 router.put(
   "/yearly-report/:id",
@@ -118,5 +126,13 @@ router.get("/quarterly-evaluations/:id/full-detail",
   verifyToken,
   authorizeRoles("RA", "HRD", "MD"),
   raController.getQuarterlyFullDetail);
+
+/* ── Extend Deadline ── */
+router.patch(
+  "/extend-deadline",
+  verifyToken,
+  authorizeRoles("RA"),
+  raController.extendDeadline
+);
 
 module.exports = router;

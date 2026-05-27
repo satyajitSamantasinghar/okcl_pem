@@ -5,6 +5,7 @@ const MonthlyPlan = require("../models/MonthlyPlan");
 const YearlyPlan = require("../models/YearlyPlan");
 const YearlyAppraisalReport = require("../models/YearlyAppraisalReport");
 const AuditLog = require("../models/AuditLog");
+const Notification = require("../models/Notification");
 // FISCAL YEAR FIX — shared fiscal utility
 const { getQuarterMonthStrings, getCurrentFiscalYear } = require("../utils/fiscalUtils");
 
@@ -356,7 +357,7 @@ exports.getMonthlyEvaluations = async (req, res) => {
 
     const evaluations = await MonthlyEvaluation.find(filter, projection)
       .populate("employeeId", "name employeeCode department")
-      .populate("monthlyPlanId", "month planDetails planItems")
+      .populate("monthlyPlanId", "month planDetails planItems status raRemarks submittedAt")
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);
@@ -490,6 +491,17 @@ exports.generateQuarterlyEvaluation = async (req, res) => {
           ipAddress: req.ip
         });
 
+        await Notification.create({
+          userId: empId,
+          type: "QUARTERLY_EVALUATED",
+          title: "Quarterly Evaluation Generated",
+          message: remarks 
+            ? `Your quarterly evaluation for ${quarter} has been generated and your RA has given remarks.`
+            : `Your quarterly evaluation for ${quarter} has been generated.`,
+          entityType: "QUARTERLY_EVALUATION",
+          entityId: quarterly._id
+        });
+
         generated++;
         results.push({ employeeId: empId, averageScore });
       }
@@ -565,6 +577,16 @@ exports.updateQuarterlyRemarks = async (req, res) => {
 
     quarterly.remarks = remarks;
     await quarterly.save();
+
+    await Notification.create({
+      userId: quarterly.employeeId,
+      type: "QUARTERLY_EVALUATED",
+      title: "Quarterly Evaluation Remarks",
+      message: `Your RA has provided remarks on your quarterly evaluation for ${quarterly.quarter}.`,
+      entityType: "QUARTERLY_EVALUATION",
+      entityId: quarterly._id
+    });
+
     res.json({ message: "Remarks updated successfully" });
   } catch (error) {
     res.status(500).json({ message: "Failed to update remarks", error: error.message });
@@ -829,5 +851,169 @@ exports.getQuarterlyFullDetail = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ message: "Failed to fetch full quarterly detail", error: error.message });
+  }
+};
+
+/* =====================================================
+   RA: REJECT MONTHLY PLAN
+   Business rules:
+     1. Plan must belong to one of RA's direct employees
+     2. Plan must be PENDING (not DRAFT, APPROVED, or already REJECTED)
+     3. RA must not have already submitted an EVALUATED MonthlyEvaluation
+     4. raRemarks are MANDATORY (min 10 chars enforced)
+===================================================== */
+exports.rejectMonthlyPlan = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { raRemarks } = req.body;
+    const raId = req.user.userId;
+
+    // ── 1. Remarks are mandatory ──────────────────────────────────────────
+    if (!raRemarks || raRemarks.trim().length < 10) {
+      return res.status(400).json({
+        message: "Rejection reason (raRemarks) is required and must be at least 10 characters."
+      });
+    }
+
+    // ── 2. Find the plan ──────────────────────────────────────────────────
+    const plan = await MonthlyPlan.findById(id);
+    if (!plan) {
+      return res.status(404).json({ message: "Monthly plan not found." });
+    }
+
+    // ── 3. Verify the plan belongs to one of RA's employees ──────────────
+    const User = require("../models/User");
+    const myEmployees = await User.find({ reportingAuthorityId: raId }).select("_id");
+    const myEmpIds = myEmployees.map(e => e._id.toString());
+
+    if (!myEmpIds.includes(plan.employeeId.toString())) {
+      return res.status(403).json({
+        message: "You are not authorized to reject this plan. It does not belong to one of your employees."
+      });
+    }
+
+    // ── 4. Plan must be PENDING ───────────────────────────────────────────
+    if (plan.status === "DRAFT") {
+      return res.status(400).json({ message: "Cannot reject a plan that is still in DRAFT status." });
+    }
+    if (plan.status === "REJECTED") {
+      return res.status(400).json({ message: "This plan is already rejected." });
+    }
+    if (plan.status === "APPROVED") {
+      return res.status(400).json({ message: "Cannot reject an already approved plan." });
+    }
+
+    // ── 5. RA must not have already evaluated this plan ───────────────────
+    const existingEvaluation = await MonthlyEvaluation.findOne({
+      employeeId: plan.employeeId,
+      month: plan.month,
+      raId,
+      status: "EVALUATED"
+    });
+    if (existingEvaluation) {
+      return res.status(400).json({
+        message: "Cannot reject: you have already submitted an evaluation for this employee's plan this month."
+      });
+    }
+
+    // ── 6. Apply rejection ────────────────────────────────────────────────
+    plan.status = "REJECTED";
+    plan.raRemarks = raRemarks.trim();
+    await plan.save();
+
+    // ── 7. Audit log ──────────────────────────────────────────────────────
+    await AuditLog.create({
+      userId: raId,
+      action: "RA_REJECT",
+      entityType: "MONTHLY_PLAN",
+      entityId: plan._id,
+      ipAddress: req.ip
+    });
+
+    // ── 8. Notify the employee ────────────────────────────────────────────
+    await Notification.create({
+      userId: plan.employeeId,
+      type: "MONTHLY_PLAN_REJECTED",
+      title: "Monthly Plan Rejected by RA",
+      message: `Your monthly plan for ${plan.month} has been rejected by your Reporting Authority. Reason: "${raRemarks.trim()}". Please revise and resubmit.`,
+      entityType: "MONTHLY_PLAN",
+      entityId: plan._id
+    });
+
+    res.json({ message: "Monthly plan rejected successfully." });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to reject monthly plan", error: error.message });
+  }
+};
+
+/* =====================================================
+   RA: EXTEND DEADLINE
+   PATCH /api/ra/extend-deadline
+   Body: { employeeId, month, year, type, newDeadline, reason, notifyEmployee }
+===================================================== */
+exports.extendDeadline = async (req, res) => {
+  try {
+    const raId = req.user.userId;
+    const { employeeId, month, year, type, newDeadline, reason, notifyEmployee } = req.body;
+
+    // Validate required fields
+    if (!employeeId || !month || !year || !type || !newDeadline || !reason) {
+      return res.status(400).json({ message: "Missing required fields: employeeId, month, year, type, newDeadline, reason" });
+    }
+
+    if (!["plan", "achievement"].includes(type)) {
+      return res.status(400).json({ message: "type must be 'plan' or 'achievement'" });
+    }
+
+    if (reason.trim().length < 10) {
+      return res.status(400).json({ message: "Reason must be at least 10 characters" });
+    }
+
+    // Verify employee belongs to this RA
+    const User = require("../models/User");
+    const employee = await User.findOne({ _id: employeeId, reportingAuthorityId: raId });
+    if (!employee) {
+      return res.status(403).json({ message: "Employee not found under your authority" });
+    }
+
+    const monthStr = `${year}-${String(month).padStart(2, "0")}`;
+    const extendedDeadlineDate = new Date(newDeadline);
+
+    // Validate that newDeadline is not in the past
+    if (extendedDeadlineDate < new Date()) {
+      return res.status(400).json({ message: "New deadline cannot be in the past" });
+    }
+
+    // Audit log the extension
+    await AuditLog.create({
+      userId: raId,
+      action: "EXTEND_DEADLINE",
+      entityType: "MONTHLY_PLAN",
+      entityId: employeeId,
+      ipAddress: req.ip,
+    });
+
+    // Optionally notify the employee
+    if (notifyEmployee) {
+      const typeLabel = type === "plan" ? "Monthly Plan" : "Achievement";
+      await Notification.create({
+        userId: employeeId,
+        type: "DEADLINE_EXTENDED",
+        title: `${typeLabel} Deadline Extended`,
+        message: `Your Reporting Authority has extended your ${typeLabel} submission deadline for ${monthStr} to ${extendedDeadlineDate.toLocaleDateString("en-US", { day: "numeric", month: "long", year: "numeric" })}. Reason: "${reason.trim()}"`,
+        entityType: "MONTHLY_PLAN",
+        entityId: employeeId,
+      });
+    }
+
+    res.json({
+      message: `Deadline extended successfully for ${employee.name}.`,
+      employee: { _id: employee._id, name: employee.name },
+      newDeadline: extendedDeadlineDate.toISOString(),
+      type,
+      month: monthStr,
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to extend deadline", error: error.message });
   }
 };

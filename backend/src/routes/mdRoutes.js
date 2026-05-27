@@ -38,13 +38,8 @@ router.get(
   mdController.getEmployeeDetail
 );
 
-/* Reject monthly plan */
-router.put(
-  "/monthly-plan/:id/reject",
-  verifyToken,
-  authorizeRoles("MD"),
-  mdController.rejectMonthlyPlan
-);
+/* NOTE: Monthly plan rejection was moved to RA (PUT /ra/monthly-plan/:id/reject).
+   MD no longer rejects monthly plans — MD's role is read-only for monthly plans. */
 
 /* Yearly Plan Approval */
 router.put(
