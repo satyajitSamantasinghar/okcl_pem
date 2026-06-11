@@ -1,21 +1,45 @@
-const mongoose = require("mongoose");
+const { DataTypes } = require("sequelize");
 
-const auditLogSchema = new mongoose.Schema({
-  userId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "User"
-  },
+// NOTE: entityId in Mongoose was a generic ObjectId (polymorphic ref).
+// In PostgreSQL there is no polymorphic FK, so we store it as a plain
+// STRING alongside entityType — same data, fully queryable.
 
-  action: String,
-  entityType: String,
-  entityId: mongoose.Schema.Types.ObjectId,
+module.exports = (sequelize) => {
+  const AuditLog = sequelize.define(
+    "AuditLog",
+    {
+      id: {
+        type:         DataTypes.UUID,
+        defaultValue: DataTypes.UUIDV4,
+        primaryKey:   true,
+      },
+      userId: {
+        type:      DataTypes.UUID,
+        allowNull: true,   // some system actions have no user
+      },
+      action: {
+        type: DataTypes.STRING,
+      },
+      entityType: {
+        type: DataTypes.STRING,
+      },
+      entityId: {
+        type: DataTypes.STRING, // store the UUID/ID of any referenced entity as a string
+      },
+      ipAddress: {
+        type: DataTypes.STRING,
+      },
+      timestamp: {
+        type:         DataTypes.DATE,
+        defaultValue: DataTypes.NOW,
+      },
+    },
+    {
+      tableName:   "audit_logs",
+      underscored: true,
+      timestamps:  false, // using our own `timestamp` column above
+    }
+  );
 
-  ipAddress: String,
-
-  timestamp: {
-    type: Date,
-    default: Date.now
-  }
-});
-
-module.exports = mongoose.model("AuditLog", auditLogSchema);
+  return AuditLog;
+};

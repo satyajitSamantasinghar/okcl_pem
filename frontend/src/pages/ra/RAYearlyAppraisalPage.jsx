@@ -5,14 +5,14 @@ import {
     FiChevronDown, FiChevronUp, FiClock, FiEdit3, FiEye,
     FiFileText, FiPenTool, FiPlus, FiStar, FiTarget, FiUsers,
     FiXCircle, FiAlertTriangle, FiTrendingUp, FiZap, FiBarChart2,
-    FiRefreshCw, FiLink, FiColumns, FiInfo,
+    FiRefreshCw, FiLink, FiColumns, FiInfo, FiLayers,
 } from 'react-icons/fi';
 import api from '../../services/api';
 import './RAYearlyAppraisalPage.css';
 
-/* ÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚Â
+/* ─────────────────────────────────────────────────────────
    CONSTANTS & HELPERS
-ÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚Â */
+───────────────────────────────────────────────────────── */
 const getCurrentFinancialYear = () => {
     const now = new Date();
     const year = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
@@ -47,16 +47,13 @@ const getStatusInfo = (status) => {
     return map[status] || { label: status || 'Unknown', cls: 'pending', icon: <FiClock /> };
 };
 
-/* Workflow stepper config ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Appraisal Report flow */
+/* Workflow stepper step index */
 const getWorkflowStep = (status) => {
-    // step = index of the CURRENT / NEXT pending step
-    // so step > i  ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ dot i is green (done)
-    //    step === i ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ dot i is orange (active)
-    if (!status || status === 'SUBMITTED') return 1;  // step 1 (RA) is next
-    if (status === 'RA_EVALUATED') return 2;  // RA done  step 2 (HRD) is next
-    if (status === 'HRD_EVALUATED') return 3;  // HRD done  step 3 (MD) is next
-    if (status === 'MD_EVALUATED') return 4;  // MD done step 4 (Completed) is next
-    if (status === 'COMPLETED') return 5;  // all done every dot is green
+    if (!status || status === 'SUBMITTED') return 1;
+    if (status === 'RA_EVALUATED') return 2;
+    if (status === 'HRD_EVALUATED') return 3;
+    if (status === 'MD_EVALUATED') return 4;
+    if (status === 'COMPLETED') return 5;
     return 1;
 };
 
@@ -70,7 +67,7 @@ const emptyEvaluationForm = {
 };
 
 const buildEvaluationForm = (report) => ({
-    raWorkKRAScore: report?.raWorkKRAScore ?? '',
+    raWorkKRAScore: report?.raWorkKraScore ?? '',
     raAdditionalScore: report?.raAdditionalScore ?? '',
     raPersonalAttributes: report?.raPersonalAttributes ?? '',
     raTeamAttributes: report?.raTeamAttributes ?? '',
@@ -81,11 +78,11 @@ const buildEvaluationForm = (report) => ({
 const getNum = (v) => Number(v || 0);
 
 const EVALUATION_FIELDS = [
-    { key: 'raWorkKRAScore', label: 'Work KRA Score', hint: 'Based on KRA delivery', max: 60 },
-    { key: 'raAdditionalScore', label: 'Additional Assignment Score', hint: 'Extra responsibilities', max: 5 },
-    { key: 'raPersonalAttributes', label: 'Personal Attributes', hint: 'Attitude, punctuality', max: 5 },
-    { key: 'raTeamAttributes', label: 'Team Attributes', hint: 'Collaboration, support', max: 5 },
-    { key: 'raLeadershipAttributes', label: 'Leadership Attributes', hint: 'Initiative, mentoring', max: 5 },
+    { key: 'raWorkKRAScore',         label: 'Work KRA Score',              desc: 'Based on KRA execution quality',            max: 60 },
+    { key: 'raAdditionalScore',      label: 'Additional Assignment Score', desc: 'Extra responsibilities beyond KRAs',        max: 5  },
+    { key: 'raPersonalAttributes',   label: 'Personal Attributes',         desc: 'Discipline, punctuality, attitude',         max: 5  },
+    { key: 'raTeamAttributes',       label: 'Team Attributes',             desc: 'Collaboration and teamwork',                max: 5  },
+    { key: 'raLeadershipAttributes', label: 'Leadership Attributes',       desc: 'Initiative and peer mentorship',            max: 5  },
 ];
 
 const clampScoreValue = (value, max) => {
@@ -98,139 +95,15 @@ const clampScoreValue = (value, max) => {
 /* ─── PLAN BASELINE HELPERS ─────────────────────── */
 const getPlanStatusInfo = (status) => {
     if (!status) return null;
-    if (status === 'APPROVED') return {
-        variant: 'approved',
-        label: 'Approved Plan',
-        icon: '✅',
-        badge: 'Approved',
-    };
-    if (status === 'PENDING' || status === 'SUBMITTED') return {
-        variant: 'pending',
-        label: 'Pending MD Review',
-        icon: '⏳',
-        badge: 'Pending MD Review',
-    };
-    if (status === 'EDITED') return {
-        variant: 'edited',
-        label: 'Edited Before Approval',
-        icon: '✏️',
-        badge: 'Edited Before Approval',
-    };
+    if (status === 'APPROVED') return { variant: 'approved', label: 'Approved Plan', icon: '✅', badge: 'Approved' };
+    if (status === 'PENDING' || status === 'SUBMITTED') return { variant: 'pending', label: 'Pending MD Review', icon: '⏳', badge: 'Pending MD Review' };
+    if (status === 'EDITED') return { variant: 'edited', label: 'Edited Before Approval', icon: '✏️', badge: 'Edited Before Approval' };
     return { variant: 'pending', label: status, icon: '⏳', badge: status };
 };
 
-/* Phase 3 — baseline banner shown below hero */
-const PlanBaselineBanner = ({ plan }) => {
-    if (!plan) {
-        return (
-            <div className="yap-baseline-banner yap-baseline-banner--neutral">
-                <FiInfo size={14} />
-                <span>ℹ️ No yearly plan linked. Evaluating based on self-reported KRA only.</span>
-            </div>
-        );
-    }
-    const s = plan.status;
-    if (s === 'APPROVED') {
-        return (
-            <div className="yap-baseline-banner yap-baseline-banner--approved">
-                <FiCheckCircle size={14} />
-                <span>✅ Evaluated against approved yearly plan (FY {plan.financialYear}, v{plan.version || 1})</span>
-            </div>
-        );
-    }
-    return (
-        <div className="yap-baseline-banner yap-baseline-banner--warning">
-            <FiAlertTriangle size={14} />
-            <span>⚠️ Yearly plan is still pending MD approval. You are evaluating against an unconfirmed baseline.</span>
-        </div>
-    );
-};
-
-/* Phase 1 — Yearly Plan Tab content for the right panel */
-const YearlyPlanTab = ({ plan, showHistory, setShowHistory }) => {
-    if (!plan) {
-        return (
-            <div className="yap-plan-tab-empty">
-                <div className="yap-plan-tab-empty-icon"><FiFileText /></div>
-                <p>No yearly plan was linked when this appraisal was submitted.</p>
-                <span>Evaluate based on the KRA text provided by the employee.</span>
-            </div>
-        );
-    }
-    const ps = getPlanStatusInfo(plan.status);
-    return (
-        <div className="yap-plan-tab">
-            {/* Status badge + meta */}
-            <div className="yap-plan-tab-meta">
-                <span className={`yap-plan-status-badge yap-plan-status-badge--${ps.variant}`}>
-                    {ps.icon} {ps.badge}
-                </span>
-                <span className="yap-plan-tab-fy">FY {plan.financialYear} · v{plan.version || 1}</span>
-            </div>
-
-            {/* Baseline warning inside tab */}
-            {plan.status !== 'APPROVED' && (
-                <div className="yap-plan-tab-warning">
-                    <FiAlertTriangle size={13} />
-                    Yearly plan is still pending MD approval. You are evaluating against an unconfirmed baseline.
-                </div>
-            )}
-            {plan.status === 'APPROVED' && (
-                <div className="yap-plan-tab-approved">
-                    <FiCheckCircle size={13} />
-                    Approved plan — reliable baseline
-                </div>
-            )}
-
-            {/* Plan content */}
-            <div className="yap-block" style={{ marginTop: 12 }}>
-                <div className="yap-block-header">
-                    <div className="yap-block-icon yap-block-icon--blue"><FiTarget /></div>
-                    <div><h3>Plan & Objectives</h3><p>Submitted yearly goals</p></div>
-                </div>
-                <div style={{ padding: '14px 18px', fontSize: '0.875rem', lineHeight: 1.8 }}>
-                    {plan.planAndObjectives
-                        ? <pre className="yap-pre">{plan.planAndObjectives}</pre>
-                        : <span className="yap-muted">No objectives submitted.</span>}
-                </div>
-            </div>
-
-            {/* Edit History */}
-            {plan.editHistory?.length > 0 && (
-                <div className="yap-block" style={{ marginTop: 10 }}>
-                    <div
-                        className="yap-block-header yap-block-header--clickable"
-                        onClick={() => setShowHistory(!showHistory)}
-                    >
-                        <div className="yap-block-icon yap-block-icon--amber"><FiPenTool /></div>
-                        <div>
-                            <h3>Edit History</h3>
-                            <p>{plan.editHistory.length} revision{plan.editHistory.length !== 1 ? 's' : ''}</p>
-                        </div>
-                        <div className="yap-toggle-icon">{showHistory ? <FiChevronUp /> : <FiChevronDown />}</div>
-                    </div>
-                    {showHistory && (
-                        <ul className="yap-history-list">
-                            {plan.editHistory.map((edit, i) => (
-                                <li key={i} className="yap-history-item">
-                                    <div className="yap-history-num">{i + 1}</div>
-                                    <div>
-                                        <div className="yap-history-note">{edit.note || 'Plan updated'}</div>
-                                        <div className="yap-history-date">{new Date(edit.editedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
-                                    </div>
-                                </li>
-                            ))}
-                        </ul>
-                    )}
-                </div>
-            )}
-        </div>
-    );
-};
-
-/*
+/* ─────────────────────────────────────────────────────────
    MICRO COMPONENTS
-*/
+───────────────────────────────────────────────────────── */
 
 /* Status Badge */
 const StatusBadge = ({ status }) => {
@@ -271,34 +144,88 @@ const ScoreCard = ({ label, value, max, color = 'primary', highlight = false }) 
     );
 };
 
-/* Workflow Stepper Appraisal Report: Submitted  RA , MD Completed */
+/* ─────────────────────────────────────────────────────────
+   SECTION 1 — REDESIGNED SUMMARY PANEL
+   Three chips: Total Plans | Pending (orange-tinted) | Evaluated (green-tinted)
+───────────────────────────────────────────────────────── */
+const SummaryPanel = ({ plans, reports }) => {
+    const pendingReports = reports.filter(
+        (r) => !['RA_EVALUATED', 'HRD_EVALUATED', 'MD_EVALUATED', 'COMPLETED'].includes(r.status)
+    ).length;
+    const doneReports = reports.filter(
+        (r) => ['RA_EVALUATED', 'HRD_EVALUATED', 'MD_EVALUATED', 'COMPLETED'].includes(r.status)
+    ).length;
+
+    return (
+        <div className="yap-summary-panel">
+            {/* Total Plans chip */}
+            <div className="yap-summary-chip yap-summary-chip--neutral">
+                <div className="yap-summary-chip-icon yap-summary-chip-icon--blue">
+                    <FiUsers size={14} />
+                </div>
+                <div className="yap-summary-chip-body">
+                    <div className="yap-summary-chip-count">{plans.length}</div>
+                    <div className="yap-summary-chip-label">Total Plans</div>
+                </div>
+            </div>
+
+            {/* Pending chip — orange-tinted */}
+            <div className="yap-summary-chip yap-summary-chip--pending">
+                <div className="yap-summary-chip-icon yap-summary-chip-icon--amber">
+                    <FiClock size={14} />
+                </div>
+                <div className="yap-summary-chip-body">
+                    <div className="yap-summary-chip-count">{pendingReports}</div>
+                    <div className="yap-summary-chip-label">Pending</div>
+                </div>
+            </div>
+
+            {/* Evaluated chip — green-tinted */}
+            <div className="yap-summary-chip yap-summary-chip--evaluated">
+                <div className="yap-summary-chip-icon yap-summary-chip-icon--green">
+                    <FiCheckCircle size={14} />
+                </div>
+                <div className="yap-summary-chip-body">
+                    <div className="yap-summary-chip-count">{doneReports}</div>
+                    <div className="yap-summary-chip-label">Evaluated</div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+/* ─────────────────────────────────────────────────────────
+   SECTION 3 — WORKFLOW STEPPER
+   Filled green (done) | Orange fill + ring (active) | Grey (upcoming)
+   Connector lines: green for passed, grey for upcoming
+───────────────────────────────────────────────────────── */
 const WorkflowStepper = ({ status }) => {
     const step = getWorkflowStep(status);
     const steps = [
-        { icon: <FiFileText />, label: 'Report Submitted' },
-        { icon: <FiStar />, label: 'RA Evaluation' },
-        { icon: <FiUsers />, label: 'HRD Evaluation' },
-        { icon: <FiAward />, label: 'MD Final' },
+        { icon: <FiFileText />, label: 'Report\nSubmitted' },
+        { icon: <FiStar />,     label: 'RA\nEvaluation' },
+        { icon: <FiUsers />,    label: 'HRD\nEvaluation' },
+        { icon: <FiAward />,    label: 'MD\nFinal' },
         { icon: <FiCheckCircle />, label: 'Completed' },
     ];
 
     return (
         <div className="yap-stepper">
             {steps.map((s, i) => {
-                const done = step > i;
+                const done   = step > i;
                 const active = step === i;
                 return (
                     <div key={i} className="yap-stepper-item">
                         {i > 0 && (
                             <div className={`yap-stepper-line${done ? ' yap-stepper-line--done' : ''}`} />
                         )}
-                        <div className={`yap-stepper-dot
-                            ${done ? 'yap-stepper-dot--done' : ''}
-                            ${active ? 'yap-stepper-dot--active' : ''}`}
-                        >
+                        <div className={`yap-stepper-dot${done ? ' yap-stepper-dot--done' : ''}${active ? ' yap-stepper-dot--active' : ''}`}>
                             {done ? <FiCheckCircle /> : s.icon}
                         </div>
-                        <span className={`yap-stepper-label${active ? ' yap-stepper-label--active' : ''}`}>
+                        <span
+                            className={`yap-stepper-label${active ? ' yap-stepper-label--active' : ''}`}
+                            style={{ whiteSpace: 'pre-line', textAlign: 'center' }}
+                        >
                             {s.label}
                         </span>
                     </div>
@@ -327,38 +254,219 @@ const RejectionAlert = ({ remark }) => (
     </div>
 );
 
-/* Summary Stats panel */
-const SummaryPanel = ({ plans, reports }) => {
-    const pendingReports = reports.filter(
-        (r) => !['RA_EVALUATED', 'HRD_EVALUATED', 'MD_EVALUATED', 'COMPLETED'].includes(r.status)
-    ).length;
-    const doneReports = reports.filter(
-        (r) => ['RA_EVALUATED', 'HRD_EVALUATED', 'MD_EVALUATED', 'COMPLETED'].includes(r.status)
-    ).length;
+/* Phase 3 — baseline banner shown below hero */
+const PlanBaselineBanner = ({ plan }) => {
+    if (!plan) {
+        return (
+            <div className="yap-baseline-banner yap-baseline-banner--neutral">
+                <FiInfo size={14} />
+                <span>ℹ️ No yearly plan linked. Evaluating based on self-reported KRA only.</span>
+            </div>
+        );
+    }
+    const s = plan.status;
+    if (s === 'APPROVED') {
+        return (
+            <div className="yap-baseline-banner yap-baseline-banner--approved">
+                <FiCheckCircle size={14} />
+                <span>✅ Evaluated against approved yearly plan (FY {plan.financialYear}, v{plan.version || 1})</span>
+            </div>
+        );
+    }
+    return (
+        <div className="yap-baseline-banner yap-baseline-banner--warning">
+            <FiAlertTriangle size={14} />
+            <span>⚠️ Yearly plan is still pending MD approval. You are evaluating against an unconfirmed baseline.</span>
+        </div>
+    );
+};
+
+/* ─────────────────────────────────────────────────────────
+   SECTION 6 & 17 — KRA REFERENCE TABLE
+   Renders plan.kras array as a structured 4-column table.
+   Used in: YearlyPlanTab (right column), Plan detail left pane,
+            Compare mode left pane.
+───────────────────────────────────────────────────────── */
+const KRATable = ({ kras }) => {
+    if (!kras || kras.length === 0) {
+        return (
+            <div className="yap-legacy-banner">
+                <FiInfo size={15} />
+                <span>No KRA data found for this plan. This may be a legacy plan submitted before the KRA update.</span>
+            </div>
+        );
+    }
 
     return (
-        <div className="yap-summary-panel">
-            <div className="yap-summary-stat">
-                <div className="yap-summary-icon yap-summary-icon--blue"><FiUsers /></div>
-                <div>
-                    <div className="yap-summary-val">{plans.length}</div>
-                    <div className="yap-summary-label">Plans</div>
+        <div className="yap-kra-table-wrapper">
+            <table className="yap-kra-table">
+                <thead>
+                    <tr>
+                        <th className="yap-kra-col--num">#</th>
+                        <th className="yap-kra-col--desc">KRA Description</th>
+                        <th className="yap-kra-col--target">Target / Measurable Outcome</th>
+                        <th className="yap-kra-col--timeline">Timeline / Milestone</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {[...kras]
+                        .sort((a, b) => (a.kraIndex ?? 0) - (b.kraIndex ?? 0))
+                        .map((kra, idx) => (
+                            <tr key={kra.id || idx} className={idx % 2 === 0 ? 'yap-kra-row--even' : 'yap-kra-row--odd'}>
+                                <td className="yap-kra-col--num">
+                                    <div className="yap-kra-num-badge">{(kra.kraIndex ?? idx) + 1}</div>
+                                </td>
+                                <td className="yap-kra-col--desc">{kra.description}</td>
+                                <td className="yap-kra-col--target">{kra.target}</td>
+                                <td className="yap-kra-col--timeline">
+                                    <span className="yap-kra-timeline-badge">{kra.timeline}</span>
+                                </td>
+                            </tr>
+                        ))}
+                </tbody>
+            </table>
+        </div>
+    );
+};
+
+/* ─────────────────────────────────────────────────────────
+   SECTION 4 — KRA ACHIEVEMENT CARD LIST
+   Renders appraisal.kraAssessments array as per-KRA cards.
+   Used in: Left column of appraisal detail, Compare mode middle pane.
+───────────────────────────────────────────────────────── */
+const KRAAssessmentCardList = ({ kraAssessments }) => {
+    if (!kraAssessments || kraAssessments.length === 0) {
+        return (
+            <div className="yap-legacy-banner">
+                <FiInfo size={15} />
+                <span>
+                    No KRA-based self-assessment found. This may be a legacy record submitted before the KRA update.
+                </span>
+            </div>
+        );
+    }
+
+    return (
+        <div className="yap-kra-cards-list">
+            {[...kraAssessments]
+                .sort((a, b) => (a.kraIndex ?? 0) - (b.kraIndex ?? 0))
+                .map((kra, idx) => (
+                    <div key={kra.id || idx} className="yap-kra-card">
+                        {/* Card Header */}
+                        <div className="yap-kra-card-header">
+                            <div className="yap-kra-num-badge">
+                                {(kra.kraIndex ?? idx) + 1}
+                            </div>
+                            <div className="yap-kra-card-header-content">
+                                <div className="yap-kra-card-desc">{kra.description}</div>
+                                <div className="yap-kra-pills">
+                                    <span className="yap-kra-pill">
+                                        <strong>Target:</strong> {kra.target}
+                                    </span>
+                                    <span className="yap-kra-pill yap-kra-pill--timeline">
+                                        {kra.timeline}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        {/* Card Body */}
+                        <div className="yap-kra-card-body">
+                            <div className="yap-kra-achievement-label">Employee Achievement</div>
+                            <p className="yap-kra-achievement-text">
+                                {kra.achievement && kra.achievement.trim()
+                                    ? kra.achievement
+                                    : <em style={{ color: 'var(--text-muted)' }}>No achievement text submitted for this KRA.</em>
+                                }
+                            </p>
+                        </div>
+                    </div>
+                ))}
+        </div>
+    );
+};
+
+/* ─────────────────────────────────────────────────────────
+   SECTION 6 — YEARLY PLAN TAB (Right column panel)
+   Fixed to render plan.kras instead of plan.planAndObjectives
+───────────────────────────────────────────────────────── */
+const YearlyPlanTab = ({ plan, showHistory, setShowHistory }) => {
+    if (!plan) {
+        return (
+            <div className="yap-plan-tab-empty">
+                <div className="yap-plan-tab-empty-icon"><FiFileText /></div>
+                <p>No yearly plan was linked when this appraisal was submitted.</p>
+                <span>Evaluate based on the KRA text provided by the employee.</span>
+            </div>
+        );
+    }
+    const ps = getPlanStatusInfo(plan.status);
+    return (
+        <div className="yap-plan-tab">
+            {/* Status badge + meta */}
+            <div className="yap-plan-tab-meta">
+                <span className={`yap-plan-status-badge yap-plan-status-badge--${ps.variant}`}>
+                    {ps.icon} {ps.badge}
+                </span>
+                <span className="yap-plan-tab-fy">FY {plan.financialYear} · v{plan.version || 1}</span>
+            </div>
+
+            {/* Baseline warning inside tab */}
+            {plan.status !== 'APPROVED' && (
+                <div className="yap-plan-tab-warning">
+                    <FiAlertTriangle size={13} />
+                    Yearly plan is still pending MD approval. You are evaluating against an unconfirmed baseline.
+                </div>
+            )}
+            {plan.status === 'APPROVED' && (
+                <div className="yap-plan-tab-approved">
+                    <FiCheckCircle size={13} />
+                    Approved plan — reliable baseline
+                </div>
+            )}
+
+            {/* SECTION 16 FIX: KRA Reference Table instead of planAndObjectives */}
+            <div className="yap-block" style={{ marginTop: 12 }}>
+                <div className="yap-block-header">
+                    <div className="yap-block-icon yap-block-icon--blue"><FiLayers /></div>
+                    <div>
+                        <h3>KRA Reference Table</h3>
+                        <p>Approved yearly KRAs and targets</p>
+                    </div>
+                </div>
+                <div style={{ padding: '14px 18px' }}>
+                    <KRATable kras={plan.kras} />
                 </div>
             </div>
-            <div className="yap-summary-stat">
-                <div className="yap-summary-icon yap-summary-icon--amber"><FiClock /></div>
-                <div>
-                    <div className="yap-summary-val">{pendingReports}</div>
-                    <div className="yap-summary-label">Pending</div>
+
+            {/* Edit History */}
+            {plan.editHistory?.length > 0 && (
+                <div className="yap-block" style={{ marginTop: 10 }}>
+                    <div
+                        className="yap-block-header yap-block-header--clickable"
+                        onClick={() => setShowHistory(!showHistory)}
+                    >
+                        <div className="yap-block-icon yap-block-icon--amber"><FiPenTool /></div>
+                        <div>
+                            <h3>Edit History</h3>
+                            <p>{plan.editHistory.length} revision{plan.editHistory.length !== 1 ? 's' : ''}</p>
+                        </div>
+                        <div className="yap-toggle-icon">{showHistory ? <FiChevronUp /> : <FiChevronDown />}</div>
+                    </div>
+                    {showHistory && (
+                        <ul className="yap-history-list">
+                            {plan.editHistory.map((edit, i) => (
+                                <li key={i} className="yap-history-item">
+                                    <div className="yap-history-num">{i + 1}</div>
+                                    <div>
+                                        <div className="yap-history-note">{edit.note || 'Plan updated'}</div>
+                                        <div className="yap-history-date">{formatDate(edit.editedAt)}</div>
+                                    </div>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
                 </div>
-            </div>
-            <div className="yap-summary-stat">
-                <div className="yap-summary-icon yap-summary-icon--green"><FiCheckCircle /></div>
-                <div>
-                    <div className="yap-summary-val">{doneReports}</div>
-                    <div className="yap-summary-label">Evaluated</div>
-                </div>
-            </div>
+            )}
         </div>
     );
 };
@@ -367,9 +475,9 @@ const SummaryPanel = ({ plans, reports }) => {
    RESIZE HOOK — VS Code-style split pane
    ═══════════════════════════════════════ */
 const SPLIT_KEY = 'ra_yap_split_pct';
-const DEFAULT_PCT = 68;   // left pane default %
-const MIN_PCT = 40;   // left pane minimum %
-const MAX_PCT = 80;   // left pane maximum %
+const DEFAULT_PCT = 68;
+const MIN_PCT = 40;
+const MAX_PCT = 80;
 
 const useSplitPane = () => {
     const [leftPct, setLeftPct] = useState(() => {
@@ -436,7 +544,7 @@ const useCompareSplitPane = () => {
         }
         return { left: 33.33, mid: 33.33 };
     });
-    
+
     const containerRef = useRef(null);
     const draggingRef = useRef(null);
 
@@ -444,7 +552,7 @@ const useCompareSplitPane = () => {
         if (!draggingRef.current || !containerRef.current) return;
         const rect = containerRef.current.getBoundingClientRect();
         const rawPct = ((e.clientX - rect.left) / rect.width) * 100;
-        
+
         setSplits(prev => {
             let next = { ...prev };
             if (draggingRef.current === 'left') {
@@ -495,35 +603,14 @@ const useCompareSplitPane = () => {
     return { splits, containerRef, onDividerMouseDown, onDividerDblClick };
 };
 
-/*
-   MAIN COMPONENT
- */
-const RAYearlyAppraisalPage = () => {
-    const [activeTab, setActiveTab] = useState('plans');
-    const [year, setYear] = useState(getCurrentFinancialYear());
-    const [plans, setPlans] = useState([]);
-    const [reports, setReports] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [selectedView, setSelectedView] = useState(null);
-    const [showHistory, setShowHistory] = useState(false);
-    const [isEvaluating, setIsEvaluating] = useState(false);
-    const [evaluationForm, setEvaluationForm] = useState(emptyEvaluationForm);
-    const [submitting, setSubmitting] = useState(false);
-    // Phase 1 — right panel tab
-    const [rightTab, setRightTab] = useState('scoring'); // 'plan' | 'scoring'
-    // Phase 2 — compare mode
-    const [compareMode, setCompareMode] = useState(false);
-    const [syncScroll, setSyncScroll] = useState(false);
-    const leftCompareRef = useRef(null);
-    const midCompareRef = useRef(null);
-    const { leftPct, containerRef, onDividerMouseDown, onDividerDblClick } = useSplitPane();
-    const { 
-        splits: compareSplits, 
-        containerRef: compareContainerRef, 
-        onDividerMouseDown: onCompareDividerMouseDown, 
-        onDividerDblClick: onCompareDividerDblClick 
-    } = useCompareSplitPane();
-
+/* ─────────────────────────────────────────────────────────
+   SECTION 5 — SCORING FORM (right column)
+   - Live RA total progress bar above fields
+   - Two-column field rows (label+desc LEFT, input+max RIGHT)
+   - Over-80 warning banner
+   - Disabled submit when total > 80
+───────────────────────────────────────────────────────── */
+const EvaluationForm = ({ evaluationForm, handleEvaluationChange, handleEvaluate, submitting, isLocked, setIsEvaluating }) => {
     const evaluationTotal = (
         getNum(evaluationForm.raWorkKRAScore)
         + getNum(evaluationForm.raAdditionalScore)
@@ -531,20 +618,134 @@ const RAYearlyAppraisalPage = () => {
         + getNum(evaluationForm.raTeamAttributes)
         + getNum(evaluationForm.raLeadershipAttributes)
     );
+    const isOver = evaluationTotal > 80;
+    const progressPct = Math.min(100, (evaluationTotal / 80) * 100);
+
+    return (
+        <div className="yap-block">
+            <div className="yap-block-header">
+                <div className="yap-block-icon yap-block-icon--orange"><FiStar /></div>
+                <div><h3>RA Evaluation Form</h3><p>Maximum total: 80 points</p></div>
+            </div>
+            <form className="yap-eval-form" onSubmit={handleEvaluate}>
+                {/* Live RA Total Progress Bar */}
+                <div className="yap-eval-progress-wrap">
+                    <div className="yap-eval-progress-label">
+                        <span>RA total:</span>
+                        <strong className={isOver ? 'yap-eval-progress-over' : ''}>
+                            {evaluationTotal} / 80
+                        </strong>
+                    </div>
+                    <div className="yap-eval-progress-track">
+                        <div
+                            className={`yap-eval-progress-fill${isOver ? ' yap-eval-progress-fill--over' : ''}`}
+                            style={{ width: `${progressPct}%` }}
+                        />
+                    </div>
+                </div>
+
+                {/* Score input rows */}
+                {EVALUATION_FIELDS.map(({ key, label, desc, max }) => (
+                    <div key={key} className="yap-eval-field-row">
+                        <div className="yap-eval-field-left">
+                            <div className="yap-eval-field-label">{label}</div>
+                            <div className="yap-eval-field-desc">{desc}</div>
+                        </div>
+                        <div className="yap-eval-field-right">
+                            <input
+                                type="number"
+                                min="0"
+                                max={max}
+                                step="0.5"
+                                placeholder={`0-${max}`}
+                                value={evaluationForm[key]}
+                                onChange={(e) => handleEvaluationChange(key, e.target.value)}
+                                disabled={isLocked}
+                                className="yap-eval-number-input"
+                            />
+                            <div className="yap-eval-field-max">max {max}</div>
+                        </div>
+                    </div>
+                ))}
+
+                {/* Over-80 warning banner */}
+                {isOver && (
+                    <div className="yap-eval-over-warning">
+                        <FiAlertTriangle size={14} />
+                        Total score exceeds 80. Please adjust the values.
+                    </div>
+                )}
+
+                {/* RA Remarks — unchanged below score fields */}
+                <div className="yap-eval-field" style={{ marginTop: 8 }}>
+                    <label>RA Remarks</label>
+                    <textarea
+                        rows={3}
+                        placeholder="Add concise appraisal remarks..."
+                        value={evaluationForm.raRemarks}
+                        onChange={(e) => handleEvaluationChange('raRemarks', e.target.value)}
+                        disabled={isLocked}
+                    />
+                </div>
+
+                <div className="yap-form-actions">
+                    <button
+                        type="submit"
+                        className="btn btn-primary"
+                        disabled={submitting || isOver}
+                        style={isOver ? { opacity: 0.4, cursor: 'not-allowed' } : {}}
+                    >
+                        {submitting ? 'Submitting...' : 'Submit RA Evaluation'}
+                    </button>
+                    <button type="button" className="btn btn-secondary" onClick={() => setIsEvaluating(false)}>
+                        Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+    );
+};
+
+/* ─────────────────────────────────────────────────────────
+   MAIN COMPONENT
+───────────────────────────────────────────────────────── */
+const RAYearlyAppraisalPage = () => {
+    const [activeTab, setActiveTab]         = useState('plans');
+    const [year, setYear]                   = useState(getCurrentFinancialYear());
+    const [plans, setPlans]                 = useState([]);
+    const [reports, setReports]             = useState([]);
+    const [loading, setLoading]             = useState(true);
+    const [selectedView, setSelectedView]   = useState(null);
+    const [showHistory, setShowHistory]     = useState(false);
+    const [isEvaluating, setIsEvaluating]   = useState(false);
+    const [evaluationForm, setEvaluationForm] = useState(emptyEvaluationForm);
+    const [submitting, setSubmitting]       = useState(false);
+    const [rightTab, setRightTab]           = useState('scoring');
+    const [compareMode, setCompareMode]     = useState(false);
+    const [syncScroll, setSyncScroll]       = useState(false);
+    const leftCompareRef  = useRef(null);
+    const midCompareRef   = useRef(null);
+    const { leftPct, containerRef, onDividerMouseDown, onDividerDblClick } = useSplitPane();
+    const {
+        splits: compareSplits,
+        containerRef: compareContainerRef,
+        onDividerMouseDown: onCompareDividerMouseDown,
+        onDividerDblClick: onCompareDividerDblClick,
+    } = useCompareSplitPane();
 
     const fetchData = async () => {
         setLoading(true);
         try {
             const [plansRes, reportsRes] = await Promise.all([
-                api.get('/ra/yearly-plans', { params: { financialYear: year } }),
+                api.get('/ra/yearly-plans',   { params: { financialYear: year } }),
                 api.get('/ra/yearly-reports', { params: { financialYear: year } }),
             ]);
-            setPlans(plansRes.data || []);
+            setPlans(plansRes.data   || []);
             setReports(reportsRes.data || []);
 
             if (selectedView) {
                 const source = activeTab === 'plans' ? plansRes.data : reportsRes.data;
-                const next = source.find((i) => i._id === selectedView._id);
+                const next = source.find((i) => i.id === selectedView.id);
                 setSelectedView(next || null);
             }
         } catch {
@@ -563,14 +764,14 @@ const RAYearlyAppraisalPage = () => {
         setRightTab('scoring');
     }, [year]);
 
-    // Sync-scroll effect for compare mode
+    /* Sync-scroll effect for compare mode */
     useEffect(() => {
         if (!syncScroll || !compareMode) return;
         const left = leftCompareRef.current;
-        const mid = midCompareRef.current;
+        const mid  = midCompareRef.current;
         if (!left || !mid) return;
         const onLeftScroll = () => { mid.scrollTop = left.scrollTop; };
-        const onMidScroll = () => { left.scrollTop = mid.scrollTop; };
+        const onMidScroll  = () => { left.scrollTop = mid.scrollTop; };
         left.addEventListener('scroll', onLeftScroll);
         mid.addEventListener('scroll', onMidScroll);
         return () => {
@@ -604,9 +805,17 @@ const RAYearlyAppraisalPage = () => {
 
     const handleEvaluationChange = (field, value) => {
         const fieldConfig = EVALUATION_FIELDS.find((item) => item.key === field);
-        const nextValue = fieldConfig ? clampScoreValue(value, fieldConfig.max) : value;
+        const nextValue   = fieldConfig ? clampScoreValue(value, fieldConfig.max) : value;
         setEvaluationForm((c) => ({ ...c, [field]: nextValue }));
     };
+
+    const evaluationTotal = (
+        getNum(evaluationForm.raWorkKRAScore)
+        + getNum(evaluationForm.raAdditionalScore)
+        + getNum(evaluationForm.raPersonalAttributes)
+        + getNum(evaluationForm.raTeamAttributes)
+        + getNum(evaluationForm.raLeadershipAttributes)
+    );
 
     const handleEvaluate = async (e) => {
         e.preventDefault();
@@ -620,13 +829,13 @@ const RAYearlyAppraisalPage = () => {
         if (evaluationTotal > 80) { toast.error('Total score cannot exceed 80'); return; }
         setSubmitting(true);
         try {
-            await api.put(`/ra/yearly-report/${selectedView._id}`, {
-                ...evaluationForm,
-                raWorkKRAScore: getNum(evaluationForm.raWorkKRAScore),
-                raAdditionalScore: getNum(evaluationForm.raAdditionalScore),
-                raPersonalAttributes: getNum(evaluationForm.raPersonalAttributes),
-                raTeamAttributes: getNum(evaluationForm.raTeamAttributes),
+            await api.put(`/ra/yearly-report/${selectedView.id}`, {
+                raWorkKRAScore:         getNum(evaluationForm.raWorkKRAScore),
+                raAdditionalScore:      getNum(evaluationForm.raAdditionalScore),
+                raPersonalAttributes:   getNum(evaluationForm.raPersonalAttributes),
+                raTeamAttributes:       getNum(evaluationForm.raTeamAttributes),
                 raLeadershipAttributes: getNum(evaluationForm.raLeadershipAttributes),
+                raRemarks:              evaluationForm.raRemarks,
             });
             toast.success('Evaluation submitted successfully');
             setIsEvaluating(false);
@@ -638,7 +847,7 @@ const RAYearlyAppraisalPage = () => {
         }
     };
 
-    /*  Loading */
+    /* Loading */
     if (loading && !plans.length && !reports.length) {
         return (
             <div className="loading-container">
@@ -648,14 +857,19 @@ const RAYearlyAppraisalPage = () => {
         );
     }
 
-    // list view
+    /* ═══════════════════════════════════════════════
+       LIST VIEW
+    ═══════════════════════════════════════════════ */
     if (!selectedView) {
         const items = activeTab === 'plans' ? plans : reports;
+        const pendingCount = reports.filter(
+            (r) => !['RA_EVALUATED', 'HRD_EVALUATED', 'MD_EVALUATED', 'COMPLETED'].includes(r.status)
+        ).length;
 
         return (
             <div className="yap-page fade-in">
 
-
+                {/* ── TOP BAR ── */}
                 <div className="yap-topbar">
                     <div className="yap-topbar-left">
                         <div className="yap-topbar-eyebrow"><FiAward size={12} /> Yearly Appraisal</div>
@@ -665,6 +879,7 @@ const RAYearlyAppraisalPage = () => {
                         </p>
                     </div>
                     <div className="yap-topbar-right">
+                        {/* SECTION 1 — Redesigned summary chips */}
                         <SummaryPanel plans={plans} reports={reports} />
                         <div className="yap-year-select">
                             <FiCalendar size={14} />
@@ -678,6 +893,7 @@ const RAYearlyAppraisalPage = () => {
                     </div>
                 </div>
 
+                {/* ── TABS ── */}
                 <div className="yap-tabs">
                     <button
                         className={`yap-tab${activeTab === 'plans' ? ' yap-tab--active' : ''}`}
@@ -693,18 +909,16 @@ const RAYearlyAppraisalPage = () => {
                     >
                         <FiBarChart2 size={15} />
                         Appraisal Evaluation
-                        {reports.filter((r) => !['RA_EVALUATED', 'HRD_EVALUATED', 'MD_EVALUATED', 'COMPLETED'].includes(r.status)).length > 0 && (
-                            <span className="yap-tab-badge yap-tab-badge--alert">
-                                {reports.filter((r) => !['RA_EVALUATED', 'HRD_EVALUATED', 'MD_EVALUATED', 'COMPLETED'].includes(r.status)).length} pending
-                            </span>
+                        {pendingCount > 0 && (
+                            <span className="yap-tab-badge yap-tab-badge--alert">{pendingCount} pending</span>
                         )}
-                        {reports.filter((r) => !['RA_EVALUATED', 'HRD_EVALUATED', 'MD_EVALUATED', 'COMPLETED'].includes(r.status)).length === 0 && (
+                        {pendingCount === 0 && (
                             <span className="yap-tab-badge">{reports.length}</span>
                         )}
                     </button>
                 </div>
 
-
+                {/* ── CARDS GRID ── */}
                 {items.length === 0 ? (
                     <div className="yap-empty">
                         <div className="yap-empty-icon">{activeTab === 'plans' ? <FiTarget /> : <FiFileText />}</div>
@@ -714,36 +928,43 @@ const RAYearlyAppraisalPage = () => {
                 ) : (
                     <div className="yap-cards-grid">
                         {items.map((item) => {
-                            const employee = item.employeeId;
-                            const info = getStatusInfo(item.status);
-                            const isPlan = activeTab === 'plans';
-                            const needsEval = !isPlan && !['RA_EVALUATED', 'HRD_EVALUATED', 'MD_EVALUATED', 'COMPLETED'].includes(item.status);
+                            const employee   = item.employee;
+                            const isPlan     = activeTab === 'plans';
+                            const needsEval  = !isPlan && !['RA_EVALUATED', 'HRD_EVALUATED', 'MD_EVALUATED', 'COMPLETED'].includes(item.status);
+                            const hasRAEval  = item.raTotalScore != null;
+                            const kraCount   = !isPlan ? (item.kraAssessments?.length ?? 0) : (item.kras?.length ?? 0);
 
                             return (
                                 <div
-                                    key={item._id}
+                                    key={item.id}
                                     className={`yap-card${needsEval ? ' yap-card--action-required' : ''}`}
                                     onClick={() => openDetail(item)}
                                     role="button"
                                     tabIndex={0}
                                     onKeyDown={(e) => e.key === 'Enter' && openDetail(item)}
                                 >
-                                    {needsEval && (
-                                        <div className="yap-card-action-pill">
-                                            <FiZap size={10} /> Action Required
-                                        </div>
-                                    )}
-
-                                    {/* Head */}
+                                    {/* ── SECTION 2: Redesigned card header ── */}
                                     <div className="yap-card-head">
                                         <div className="yap-card-avatar">{getInitials(employee?.name)}</div>
                                         <div className="yap-card-identity">
                                             <div className="yap-card-name">{employee?.name || 'Unknown'}</div>
                                             <div className="yap-card-sub">
-                                                {(employee?.employeeCode || 'N/A')} | {employee?.department || 'N/A'}
+                                                {employee?.employeeCode || 'N/A'} | FY {item.financialYear}
+                                                {kraCount > 0 && (
+                                                    <span className="yap-card-kra-count">
+                                                        <FiLayers size={10} /> {kraCount} KRA{kraCount !== 1 ? 's' : ''}
+                                                    </span>
+                                                )}
                                             </div>
                                         </div>
-                                        <StatusBadge status={item.status} />
+                                        <div className="yap-card-head-right">
+                                            <StatusBadge status={item.status} />
+                                            {needsEval && (
+                                                <div className="yap-card-action-pill">
+                                                    <FiZap size={10} /> Action required
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
 
                                     {/* Meta chips */}
@@ -758,30 +979,63 @@ const RAYearlyAppraisalPage = () => {
                                         )}
                                     </div>
 
-                                    {/* Score strip for reports */}
+                                    {/* SECTION 2: Three score mini-cards for report cards */}
                                     {!isPlan && (
-                                        <div className="yap-card-score-strip">
-                                            <span className="yap-score-chip yap-score-chip--ra">
-                                                RA {item.raTotalScore ?? '-'}/80
-                                            </span>
-                                            <span className="yap-score-chip yap-score-chip--hrd">
-                                                HRD {item.hrdTotalScore ?? '-'}/5
-                                            </span>
-                                            <span className="yap-score-chip yap-score-chip--md">
-                                                MD {item.mdFinalScore ?? '-'}/15
-                                            </span>
+                                        <div className="yap-score-mini-cards">
+                                            <div className="yap-score-mini-card yap-score-mini-card--ra">
+                                                <div className="yap-score-mini-stage">RA score</div>
+                                                <div className="yap-score-mini-value">
+                                                    {item.raTotalScore != null ? item.raTotalScore : '—'} / 80
+                                                </div>
+                                                <div className="yap-score-mini-status">
+                                                    {item.raTotalScore != null ? 'RA evaluated' : 'Pending your evaluation'}
+                                                </div>
+                                            </div>
+                                            <div className="yap-score-mini-card yap-score-mini-card--hrd">
+                                                <div className="yap-score-mini-stage">HRD score</div>
+                                                <div className="yap-score-mini-value">
+                                                    {item.hrdTotalScore != null ? item.hrdTotalScore : '—'} / 5
+                                                </div>
+                                                <div className="yap-score-mini-status">
+                                                    {item.hrdTotalScore != null ? 'HRD evaluated' : 'Awaiting HRD completion'}
+                                                </div>
+                                            </div>
+                                            <div className="yap-score-mini-card yap-score-mini-card--md">
+                                                <div className="yap-score-mini-stage">MD score</div>
+                                                <div className="yap-score-mini-value">
+                                                    {item.mdFinalScore != null ? item.mdFinalScore : '—'} / 15
+                                                </div>
+                                                <div className="yap-score-mini-status">
+                                                    {item.mdFinalScore != null ? 'MD evaluated' : 'Awaiting MD completion'}
+                                                </div>
+                                            </div>
                                         </div>
                                     )}
 
-                                    {/* CTA */}
+                                    {/* SECTION 2: Full-width CTA footer */}
                                     <div className="yap-card-footer">
-                                        <button
-                                            className={`yap-card-btn${needsEval ? ' yap-card-btn--primary' : ' yap-card-btn--secondary'}`}
-                                            onClick={(e) => { e.stopPropagation(); openDetail(item); }}
-                                        >
-                                            <FiEye size={13} />
-                                            {isPlan ? 'View Plan' : needsEval ? 'Start Evaluation' : 'View Report'}
-                                        </button>
+                                        {isPlan ? (
+                                            <button
+                                                className="yap-card-btn yap-card-btn--secondary"
+                                                onClick={(e) => { e.stopPropagation(); openDetail(item); }}
+                                            >
+                                                <FiEye size={13} /> View Plan
+                                            </button>
+                                        ) : !hasRAEval ? (
+                                            <button
+                                                className="yap-card-btn yap-card-btn--primary"
+                                                onClick={(e) => { e.stopPropagation(); openDetail(item); }}
+                                            >
+                                                <FiStar size={13} /> Start RA Evaluation
+                                            </button>
+                                        ) : (
+                                            <button
+                                                className="yap-card-btn yap-card-btn--secondary"
+                                                onClick={(e) => { e.stopPropagation(); openDetail(item); }}
+                                            >
+                                                <FiEdit3 size={13} /> View / Update Evaluation
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                             );
@@ -792,21 +1046,22 @@ const RAYearlyAppraisalPage = () => {
         );
     }
 
-    /*
+    /* ═══════════════════════════════════════════════
        DETAIL VIEW
-     */
-    const item = selectedView;
-    const employee = item.employeeId;
-    const isPlan = activeTab === 'plans';
-    const hasRAEval = item.raTotalScore != null;
-    const isLocked = ['MD_EVALUATED', 'COMPLETED'].includes(item.status);
-    const linkedPlan = !isPlan ? item.yearlyPlanId : null;
+    ═══════════════════════════════════════════════ */
+    const item       = selectedView;
+    const employee   = item.employee;
+    const isPlan     = activeTab === 'plans';
+    const hasRAEval  = item.raTotalScore != null;
+    const isLocked   = ['MD_EVALUATED', 'COMPLETED'].includes(item.status);
+    // linkedYearlyPlan is the Sequelize alias for the joined plan on the report
+    const linkedPlan = !isPlan ? (item.linkedYearlyPlan || null) : null;
     const hasLinkedPlan = !!linkedPlan;
 
     return (
         <div className="yap-detail-page fade-in">
 
-            {/* ÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚Â FIXED HEADER CHROME ÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚Â */}
+            {/* ── FIXED HEADER CHROME ── */}
             <div className="yap-detail-header">
                 {/* Back */}
                 <button
@@ -816,7 +1071,7 @@ const RAYearlyAppraisalPage = () => {
                     <FiArrowLeft size={14} /> Back to List
                 </button>
 
-                {/* Workflow Stepper */}
+                {/* SECTION 3 — Workflow Stepper */}
                 {!isPlan && <WorkflowStepper status={item.status} />}
 
                 {/* Hero Header */}
@@ -841,7 +1096,7 @@ const RAYearlyAppraisalPage = () => {
                         </div>
                     </div>
                     <div className="yap-hero-right">
-                        {/* Phase 2: Compare button — report only, desktop only */}
+                        {/* Compare button — report only, desktop only */}
                         {!isPlan && hasLinkedPlan && (
                             <button
                                 className={`yap-compare-btn${compareMode ? ' yap-compare-btn--active' : ''}`}
@@ -873,7 +1128,7 @@ const RAYearlyAppraisalPage = () => {
                                 </button>
                             ) : (
                                 <button className="yap-cta-btn yap-cta-btn--secondary" onClick={() => startEvaluation(item)}>
-                                    <FiEdit3 size={14} /> Update Evaluation
+                                    <FiEdit3 size={14} /> View / Update Evaluation
                                 </button>
                             )
                         )}
@@ -884,20 +1139,20 @@ const RAYearlyAppraisalPage = () => {
                 {!isPlan && <PlanBaselineBanner plan={linkedPlan} />}
 
                 {/* MD Rejection Alert */}
-                {item.status === 'REJECTED' && (
-                    <RejectionAlert remark={item.mdRemarks} />
-                )}
+                {item.status === 'REJECTED' && <RejectionAlert remark={item.mdRemarks} />}
             </div>
 
-            {/* ── SCROLLABLE SPLIT-PANE BODY ── */}
+            {/* ── SCROLLABLE BODY ── */}
             {compareMode && !isPlan ? (
-                /* ═══ PHASE 2: 3-COLUMN COMPARE MODE ═══ */
+                /* ═══════════════════════════════════════════
+                   SECTION 8 — 3-COLUMN COMPARE MODE
+                ═══════════════════════════════════════════ */
                 <div className="yap-compare-body" ref={compareContainerRef}>
 
-                    {/* Left: Yearly Plan pane */}
-                    <div 
-                        className="yap-compare-pane yap-compare-pane--plan" 
-                        ref={leftCompareRef} 
+                    {/* Left: KRA Reference Table from linkedPlan.kras */}
+                    <div
+                        className="yap-compare-pane yap-compare-pane--plan"
+                        ref={leftCompareRef}
                         style={{ flexBasis: `${compareSplits.left}%`, flexGrow: 0, flexShrink: 0 }}
                         onScroll={(e) => {
                             if (!syncScroll || !midCompareRef.current) return;
@@ -906,11 +1161,14 @@ const RAYearlyAppraisalPage = () => {
                             }
                         }}
                     >
-                        <div className="yap-compare-pane-hd">📋 YEARLY PLAN</div>
-                        {linkedPlan?.planAndObjectives
-                            ? <pre className="yap-pre" style={{ padding: '16px 20px' }}>{linkedPlan.planAndObjectives}</pre>
-                            : <span className="yap-muted" style={{ padding: 20, display: 'block' }}>No plan objectives linked.</span>
-                        }
+                        <div className="yap-compare-pane-hd">📋 YEARLY PLAN — KRA REFERENCE</div>
+                        <div style={{ padding: '16px 20px 40px' }}>
+                            {linkedPlan ? (
+                                <KRATable kras={linkedPlan.kras} />
+                            ) : (
+                                <span className="yap-muted" style={{ display: 'block' }}>No plan linked.</span>
+                            )}
+                        </div>
                     </div>
 
                     {/* DIVIDER 1 */}
@@ -921,10 +1179,10 @@ const RAYearlyAppraisalPage = () => {
                         title="Drag to resize · Double-click to reset"
                     />
 
-                    {/* Middle: Appraisal Report pane */}
-                    <div 
-                        className="yap-compare-pane yap-compare-pane--report" 
-                        ref={midCompareRef} 
+                    {/* Middle: Per-KRA Achievement Cards from appraisal.kraAssessments */}
+                    <div
+                        className="yap-compare-pane yap-compare-pane--report"
+                        ref={midCompareRef}
                         style={{ flexBasis: `${compareSplits.mid}%`, flexGrow: 0, flexShrink: 0 }}
                         onScroll={(e) => {
                             if (!syncScroll || !leftCompareRef.current) return;
@@ -934,7 +1192,7 @@ const RAYearlyAppraisalPage = () => {
                         }}
                     >
                         <div className="yap-compare-pane-hd" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span>📝 APPRAISAL REPORT</span>
+                            <span>📝 SELF-ASSESSMENT — KRA ACHIEVEMENTS</span>
                             <button
                                 className={`yap-sync-btn${syncScroll ? ' yap-sync-btn--on' : ''}`}
                                 onClick={() => setSyncScroll(s => !s)}
@@ -944,31 +1202,18 @@ const RAYearlyAppraisalPage = () => {
                                 Sync Scroll: {syncScroll ? 'ON' : 'OFF'}
                             </button>
                         </div>
-                        <div style={{ padding: '0 20px 40px' }}>
-                            <div className="yap-section">
-                                <div className="yap-section-hd yap-section-hd--blue">
-                                    <div className="yap-section-hd-icon"><FiBriefcase /></div>
-                                    <div>
-                                        <div className="yap-section-hd-title">Work Done According to KRA</div>
-                                        <div className="yap-section-hd-sub">Self-reported delivery against yearly targets</div>
-                                    </div>
-                                </div>
-                                <div className="yap-section-body">
-                                    {item.workKRA ? <pre className="yap-pre">{item.workKRA}</pre>
-                                        : <span className="yap-muted">No self-assessment submitted.</span>}
-                                </div>
-                            </div>
-                            <div className="yap-section">
-                                <div className="yap-section-hd yap-section-hd--teal">
-                                    <div className="yap-section-hd-icon"><FiPlus /></div>
-                                    <div>
-                                        <div className="yap-section-hd-title">Additional Assignments</div>
-                                        <div className="yap-section-hd-sub">Extra responsibilities outside planned KRA</div>
-                                    </div>
-                                </div>
-                                <div className="yap-section-body">
-                                    {item.additionalAssignments ? <pre className="yap-pre">{item.additionalAssignments}</pre>
-                                        : <span className="yap-muted">No additional assignments recorded.</span>}
+                        <div style={{ padding: '16px 20px 40px' }}>
+                            <KRAAssessmentCardList kraAssessments={item.kraAssessments} />
+                            {/* Additional Assignments in compare middle pane */}
+                            <div style={{ marginTop: 16 }}>
+                                <div className="yap-additional-block">
+                                    <div className="yap-additional-block-label">Additional Assignments</div>
+                                    <p className="yap-additional-block-text">
+                                        {item.additionalAssignments && item.additionalAssignments.trim()
+                                            ? item.additionalAssignments
+                                            : <em>No additional assignments reported.</em>
+                                        }
+                                    </p>
                                 </div>
                             </div>
                         </div>
@@ -982,7 +1227,7 @@ const RAYearlyAppraisalPage = () => {
                         title="Drag to resize · Double-click to reset"
                     />
 
-                    {/* Right: Scoring sidebar (unchanged) */}
+                    {/* Right: Scoring sidebar — unchanged */}
                     <div className="yap-compare-pane yap-compare-pane--scoring" style={{ flex: 1, minWidth: 260 }}>
                         <div className="yap-compare-pane-hd">⭐ SCORING</div>
                         <div style={{ padding: '0 0 40px' }}>
@@ -993,57 +1238,30 @@ const RAYearlyAppraisalPage = () => {
                                     <div><h3>Score Dashboard</h3><p>All stages</p></div>
                                 </div>
                                 <div className="yap-score-grid">
-                                    <ScoreCard label="RA Score" value={item.raTotalScore} max={80} color="primary" />
-                                    <ScoreCard label="HRD Score" value={item.hrdTotalScore} max={5} color="teal" />
-                                    <ScoreCard label="MD Score" value={item.mdFinalScore} max={15} color="indigo" />
-                                    <ScoreCard label="Grand Total" value={item.grandTotal} max={100} color="success" highlight />
+                                    <ScoreCard label="RA Score"    value={item.raTotalScore}  max={80}  color="primary" />
+                                    <ScoreCard label="HRD Score"   value={item.hrdTotalScore} max={5}   color="teal" />
+                                    <ScoreCard label="MD Score"    value={item.mdFinalScore}  max={15}  color="indigo" />
+                                    <ScoreCard label="Grand Total" value={item.grandTotal}    max={100} color="success" highlight />
                                 </div>
                             </div>
                             {isEvaluating ? (
-                                <div className="yap-block">
-                                    <div className="yap-block-header">
-                                        <div className="yap-block-icon yap-block-icon--orange"><FiStar /></div>
-                                        <div><h3>RA Evaluation Form</h3><p>Max 80 points</p></div>
-                                    </div>
-                                    <form className="yap-eval-form" onSubmit={handleEvaluate}>
-                                        {EVALUATION_FIELDS.map(({ key, label, hint, max }) => (
-                                            <div key={key} className="yap-eval-field">
-                                                <div className="yap-eval-field-top">
-                                                    <label>{label}</label>
-                                                    <span className="yap-eval-cap">/{max}</span>
-                                                </div>
-                                                <input type="number" min="0" max={max} step="0.5"
-                                                    placeholder={`0-${max}`}
-                                                    value={evaluationForm[key]}
-                                                    onChange={(e) => handleEvaluationChange(key, e.target.value)} />
-                                            </div>
-                                        ))}
-                                        <div className={`yap-eval-total${evaluationTotal > 80 ? ' yap-eval-total--over' : ''}`}>
-                                            <span>Total</span><strong>{evaluationTotal} <small>/ 80</small></strong>
-                                        </div>
-                                        <ScoreBar value={evaluationTotal} max={80} color={evaluationTotal > 80 ? 'error' : 'primary'} />
-                                        <div className="yap-eval-field" style={{ marginTop: 12 }}>
-                                            <label>RA Remarks</label>
-                                            <textarea rows={3} placeholder="Remarks..." value={evaluationForm.raRemarks}
-                                                onChange={(e) => handleEvaluationChange('raRemarks', e.target.value)} />
-                                        </div>
-                                        <div className="yap-form-actions">
-                                            <button type="submit" className="btn btn-primary" disabled={submitting || evaluationTotal > 80}>
-                                                {submitting ? 'Submitting...' : 'Submit'}
-                                            </button>
-                                            <button type="button" className="btn btn-secondary" onClick={() => setIsEvaluating(false)}>Cancel</button>
-                                        </div>
-                                    </form>
-                                </div>
+                                <EvaluationForm
+                                    evaluationForm={evaluationForm}
+                                    handleEvaluationChange={handleEvaluationChange}
+                                    handleEvaluate={handleEvaluate}
+                                    submitting={submitting}
+                                    isLocked={isLocked}
+                                    setIsEvaluating={setIsEvaluating}
+                                />
                             ) : (
                                 <>
                                     {isLocked ? (
-                                        <div className="yap-locked-block">
+                                        <div className="yap-locked-block" style={{ margin: '12px 18px' }}>
                                             <FiCheckCircle className="yap-locked-block-icon" />
                                             <div><strong>Finalized</strong><p>No further updates allowed.</p></div>
                                         </div>
                                     ) : !hasRAEval ? (
-                                        <div className="yap-cta-block">
+                                        <div className="yap-cta-block" style={{ margin: '12px 18px' }}>
                                             <div className="yap-cta-block-icon"><FiStar /></div>
                                             <div className="yap-cta-block-text">
                                                 <strong>Evaluation Required</strong>
@@ -1052,9 +1270,9 @@ const RAYearlyAppraisalPage = () => {
                                             <button className="yap-cta-btn" onClick={() => startEvaluation(item)}>Start Evaluation</button>
                                         </div>
                                     ) : (
-                                        <div className="yap-eval-edit">
+                                        <div className="yap-eval-edit" style={{ margin: '12px 18px' }}>
                                             <button className="yap-btn-sm yap-btn-sm--ghost" onClick={() => startEvaluation(item)}>
-                                                <FiEdit3 /> Update Evaluation
+                                                <FiEdit3 /> View / Update Evaluation
                                             </button>
                                         </div>
                                     )}
@@ -1064,26 +1282,28 @@ const RAYearlyAppraisalPage = () => {
                     </div>
                 </div>
             ) : (
-                /* ═══ STANDARD 2-PANE SPLIT ═══ */
+                /* ═══════════════════════════════════════════
+                   STANDARD 2-PANE SPLIT
+                ═══════════════════════════════════════════ */
                 <div className="yap-detail-body" ref={containerRef}>
 
                     {/* LEFT — independently scrollable */}
                     <div className="yap-detail-left" style={{ flexBasis: `${leftPct}%`, flexGrow: 0, flexShrink: 0 }}>
                         {isPlan ? (
                             <>
-                                {/* Plan Objectives */}
+                                {/* SECTION 7 — Plan detail left pane: KRA table instead of planAndObjectives */}
                                 <div className="yap-section">
                                     <div className="yap-section-hd yap-section-hd--blue">
-                                        <div className="yap-section-hd-icon"><FiTarget /></div>
+                                        <div className="yap-section-hd-icon"><FiLayers /></div>
                                         <div>
-                                            <div className="yap-section-hd-title">Yearly Plan Objectives</div>
-                                            <div className="yap-section-hd-sub">Employee's focus areas and goals for FY {item.financialYear}</div>
+                                            <div className="yap-section-hd-title">Yearly Plan KRAs</div>
+                                            <div className="yap-section-hd-sub">
+                                                Employee's Key Result Areas for FY {item.financialYear}
+                                            </div>
                                         </div>
                                     </div>
-                                    <div className="yap-section-body">
-                                        {item.planAndObjectives
-                                            ? <pre className="yap-pre">{item.planAndObjectives}</pre>
-                                            : <span className="yap-muted">No objectives submitted.</span>}
+                                    <div className="yap-section-body" style={{ padding: '12px' }}>
+                                        <KRATable kras={item.kras} />
                                     </div>
                                 </div>
 
@@ -1138,23 +1358,21 @@ const RAYearlyAppraisalPage = () => {
                             </>
                         ) : (
                             <>
-                                {/* Work KRA */}
+                                {/* SECTION 4 — KRA Achievement Cards (replaces workKRA text) */}
                                 <div className="yap-section">
                                     <div className="yap-section-hd yap-section-hd--blue">
-                                        <div className="yap-section-hd-icon"><FiBriefcase /></div>
+                                        <div className="yap-section-hd-icon"><FiLayers /></div>
                                         <div>
-                                            <div className="yap-section-hd-title">Work Done According to KRA</div>
-                                            <div className="yap-section-hd-sub">Employee's self-reported delivery against yearly targets</div>
+                                            <div className="yap-section-hd-title">KRA Self-Assessment</div>
+                                            <div className="yap-section-hd-sub">
+                                                Employee's self-reported achievement against each KRA
+                                            </div>
                                         </div>
                                     </div>
-                                    <div className="yap-section-body">
-                                        {item.workKRA
-                                            ? <pre className="yap-pre">{item.workKRA}</pre>
-                                            : <span className="yap-muted">No self-assessment submitted.</span>}
-                                    </div>
+                                    <KRAAssessmentCardList kraAssessments={item.kraAssessments} />
                                 </div>
 
-                                {/* Additional Assignments */}
+                                {/* SECTION 9 — Additional Assignments */}
                                 <div className="yap-section">
                                     <div className="yap-section-hd yap-section-hd--teal">
                                         <div className="yap-section-hd-icon"><FiPlus /></div>
@@ -1163,14 +1381,17 @@ const RAYearlyAppraisalPage = () => {
                                             <div className="yap-section-hd-sub">Extra responsibilities handled outside the planned KRA</div>
                                         </div>
                                     </div>
-                                    <div className="yap-section-body">
-                                        {item.additionalAssignments
-                                            ? <pre className="yap-pre">{item.additionalAssignments}</pre>
-                                            : <span className="yap-muted">No additional assignments recorded.</span>}
+                                    <div className="yap-additional-block">
+                                        <p className="yap-additional-block-text">
+                                            {item.additionalAssignments && item.additionalAssignments.trim()
+                                                ? item.additionalAssignments
+                                                : <em>No additional assignments reported.</em>
+                                            }
+                                        </p>
                                     </div>
                                 </div>
 
-                                {/* Evaluator Remarks */}
+                                {/* SECTION 10 — Evaluator Remarks History (unchanged logic) */}
                                 {(item.raRemarks || item.hrdRemarks || item.mdRemarks) && (
                                     <div className="yap-section">
                                         <div className="yap-section-hd yap-section-hd--purple">
@@ -1181,9 +1402,9 @@ const RAYearlyAppraisalPage = () => {
                                             </div>
                                         </div>
                                         {[
-                                            { role: 'RA Remarks', cls: 'ra', text: item.raRemarks },
+                                            { role: 'RA Remarks',  cls: 'ra',  text: item.raRemarks  },
                                             { role: 'HRD Remarks', cls: 'hrd', text: item.hrdRemarks },
-                                            { role: 'MD Remarks', cls: 'md', text: item.mdRemarks },
+                                            { role: 'MD Remarks',  cls: 'md',  text: item.mdRemarks  },
                                         ].filter(r => r.text).map(({ role, cls, text }) => (
                                             <div key={cls} className={`yap-remark-item yap-remark-item--${cls}`}>
                                                 <div className="yap-remark-item-hd">{role}</div>
@@ -1207,7 +1428,7 @@ const RAYearlyAppraisalPage = () => {
                     {/* RIGHT — independently scrollable */}
                     <div className="yap-detail-right" style={{ flex: 1, minWidth: 280 }}>
                         {isPlan ? (
-                            /* Plan summary sidebar */
+                            /* Plan summary sidebar — unchanged */
                             <div className="yap-block">
                                 <div className="yap-block-header">
                                     <div className="yap-block-icon yap-block-icon--indigo"><FiCalendar /></div>
@@ -1216,8 +1437,8 @@ const RAYearlyAppraisalPage = () => {
                                 <div className="yap-side-stack">
                                     {[
                                         { label: 'Financial Year', value: item.financialYear },
-                                        { label: 'Version', value: `v${item.version || 1}` },
-                                        { label: 'Submitted', value: formatDate(item.submittedAt) },
+                                        { label: 'Version',        value: `v${item.version || 1}` },
+                                        { label: 'Submitted',      value: formatDate(item.submittedAt) },
                                         { label: 'Current Status', value: getStatusInfo(item.status).label },
                                     ].map((r) => (
                                         <div key={r.label} className="yap-side-row">
@@ -1229,7 +1450,7 @@ const RAYearlyAppraisalPage = () => {
                             </div>
                         ) : (
                             <>
-                                {/* Phase 1: Right-panel tab switcher */}
+                                {/* Right-panel tab switcher */}
                                 <div className="yap-right-tabs">
                                     <button
                                         className={`yap-right-tab${rightTab === 'plan' ? ' yap-right-tab--active' : ''}`}
@@ -1246,12 +1467,14 @@ const RAYearlyAppraisalPage = () => {
                                 </div>
 
                                 {rightTab === 'plan' ? (
+                                    /* SECTION 6 — YearlyPlanTab with KRA table */
                                     <YearlyPlanTab
                                         plan={linkedPlan}
                                         showHistory={showHistory}
                                         setShowHistory={setShowHistory}
                                     />
                                 ) : (
+                                    /* SECTION 5 — Scoring Panel */
                                     <>
                                         {/* Score Dashboard */}
                                         <div className="yap-block">
@@ -1260,82 +1483,53 @@ const RAYearlyAppraisalPage = () => {
                                                 <div><h3>Score Dashboard</h3><p>Evaluation scores across all stages</p></div>
                                             </div>
                                             <div className="yap-score-grid">
-                                                <ScoreCard label="RA Score" value={item.raTotalScore} max={80} color="primary" />
-                                                <ScoreCard label="HRD Score" value={item.hrdTotalScore} max={5} color="teal" />
-                                                <ScoreCard label="MD Score" value={item.mdFinalScore} max={15} color="indigo" />
-                                                <ScoreCard label="Grand Total" value={item.grandTotal} max={100} color="success" highlight />
+                                                <ScoreCard label="RA Score"    value={item.raTotalScore}  max={80}  color="primary" />
+                                                <ScoreCard label="HRD Score"   value={item.hrdTotalScore} max={5}   color="teal" />
+                                                <ScoreCard label="MD Score"    value={item.mdFinalScore}  max={15}  color="indigo" />
+                                                <ScoreCard label="Grand Total" value={item.grandTotal}    max={100} color="success" highlight />
                                             </div>
                                         </div>
 
-                                        {isEvaluating ? (
-                                            <div className="yap-block">
-                                                <div className="yap-block-header">
-                                                    <div className="yap-block-icon yap-block-icon--orange"><FiStar /></div>
-                                                    <div><h3>RA Evaluation Form</h3><p>Maximum total: 80 points</p></div>
+                                        {/* SECTION 15 — Locked state banner (unchanged logic) */}
+                                        {isLocked && (
+                                            <div className="yap-locked-block" style={{ margin: '4px 0' }}>
+                                                <FiCheckCircle className="yap-locked-block-icon" />
+                                                <div>
+                                                    <strong>Appraisal Finalized</strong>
+                                                    <p>MD has completed evaluation. No further updates allowed.</p>
                                                 </div>
-                                                <form className="yap-eval-form" onSubmit={handleEvaluate}>
-                                                    {EVALUATION_FIELDS.map(({ key, label, hint, max }) => (
-                                                        <div key={key} className="yap-eval-field">
-                                                            <div className="yap-eval-field-top">
-                                                                <label>{label}</label>
-                                                                <span className="yap-eval-cap">Out of {max}</span>
-                                                            </div>
-                                                            <span className="yap-eval-hint">{hint}</span>
-                                                            <input
-                                                                type="number" min="0" max={max} step="0.5"
-                                                                placeholder={`0 - ${max}`}
-                                                                value={evaluationForm[key]}
-                                                                onChange={(e) => handleEvaluationChange(key, e.target.value)}
-                                                            />
-                                                        </div>
-                                                    ))}
-                                                    <div className={`yap-eval-total${evaluationTotal > 80 ? ' yap-eval-total--over' : ''}`}>
-                                                        <span>Total Score</span>
-                                                        <strong>{evaluationTotal} <small>/ 80</small></strong>
-                                                    </div>
-                                                    <ScoreBar value={evaluationTotal} max={80} color={evaluationTotal > 80 ? 'error' : 'primary'} />
-                                                    <div className="yap-eval-field" style={{ marginTop: 16 }}>
-                                                        <label>RA Remarks</label>
-                                                        <textarea rows={3} placeholder="Add concise appraisal remarks..."
-                                                            value={evaluationForm.raRemarks}
-                                                            onChange={(e) => handleEvaluationChange('raRemarks', e.target.value)}
-                                                        />
-                                                    </div>
-                                                    <div className="yap-form-actions">
-                                                        <button type="submit" className="btn btn-primary" disabled={submitting || evaluationTotal > 80}>
-                                                            {submitting ? 'Submitting...' : 'Submit Evaluation'}
-                                                        </button>
-                                                        <button type="button" className="btn btn-secondary" onClick={() => setIsEvaluating(false)}>Cancel</button>
-                                                    </div>
-                                                </form>
                                             </div>
-                                        ) : (
-                                            <>
-                                                {isLocked ? (
-                                                    <div className="yap-locked-block">
-                                                        <FiCheckCircle className="yap-locked-block-icon" />
-                                                        <div>
-                                                            <strong>Appraisal Finalized</strong>
-                                                            <p>MD has completed evaluation. No further updates allowed.</p>
-                                                        </div>
+                                        )}
+
+                                        {/* Evaluation form or CTA */}
+                                        {!isLocked && (
+                                            isEvaluating ? (
+                                                <EvaluationForm
+                                                    evaluationForm={evaluationForm}
+                                                    handleEvaluationChange={handleEvaluationChange}
+                                                    handleEvaluate={handleEvaluate}
+                                                    submitting={submitting}
+                                                    isLocked={isLocked}
+                                                    setIsEvaluating={setIsEvaluating}
+                                                />
+                                            ) : !hasRAEval ? (
+                                                <div className="yap-cta-block">
+                                                    <div className="yap-cta-block-icon"><FiStar /></div>
+                                                    <div className="yap-cta-block-text">
+                                                        <strong>Evaluation Required</strong>
+                                                        <p>This report is awaiting your RA-stage scoring. Click to begin.</p>
                                                     </div>
-                                                ) : !hasRAEval ? (
-                                                    <div className="yap-cta-block">
-                                                        <div className="yap-cta-block-icon"><FiStar /></div>
-                                                        <div className="yap-cta-block-text">
-                                                            <strong>Evaluation Required</strong>
-                                                            <p>This report is awaiting your RA-stage scoring. Click to begin.</p>
-                                                        </div>
-                                                        <button className="yap-cta-btn" onClick={() => startEvaluation(item)}>Start Evaluation</button>
-                                                    </div>
-                                                ) : (
-                                                    <div className="yap-eval-edit">
-                                                        <button className="yap-btn-sm yap-btn-sm--ghost" onClick={() => startEvaluation(item)}>
-                                                            <FiEdit3 /> Update Evaluation
-                                                        </button>
-                                                    </div>
-                                                )}
-                                            </>
+                                                    <button className="yap-cta-btn" onClick={() => startEvaluation(item)}>
+                                                        Start RA Evaluation
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <div className="yap-eval-edit">
+                                                    <button className="yap-btn-sm yap-btn-sm--ghost" onClick={() => startEvaluation(item)}>
+                                                        <FiEdit3 /> View / Update Evaluation
+                                                    </button>
+                                                </div>
+                                            )
                                         )}
                                     </>
                                 )}

@@ -75,8 +75,8 @@ function getProgressTokens(p) {
 }
 function getPlanItems(plan) {
     if (!plan) return [];
-    if (Array.isArray(plan.planItems) && plan.planItems.filter(Boolean).length > 0)
-        return plan.planItems.filter(Boolean);
+    if (Array.isArray(plan.planItems) && plan.planItems.length > 0)
+        return plan.planItems.map(p => typeof p === 'string' ? p : p.itemText).filter(Boolean);
     if (plan.planDetails)
         return plan.planDetails.split('\n').map(s => s.trim()).filter(Boolean);
     return [];
@@ -849,14 +849,14 @@ const HRDMonthlyOverviewPage = () => {
                                     const isEval     = plan.evaluationStatus === 'EVALUATED';
                                     const isRejected = plan.status === 'REJECTED';
                                     return (
-                                        <tr key={plan._id} className={`mmo-row ${isRejected ? 'mmo-row-rejected' : ''}`} onClick={() => setSelected(plan)}>
+                                        <tr key={plan.id} className={`mmo-row ${isRejected ? 'mmo-row-rejected' : ''}`} onClick={() => setSelected(plan)}>
                                             <td className="mmo-cell-num">{(page - 1) * PAGE_SIZE + idx + 1}</td>
                                             <td>
                                                 <div className="mmo-emp-cell">
-                                                    <div className="mmo-avatar">{getInitials(plan.employeeId?.name)}</div>
+                                                    <div className="mmo-avatar">{getInitials(plan.employee?.name)}</div>
                                                     <div>
-                                                        <div className="mmo-emp-name">{plan.employeeId?.name || '—'}</div>
-                                                        <div className="mmo-emp-code">{plan.employeeId?.employeeCode}</div>
+                                                        <div className="mmo-emp-name">{plan.employee?.name || '—'}</div>
+                                                        <div className="mmo-emp-code">{plan.employee?.employeeCode}</div>
                                                     </div>
                                                 </div>
                                             </td>

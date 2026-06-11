@@ -1,4 +1,7 @@
-const MonthlyPlan = require("../models/MonthlyPlan");
+// ── PERN STACK: Sequelize models loaded from index (not raw factory files)
+const { MonthlyPlan, YearlyPlan } = require("../models");
+const { Op } = require("sequelize");
+
 // FISCAL YEAR FIX — shared fiscal utility is canonical source for FY logic
 const { getCurrentFiscalYear } = require("../utils/fiscalUtils");
 
@@ -48,19 +51,23 @@ exports.allowMonthlyPlanSubmission = async (req, res, next) => {
     // whether the original month's deadline has passed — even if the month is
     // in the past. RA can reject a plan weeks or months after submission.
     // Detection: an existing REJECTED plan document for this employee + month.
-    // const existingRejected = await MonthlyPlan.findOne({
-    //   employeeId: req.user.userId,
-    //   month: submittedMonth,
-    //   status: "REJECTED",
-    // });
+    //
+    // PERN CHANGE: Mongoose .findOne({...}) → Sequelize .findOne({ where: {...} })
+    const existingRejected = await MonthlyPlan.findOne({
+      where: {
+        employeeId: req.user.userId,
+        month: submittedMonth,
+        status: "REJECTED",
+      },
+    });
 
-    // if (existingRejected) {
-    //   // Bypass ALL date checks — this is a legitimate post-rejection resubmission.
-    //   return next();
-    // }
-    // // ─────────────────────────────────────────────────────────────────────────
+    if (existingRejected) {
+      // Bypass ALL date checks — this is a legitimate post-rejection resubmission.
+      return next();
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
-    // // ── Normal deadline enforcement for fresh first submissions ───────────────
+    // ── Normal deadline enforcement for fresh first submissions ───────────────
     // if (submittedMonth !== currentMonth) {
     //   return res.status(403).json({
     //     message: `You can only submit a monthly plan for the current month (${currentMonth}). Received: ${submittedMonth}`
@@ -95,7 +102,11 @@ exports.allowMonthlyAchievementSubmission = async (req, res, next) => {
       return res.status(400).json({ message: "monthlyPlanId is required." });
     }
 
-    const plan = await MonthlyPlan.findById(monthlyPlanId).select("month version status");
+    // PERN CHANGE: Mongoose .findById(id).select("month version status")
+    //              → Sequelize .findByPk(id, { attributes: [...] })
+    const plan = await MonthlyPlan.findByPk(monthlyPlanId, {
+      attributes: ["id", "month", "version", "status"],
+    });
     if (!plan) {
       return res.status(404).json({ message: "Monthly plan not found." });
     }
@@ -106,13 +117,13 @@ exports.allowMonthlyAchievementSubmission = async (req, res, next) => {
     // The employee was forced to resubmit due to RA action — possibly weeks
     // after the original month ended. They must be able to submit the achievement
     // immediately after resubmitting the revised plan.
-    // if (plan.version > 1) {
-    //   // Bypass ALL date checks — post-rejection resubmission flow.
-    //   return next();
-    // }
-    // // ─────────────────────────────────────────────────────────────────────────
+    if (plan.version > 1) {
+      // Bypass ALL date checks — post-rejection resubmission flow.
+      return next();
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
-    // // ── Normal deadline enforcement for fresh first-time achievements ─────────
+    // ── Normal deadline enforcement for fresh first-time achievements ─────────
     // if (plan.month !== currentMonth) {
     //   return res.status(403).json({
     //     message: `You can only submit a monthly achievement for the current month (${currentMonth}). The linked plan is for: ${plan.month}`
@@ -170,7 +181,7 @@ exports.allowYearlyPlanSubmission = (req, res, next) => {
 
   // ── 4. Deadline check: must be on or before 30 April of the start year ──
   // April = month index 3 (0-based), day 30
-  // const deadline = new Date(parsed.startYear, 3, 30, 23, 59, 59, 999); // Apr 30 end-of-day
+  const deadline = new Date(parsed.startYear, 3, 30, 23, 59, 59, 999); // Apr 30 end-of-day
   // if (today > deadline) {
   //   return res.status(403).json({
   //     message: `The yearly plan submission deadline for FY ${submittedFY} has passed. Plans must be submitted by 30 April ${parsed.startYear}.`
@@ -221,8 +232,8 @@ exports.allowYearlyAppraisalSubmission = (req, res, next) => {
   // ── 4. Window check ─────────────────────────────────────────────────────
   // Open:  1 March of the end year  (month index 2, day 1)
   // Close: 30 April of the end year (month index 3, day 30)
-  const windowOpen = new Date(parsed.endYear, 2, 1, 0, 0, 0, 0);          // 1 Mar
-  const windowClose = new Date(parsed.endYear, 3, 30, 23, 59, 59, 999);    // 30 Apr
+  const windowOpen  = new Date(parsed.endYear, 2, 1,  0,  0,  0,   0); // 1 Mar
+  const windowClose = new Date(parsed.endYear, 3, 30, 23, 59, 59, 999); // 30 Apr
 
   // if (today < windowOpen) {
   //   return res.status(403).json({
@@ -247,42 +258,43 @@ exports.allowYearlyAppraisalSubmission = (req, res, next) => {
    from the DB using req.params.id, then apply the same April 30
    deadline as allowYearlyPlanSubmission.
 ════════════════════════════════════════════════════════════════════ */
-const YearlyPlan = require("../models/YearlyPlan");
-
 exports.allowYearlyPlanEdit = async (req, res, next) => {
   try {
-    // const today     = new Date();
-    // const currentFY = getCurrentFinancialYear();
-    // const planId    = req.params.id;
+    const today     = new Date();
+    const currentFY = getCurrentFinancialYear();
+    const planId    = req.params.id;
 
-    // if (!planId) {
-    //   return res.status(400).json({ message: "Plan ID is required." });
-    // }
+    if (!planId) {
+      return res.status(400).json({ message: "Plan ID is required." });
+    }
 
-    // // Load just the financialYear field from the plan
-    // const plan = await YearlyPlan.findById(planId).select("financialYear");
-    // if (!plan) {
-    //   return res.status(404).json({ message: "Yearly plan not found." });
-    // }
+    // PERN CHANGE: Mongoose .findById(id).select("financialYear")
+    //              → Sequelize .findByPk(id, { attributes: [...] })
+    const plan = await YearlyPlan.findByPk(planId, {
+      attributes: ["id", "financialYear"],
+    });
+    if (!plan) {
+      return res.status(404).json({ message: "Yearly plan not found." });
+    }
 
-    // const planFY = plan.financialYear;
+    const planFY = plan.financialYear;
 
-    // // ── 1. Must match the current financial year ──────────────────────────
+    // ── 1. Must match the current financial year ──────────────────────────
     // if (planFY !== currentFY) {
     //   return res.status(403).json({
     //     message: `You can only edit/resubmit a yearly plan for the current financial year (${currentFY}). This plan belongs to FY ${planFY}.`
     //   });
     // }
 
-    // // ── 2. Parse and check deadline ───────────────────────────────────────
-    // const parsed = parseFinancialYear(planFY);
-    // if (!parsed) {
-    //   return res.status(400).json({
-    //     message: `Could not determine deadline for financial year "${planFY}".`
-    //   });
-    // }
+    // ── 2. Parse and check deadline ───────────────────────────────────────
+    const parsed = parseFinancialYear(planFY);
+    if (!parsed) {
+      return res.status(400).json({
+        message: `Could not determine deadline for financial year "${planFY}".`
+      });
+    }
 
-    // const deadline = new Date(parsed.startYear, 3, 30, 23, 59, 59, 999); // Apr 30
+    const deadline = new Date(parsed.startYear, 3, 30, 23, 59, 59, 999); // Apr 30
     // if (today > deadline) {
     //   return res.status(403).json({
     //     message: `The yearly plan edit deadline for FY ${planFY} has passed. Plans must be finalised by 30 April ${parsed.startYear}.`

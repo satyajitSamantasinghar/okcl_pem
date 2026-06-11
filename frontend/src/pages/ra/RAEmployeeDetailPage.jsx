@@ -66,8 +66,8 @@ function getProgressTokens(p) {
 }
 function getPlanItems(plan) {
     if (!plan) return [];
-    if (Array.isArray(plan.planItems) && plan.planItems.filter(Boolean).length > 0)
-        return plan.planItems.filter(Boolean);
+    if (Array.isArray(plan.planItems) && plan.planItems.length > 0)
+        return plan.planItems.map(p => typeof p === 'string' ? p : p.itemText).filter(Boolean);
     if (plan.planDetails)
         return plan.planDetails.split('\n').map(s => s.trim()).filter(Boolean);
     return [];
@@ -216,7 +216,7 @@ function CustomTooltip({ active, payload, label }) {
                     <span className="red-chart-tooltip-dot" style={{ background: p.color || p.fill }} />
                     <span>{p.name}:</span>
                     <strong style={{ color: getScoreColor(p.value) }}>
-                        {typeof p.value === 'number' ? p.value.toFixed(1) : p.value}/10
+                        {Number(p.value)}/10
                     </strong>
                 </div>
             ))}
@@ -284,8 +284,8 @@ const RAEmployeeDetailPage = () => {
         .map(plan => {
             const evaluation = monthlyEvaluations.find(e => e.month === plan.month);
             const achievement = monthlyAchievements?.find(a => {
-                const planId = typeof a.monthlyPlanId === 'object' ? a.monthlyPlanId?._id : a.monthlyPlanId;
-                return planId === plan._id;
+                const planId = typeof a.monthlyPlanId === 'object' ? a.monthlyPlanId?.id : a.monthlyPlanId;
+                return planId === plan.id;
             });
             const isEval = !!evaluation && evaluation.status === 'EVALUATED';
             const hasAch = !!achievement && achievement.status !== 'DRAFT';
@@ -359,7 +359,7 @@ const RAEmployeeDetailPage = () => {
     /* ── Stats — UNCHANGED ── */
     const evaluatedEvals = filteredEvals.filter(e => e.status === 'EVALUATED' && e.score > 0);
     const avgScore = evaluatedEvals.length > 0
-        ? (evaluatedEvals.reduce((s, e) => s + e.score, 0) / evaluatedEvals.length).toFixed(1)
+        ? Number((evaluatedEvals.reduce((s, e) => s + e.score, 0) / evaluatedEvals.length).toFixed(1))
         : '—';
 
     /* ── KPI derived ── */
@@ -385,12 +385,12 @@ const RAEmployeeDetailPage = () => {
         else if (scoreTrend < 0)
             insights.push({ icon: <FiTrendingDown />, variant: 'concern', text: `Performance dropped by −${abs} pts from ${shortMonth(prev.month)} → ${shortMonth(curr.month)}` });
         else
-            insights.push({ icon: <FiActivity />, variant: 'neutral', text: `Score remained stable at ${curr.score}/10 — consistent performance` });
+            insights.push({ icon: <FiActivity />, variant: 'neutral', text: `Score remained stable at ${Number(curr.score)}/10 — consistent performance` });
     }
     if (worstEval && worstEval.score < 5)
-        insights.push({ icon: <FiAlertTriangle />, variant: 'warning', text: `Lowest score in ${formatMonth(worstEval.month)} (${worstEval.score}/10) — may need follow-up` });
+        insights.push({ icon: <FiAlertTriangle />, variant: 'warning', text: `Lowest score in ${formatMonth(worstEval.month)} (${Number(worstEval.score)}/10) — may need follow-up` });
     if (bestEval && bestEval.score >= 8)
-        insights.push({ icon: <FiStar />, variant: 'positive', text: `Best performance in ${formatMonth(bestEval.month)} with ${bestEval.score}/10 — ${getScoreLabel(bestEval.score)} rating` });
+        insights.push({ icon: <FiStar />, variant: 'positive', text: `Best performance in ${formatMonth(bestEval.month)} with ${Number(bestEval.score)}/10 — ${getScoreLabel(bestEval.score)} rating` });
     if (completionRate === 100 && filteredMonths.length > 0)
         insights.push({ icon: <FiThumbsUp />, variant: 'positive', text: `100% evaluation completion for FY ${filterYear} — all plans reviewed` });
     else if (completionRate < 50 && filteredMonths.length > 1)
@@ -712,7 +712,7 @@ const RAEmployeeDetailPage = () => {
                                     <div>
                                         <div className="dmod-ra-done">{ev.remarks || 'Evaluation completed.'}</div>
                                         {ev.score != null && (
-                                            <div className="dmod-ra-score">Score: <strong>{ev.score}/10</strong></div>
+                                            <div className="dmod-ra-score">Score: <strong>{Number(ev.score)}/10</strong></div>
                                         )}
                                         {ev.evaluatedAt && (
                                             <div className="dmod-ra-date">
@@ -725,7 +725,7 @@ const RAEmployeeDetailPage = () => {
                                 )}
                             </div>
                             {isEval && ev.score != null && (
-                                <div className="dmod-score-chip">{ev.score}/10</div>
+                                <div className="dmod-score-chip">{Number(ev.score)}/10</div>
                             )}
                         </div>
 
@@ -827,12 +827,12 @@ const RAEmployeeDetailPage = () => {
                     trend={scoreTrend !== null ? (scoreTrend > 0 ? 'up' : scoreTrend < 0 ? 'down' : 'neutral') : null}
                 />
                 <KPICard label="Best Month"
-                    value={bestEval ? `${bestEval.score}/10` : '—'}
+                    value={bestEval ? `${Number(bestEval.score)}/10` : '—'}
                     sub={bestEval ? formatMonth(bestEval.month) : 'No evaluations'}
                     icon={<FiStar />} color="#22C55E" trend={bestEval ? 'up' : null}
                 />
                 <KPICard label="Worst Month"
-                    value={worstEval ? `${worstEval.score}/10` : '—'}
+                    value={worstEval ? `${Number(worstEval.score)}/10` : '—'}
                     sub={worstEval ? formatMonth(worstEval.month) : 'No evaluations'}
                     icon={<FiAlertTriangle />}
                     color={worstEval ? getScoreColor(worstEval.score) : '#94A3B8'}
@@ -977,7 +977,7 @@ const RAEmployeeDetailPage = () => {
                                 </thead>
                                 <tbody>
                                     {filteredMonths.map(plan => (
-                                        <tr key={plan._id} className="red-table-row"
+                                        <tr key={plan.id} className="red-table-row"
                                             onClick={() => setSelectedMonthDetail(plan)}>
                                             <td>
                                                 <div className="red-month-cell">
@@ -1001,7 +1001,7 @@ const RAEmployeeDetailPage = () => {
                                                 {plan.isEval ? (
                                                     <span className="red-score-chip"
                                                         style={{ background: `${getScoreColor(plan.evaluation.score)}15`, color: getScoreColor(plan.evaluation.score) }}>
-                                                        {plan.evaluation.score}/10
+                                                        {Number(plan.evaluation.score)}/10
                                                     </span>
                                                 ) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
                                             </td>
@@ -1030,12 +1030,12 @@ const RAEmployeeDetailPage = () => {
                             <p>No quarterly evaluations found for FY {filterYear}</p>
                         </div>
                     ) : filteredQuarterly.map(qe => (
-                        <div key={qe._id} className="red-qtr-card" style={{ '--qclr': getScoreColor(qe.averageScore) }}>
+                        <div key={qe.id} className="red-qtr-card" style={{ '--qclr': getScoreColor(qe.averageScore) }}>
                             <div className="red-qtr-inner">
                                 <div className="red-qtr-head">
                                     <span className="red-qtr-label"><FiBarChart2 /> {qe.quarter?.replace('-', ' ')}</span>
                                     <span className="red-qtr-score" style={{ color: getScoreColor(qe.averageScore) }}>
-                                        {qe.averageScore?.toFixed(1)}<span>/10</span>
+                                        {qe.averageScore != null ? Number(qe.averageScore) : '—'}<span>/10</span>
                                     </span>
                                 </div>
                                 <div className="red-qtr-bar-track">
@@ -1068,7 +1068,7 @@ const RAEmployeeDetailPage = () => {
                                 <div className="red-yearly-section">
                                     <h3 className="red-yearly-section-title"><FiFileText /> Yearly Plans</h3>
                                     {filteredYearlyPlans.map(yp => (
-                                        <div key={yp._id} className="red-yearly-card">
+                                        <div key={yp.id} className="red-yearly-card">
                                             <div className="red-yearly-card-header">
                                                 <span className="red-yearly-fy">FY {yp.financialYear}</span>
                                                 <span className={`red-badge red-badge--${yp.status?.toLowerCase()}`}>{yp.status}</span>
@@ -1082,7 +1082,7 @@ const RAEmployeeDetailPage = () => {
                                 <div className="red-yearly-section">
                                     <h3 className="red-yearly-section-title"><FiAward /> Appraisal Reports</h3>
                                     {filteredYearlyReports.map(yr => (
-                                        <div key={yr._id} className="red-yearly-card">
+                                        <div key={yr.id} className="red-yearly-card">
                                             <div className="red-yearly-card-header">
                                                 <span className="red-yearly-fy">FY {yr.financialYear}</span>
                                                 <span className={`red-badge red-badge--${yr.status?.toLowerCase()?.replace(/_/g, '-')}`}>

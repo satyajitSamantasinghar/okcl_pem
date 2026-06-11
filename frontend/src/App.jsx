@@ -120,6 +120,10 @@ function App() {
             <Route path="employees" element={<RAEmployeeListPage />} />
             <Route path="employee/:id" element={<RAEmployeeDetailPage />} />
             <Route path="/ra/quarterly-evaluation/:id" element={<RAQuarterlyDetailPage />} />
+            {/* ── RA acting as an employee: self-submission routes ── */}
+            <Route path="my-monthly-plan" element={<MonthlyPlanPage />} />
+            <Route path="my-yearly-plan" element={<YearlyPlanPage />} />
+            <Route path="my-quarterly-evaluation" element={<QuarterlyEvaluationPage />} />
           </Route>
 
           {/* HRD Routes */}

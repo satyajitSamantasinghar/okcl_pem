@@ -64,7 +64,7 @@ const NotificationBell = () => {
             setData(prev => ({
                 ...prev,
                 unreadCount: Math.max(0, prev.unreadCount - 1),
-                notifications: prev.notifications.map(n => n._id === id ? { ...n, read: true } : n)
+                notifications: prev.notifications.map(n => n.id === id ? { ...n, read: true } : n)
             }));
         } catch { /* silent */ }
     };
@@ -101,9 +101,9 @@ const NotificationBell = () => {
                         ) : (
                             data.notifications.map(n => (
                                 <div
-                                    key={n._id}
+                                    key={n.id}
                                     className={`notif-item ${n.read ? '' : 'unread'}`}
-                                    onClick={() => !n.read && markRead(n._id)}
+                                    onClick={() => !n.read && markRead(n.id)}
                                 >
                                     <div className="notif-item-icon">{getIcon(n.type)}</div>
                                     <div className="notif-item-body">

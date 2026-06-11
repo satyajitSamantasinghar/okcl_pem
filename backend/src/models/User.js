@@ -1,50 +1,59 @@
-const mongoose = require("mongoose");
+const { DataTypes } = require("sequelize");
 
-const userSchema = new mongoose.Schema({
-  employeeCode: {
-    type: String,
-    required: true,
-    unique: true
-  },
+module.exports = (sequelize) => {
+  const User = sequelize.define(
+    "User",
+    {
+      id: {
+        type:         DataTypes.UUID,
+        defaultValue: DataTypes.UUIDV4,
+        primaryKey:   true,
+      },
+      employeeCode: {
+        type:      DataTypes.STRING,
+        allowNull: false,
+        unique:    true,
+      },
+      name: {
+        type:      DataTypes.STRING,
+        allowNull: false,
+      },
+      email: {
+        type:      DataTypes.STRING,
+        allowNull: false,
+        unique:    true,
+        validate:  { isEmail: true },
+      },
+      passwordHash: {
+        type:      DataTypes.STRING,
+        allowNull: false,
+      },
+      role: {
+        type:      DataTypes.ENUM("EMPLOYEE", "RA", "HRD", "MD"),
+        allowNull: false,
+      },
+      department: {
+        type: DataTypes.STRING,
+      },
+      // Self-referencing FK — set in models/index.js associations
+      reportingAuthorityId: {
+        type:      DataTypes.UUID,
+        allowNull: true,
+      },
+      refreshToken: {
+        type: DataTypes.TEXT,
+      },
+      isActive: {
+        type:         DataTypes.BOOLEAN,
+        defaultValue: true,
+      },
+    },
+    {
+      tableName:  "users",
+      underscored: true,   // camelCase JS fields → snake_case DB columns
+      timestamps:  true,   // createdAt + updatedAt
+    }
+  );
 
-  name: {
-    type: String,
-    required: true
-  },
-
-  email: {
-    type: String,
-    required: true,
-    unique: true
-  },
-
-  passwordHash: {
-    type: String,
-    required: true
-  },
-
-  role: {
-    type: String,
-    enum: ["EMPLOYEE", "RA", "HRD", "MD"],
-    required: true
-  },
-
-  department: String,
-
-  reportingAuthorityId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "User"
-  },
-
-  refreshToken: {
-    type: String
-  },
-
-
-  isActive: {
-    type: Boolean,
-    default: true
-  }
-}, { timestamps: true });
-
-module.exports = mongoose.model("User", userSchema);
+  return User;
+};

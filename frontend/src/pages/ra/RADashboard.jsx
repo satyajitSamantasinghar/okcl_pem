@@ -235,7 +235,7 @@ const RADashboard = () => {
                     );
                     if (monthlyPlan?.submittedAt) {
                         nextActivities.push({
-                            id: `plan-${employee._id}`,
+                            id: `plan-${employee.id}`,
                             user: employee.name,
                             action: 'submitted the monthly plan',
                             time: formatActivityTimestamp(monthlyPlan.submittedAt),
@@ -252,7 +252,7 @@ const RADashboard = () => {
                     });
                     if (monthlyAchievement?.submittedAt) {
                         nextActivities.push({
-                            id: `achievement-${employee._id}`,
+                            id: `achievement-${employee.id}`,
                             user: employee.name,
                             action: 'uploaded the monthly achievement',
                             time: formatActivityTimestamp(monthlyAchievement.submittedAt),
@@ -268,7 +268,7 @@ const RADashboard = () => {
                     const evaluationTime = monthlyEvaluation?.evaluatedAt || monthlyEvaluation?.createdAt;
                     if (evaluationTime) {
                         nextActivities.push({
-                            id: `evaluation-${employee._id}`,
+                            id: `evaluation-${employee.id}`,
                             user: employee.name,
                             action: 'has a completed monthly evaluation',
                             time: formatActivityTimestamp(evaluationTime),
@@ -284,7 +284,7 @@ const RADashboard = () => {
                     );
                     if (yearlyPlan) {
                         nextActivities.push({
-                            id: `yearly-plan-${employee._id}`,
+                            id: `yearly-plan-${employee.id}`,
                             user: employee.name,
                             action: 'submitted the yearly plan',
                             time: formatActivityTimestamp(yearlyPlan.submittedAt),
@@ -299,7 +299,7 @@ const RADashboard = () => {
                     );
                     if (yearlyReport) {
                         nextActivities.push({
-                            id: `yearly-report-${employee._id}`,
+                            id: `yearly-report-${employee.id}`,
                             user: employee.name,
                             action: 'submitted the yearly appraisal report',
                             time: formatActivityTimestamp(yearlyReport.submittedAt),
@@ -332,7 +332,7 @@ const RADashboard = () => {
 
         return employeesList
             .map(emp => {
-                const empId = emp._id?.toString();
+                const empId = emp.id?.toString();
                 const submitted = submittedSet.has(empId);
                 const hasAchievement = achievementsSet.has(empId);
                 /* Achievement only relevant if plan submitted */
@@ -361,7 +361,7 @@ const RADashboard = () => {
 
         return employeesList
             .map(emp => {
-                const empId = emp._id?.toString();
+                const empId = emp.id?.toString();
                 const submitted = submittedSet.has(empId);
                 const hasAchievement = achievementsSet.has(empId);
                 // (a) missed plan
@@ -408,7 +408,7 @@ const RADashboard = () => {
             NOT_SUBMITTED: stats.lists.notSubmitted || [],
         };
         const targetIds = (listMap[modalConfig.type] || []).map((id) => id.toString());
-        return employeesList.filter((emp) => targetIds.includes(emp._id.toString()));
+        return employeesList.filter((emp) => targetIds.includes(emp.id.toString()));
     };
 
     if (loading) {
@@ -489,7 +489,7 @@ const RADashboard = () => {
                             ) : (
                                 <div className="ra-modal-list">
                                     {displayEmployees.map((employee) => (
-                                        <div key={employee._id} className="ra-modal-list-item">
+                                        <div key={employee.id} className="ra-modal-list-item">
                                             <div className="ra-ml-avatar">{getInitials(employee.name)}</div>
                                             <div className="ra-ml-info">
                                                 <strong>{employee.name}</strong>
@@ -500,7 +500,7 @@ const RADashboard = () => {
                                                 <div className="stat"><span>{employee.totalEvaluated || 0}</span>Evals</div>
                                             </div>
                                             <button className="ra-ml-btn"
-                                                onClick={() => navigate(`/ra/employee/${employee._id}`)}>
+                                                onClick={() => navigate(`/ra/employee/${employee.id}`)}>
                                                 View
                                             </button>
                                         </div>
@@ -778,6 +778,49 @@ const RADashboard = () => {
                 </Link>
             </div>
 
+            {/* ── 5b. My Performance (RA acting as an Employee) ── */}
+            {/*
+             * ─── FEATURE FLAGS ───────────────────────────────────────────────────
+             * To temporarily disable a card before going live, add the CSS class
+             * "coming-soon" to that <Link>, e.g.:
+             *
+             *   className="ra-action-tile indigo coming-soon"
+             *
+             * That will grey it out, block clicks, and show a "Coming Soon" badge.
+             * To hide it completely instead, just comment out the entire <Link> block.
+             * ─────────────────────────────────────────────────────────────────────
+             */}
+            <div className="ra-section-header" style={{ marginTop: '2rem' }}>
+                <h2>My Performance</h2>
+                <p>Submit and track your own plans — you are also an employee reporting to MD</p>
+            </div>
+            <div className="ra-actions-grid ra-perf-grid">
+                <Link to="/ra/my-monthly-plan" className="ra-action-tile indigo coming-soon">
+                    <div className="ra-at-icon"><FiFileText /></div>
+                    <div className="ra-at-content">
+                        <h3>My Monthly Plan</h3>
+                        <p>Submit your own monthly plan &amp; achievement</p>
+                    </div>
+                    <ArrowRightIcon className="ra-at-arrow" />
+                </Link>
+                <Link to="/ra/my-yearly-plan" className="ra-action-tile sky coming-soon">
+                    <div className="ra-at-icon"><FiClipboard /></div>
+                    <div className="ra-at-content">
+                        <h3>My Yearly Plan</h3>
+                        <p>Set your annual KRAs for MD approval</p>
+                    </div>
+                    <ArrowRightIcon className="ra-at-arrow" />
+                </Link>
+                <Link to="/ra/my-quarterly-evaluation" className="ra-action-tile teal coming-soon">
+                    <div className="ra-at-icon"><FiBarChart2 /></div>
+                    <div className="ra-at-content">
+                        <h3>My Quarterly Review</h3>
+                        <p>View your own quarterly evaluation scores</p>
+                    </div>
+                    <ArrowRightIcon className="ra-at-arrow" />
+                </Link>
+            </div>
+
             {/* ════════════════════════════════════════════════
                 ── 6. NEW: 6-Month Activity Trend — full width ──
                 Dedicated section between Quick Actions and Analytics.
@@ -932,11 +975,11 @@ const RADashboard = () => {
                                         const pct = Math.round((emp.score / 3) * 100);
                                         return (
                                             <div
-                                                key={emp._id}
+                                                key={emp.id}
                                                 className={`ra-lb-row ${cfg.bgCls}`}
-                                                onClick={() => navigate(`/ra/employee/${emp._id}`)}
+                                                onClick={() => navigate(`/ra/employee/${emp.id}`)}
                                                 title={`View ${emp.name}'s details`}
-                                                onMouseEnter={() => setHoveredRowId(emp._id)}
+                                                onMouseEnter={() => setHoveredRowId(emp.id)}
                                                 onMouseLeave={() => setHoveredRowId(null)}
                                             >
                                                 {/* Rank */}
@@ -960,7 +1003,7 @@ const RADashboard = () => {
 
                                                 {/* Step indicators */}
                                                 {(() => {
-                                                    const missedInfo = missedEmployees.find(m => m._id?.toString() === emp._id?.toString());
+                                                    const missedInfo = missedEmployees.find(m => m.id?.toString() === emp.id?.toString());
                                                     return (
                                                         <div className="ra-lb-steps">
                                                             <span className={`ra-lb-step ${
@@ -1003,8 +1046,8 @@ const RADashboard = () => {
                                                     </div>
                                                     {/* Hover-reveal: swap score badge → Extend button for missed employees */}
                                                     {(() => {
-                                                        const isMissed = missedEmployees.find(m => m._id?.toString() === emp._id?.toString());
-                                                        const isHovered = hoveredRowId === emp._id?.toString();
+                                                        const isMissed = missedEmployees.find(m => m.id?.toString() === emp.id?.toString());
+                                                        const isHovered = hoveredRowId === emp.id?.toString();
                                                         if (isMissed && isHovered) {
                                                             return (
                                                                 <button

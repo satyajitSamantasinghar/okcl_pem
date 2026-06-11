@@ -70,8 +70,8 @@ function getProgressTokens(p) {
 }
 function getPlanItems(plan) {
     if (!plan) return [];
-    if (Array.isArray(plan.planItems) && plan.planItems.filter(Boolean).length > 0)
-        return plan.planItems.filter(Boolean);
+    if (Array.isArray(plan.planItems) && plan.planItems.length > 0)
+        return plan.planItems.map(p => typeof p === 'string' ? p : p.itemText).filter(Boolean);
     if (plan.planDetails)
         return plan.planDetails.split('\n').map(s => s.trim()).filter(Boolean);
     return [];
@@ -172,6 +172,15 @@ const MDMonthlyOverviewPage = () => {
     const [plans,   setPlans]   = useState([]);
     const [loading, setLoading] = useState(true);
 
+    /* ── RA evaluation tab ── */
+    const [activeTab,       setActiveTab]       = useState('employee'); // 'employee' | 'ra'
+    const [raEvals,         setRAEvals]         = useState([]);
+    const [raEvalsLoading,  setRAEvalsLoading]  = useState(false);
+    const [raEvalModal,     setRAEvalModal]     = useState(null); // selected RA eval row
+    const [raScore,         setRAScore]         = useState('');
+    const [raRemarks,       setRARemarks]       = useState('');
+    const [raEvalSubmitting, setRAEvalSubmitting] = useState(false);
+
     /* filters */
     const [filterYear,   setFilterYear]   = useState(String(currentYear));
     const [filterMonth,  setFilterMonth]  = useState(currentMonth);
@@ -182,6 +191,7 @@ const MDMonthlyOverviewPage = () => {
 
     /* detail modal */
     const [selected, setSelected] = useState(null);
+
 
     /* ── fetch ── */
     const fetchPlans = useCallback(async () => {
@@ -213,6 +223,47 @@ const MDMonthlyOverviewPage = () => {
     useEffect(() => { fetchPlans(); }, [fetchPlans]);
     useEffect(() => { setPage(1); }, [filterYear, filterMonth, filterStatus, sortOrder, searchQ]);
 
+    /* ── RA evaluations fetch ── */
+    const fetchRAEvals = useCallback(async () => {
+        const month = filterMonth ? `${filterYear}-${filterMonth}` : `${filterYear}-${currentMonth}`;
+        setRAEvalsLoading(true);
+        try {
+            const res = await api.get('/md/ra-monthly-evaluations', { params: { month } });
+            setRAEvals(Array.isArray(res.data) ? res.data : []);
+        } catch {
+            toast.error('Failed to load RA evaluations');
+        } finally {
+            setRAEvalsLoading(false);
+        }
+    }, [filterYear, filterMonth]);
+
+    useEffect(() => {
+        if (activeTab === 'ra') fetchRAEvals();
+    }, [activeTab, fetchRAEvals]);
+
+    /* ── Handle RA evaluation submit ── */
+    const handleEvaluateRA = async () => {
+        if (!raEvalModal) return;
+        const s = parseInt(raScore);
+        if (!s || s < 1 || s > 10) { toast.error('Score must be between 1 and 10'); return; }
+        setRAEvalSubmitting(true);
+        try {
+            await api.post('/md/monthly-evaluation', {
+                evaluationId: raEvalModal.id,
+                score: s,
+                remarks: raRemarks || null,
+            });
+            toast.success('RA evaluation submitted successfully!');
+            setRAEvalModal(null); setRAScore(''); setRARemarks('');
+            fetchRAEvals();
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Failed to submit evaluation');
+        } finally {
+            setRAEvalSubmitting(false);
+        }
+    };
+
+
     /* ── derived: sort + search + paginate ── */
     const processed = (() => {
         let list = [...plans];
@@ -220,8 +271,8 @@ const MDMonthlyOverviewPage = () => {
         if (searchQ.trim()) {
             const q = searchQ.toLowerCase();
             list = list.filter(p =>
-                p.employeeId?.name?.toLowerCase().includes(q) ||
-                p.employeeId?.employeeCode?.toLowerCase().includes(q)
+                p.employee?.name?.toLowerCase().includes(q) ||
+                p.employee?.employeeCode?.toLowerCase().includes(q)
             );
         }
 
@@ -272,21 +323,30 @@ const MDMonthlyOverviewPage = () => {
     const renderDetail = () => {
         if (!selected) return null;
         const plan       = selected;
-        // Map flattened structure
-        const ev         = { score: plan.evaluationScore, remarks: plan.evaluationRemarks, evaluatedAt: plan.evaluationDate };
-        const isEval     = plan.evaluationStatus === 'EVALUATED';
-        const ach        = plan.hasAchievement ? { 
-            status: 'SUBMITTED',
-            achievementDetails: plan.achievementDetails,
-            planAchievements: plan.planAchievements,
-            additionalAchievement: plan.additionalAchievement,
-            submittedAt: plan.achievementDate 
-        } : null;
-        const isRejected = plan.status === 'REJECTED';
-        // MD no longer has reject capability — read-only view
+        const isRaTab    = activeTab === 'ra';
+        
+        // Map flattened structure depending on whether it's an Employee plan or RA evaluation object
+        const ev         = isRaTab 
+            ? { score: plan.score, remarks: plan.remarks, evaluatedAt: plan.evaluatedAt }
+            : { score: plan.evaluationScore, remarks: plan.evaluationRemarks, evaluatedAt: plan.evaluationDate };
+            
+        const isEval     = isRaTab ? plan.status === 'EVALUATED' : plan.evaluationStatus === 'EVALUATED';
+        
+        const ach        = isRaTab 
+            ? plan.achievement 
+            : (plan.hasAchievement ? { 
+                status: 'SUBMITTED',
+                achievementDetails: plan.achievementDetails,
+                planAchievements: plan.planAchievements,
+                additionalAchievement: plan.additionalAchievement,
+                submittedAt: plan.achievementDate 
+            } : null);
+            
+        const isRejected = isRaTab ? plan.monthlyPlan?.status === 'REJECTED' : plan.status === 'REJECTED';
 
         const chipStyle  = getMonthChipStyle(plan.month);
-        const planItemsList = getPlanItems(plan);
+        const actualPlanObj = isRaTab ? plan.monthlyPlan : plan;
+        const planItemsList = getPlanItems(actualPlanObj);
         const effectivePlanAch = getEffectivePlanAch(ach, planItemsList.length);
         const hasStructuredAch = !!effectivePlanAch;
         
@@ -329,11 +389,11 @@ const MDMonthlyOverviewPage = () => {
                                 <span className="dmod-mc-yr">{shortYear(plan.month)}</span>
                             </div>
                             <div>
-                                <div className="dmod-title">{plan.employeeId?.name || '—'}</div>
+                                <div className="dmod-title">{plan.employee?.name || '—'}</div>
                                 <div className="dmod-meta">
-                                    <span style={{fontWeight:500}}>{plan.employeeId?.employeeCode}</span>
+                                    <span style={{fontWeight:500}}>{plan.employee?.employeeCode}</span>
                                     <span className="dmod-meta-sep" />
-                                    <span>{plan.employeeId?.department || '—'}</span>
+                                    <span>{plan.employee?.department || '—'}</span>
                                     <span className="dmod-meta-sep" />
                                     <span className={`dmod-status-pill ${stCls}`}>{stLabel}</span>
                                 </div>
@@ -625,6 +685,224 @@ const MDMonthlyOverviewPage = () => {
                 </div>
             </div>
 
+            {/* ── Tab Switcher: Employees vs RAs ── */}
+            <div style={{
+                display: 'flex', gap: '8px', marginBottom: '20px',
+                borderBottom: '2px solid var(--border-default, #E5E7EB)',
+                paddingBottom: '0',
+            }}>
+                <button
+                    id="md-tab-employees"
+                    onClick={() => setActiveTab('employee')}
+                    style={{
+                        padding: '8px 20px', fontWeight: 600, fontSize: '0.875rem',
+                        border: 'none', cursor: 'pointer', borderRadius: '6px 6px 0 0',
+                        background: activeTab === 'employee' ? 'var(--accent-primary, #6366F1)' : 'transparent',
+                        color: activeTab === 'employee' ? '#fff' : 'var(--text-secondary, #6B7280)',
+                        borderBottom: activeTab === 'employee' ? '2px solid var(--accent-primary, #6366F1)' : '2px solid transparent',
+                        transition: 'all 0.2s',
+                    }}
+                >
+                    Employee Plans
+                </button>
+                <button
+                    id="md-tab-ra"
+                    onClick={() => setActiveTab('ra')}
+                    style={{
+                        padding: '8px 20px', fontWeight: 600, fontSize: '0.875rem',
+                        border: 'none', cursor: 'pointer', borderRadius: '6px 6px 0 0',
+                        background: activeTab === 'ra' ? 'var(--accent-primary, #6366F1)' : 'transparent',
+                        color: activeTab === 'ra' ? '#fff' : 'var(--text-secondary, #6B7280)',
+                        borderBottom: activeTab === 'ra' ? '2px solid var(--accent-primary, #6366F1)' : '2px solid transparent',
+                        transition: 'all 0.2s',
+                    }}
+                >
+                    RA Plans {raEvals.filter(r => r.status !== 'EVALUATED').length > 0 && (
+                        <span style={{
+                            background: '#EF4444', color: '#fff', borderRadius: '999px',
+                            padding: '1px 7px', fontSize: '0.72rem', marginLeft: '6px',
+                        }}>
+                            {raEvals.filter(r => r.status !== 'EVALUATED').length}
+                        </span>
+                    )}
+                </button>
+            </div>
+
+            {/* ── RA Evaluation Modal ── */}
+            {raEvalModal && createPortal(
+                <div className="mp-overlay" onClick={() => { setRAEvalModal(null); setRAScore(''); setRARemarks(''); }}>
+                    <div className="dmod" onClick={e => e.stopPropagation()} style={{ maxWidth: '480px' }}>
+                        <div className="dmod-hdr">
+                            <div className="dmod-hdr-left">
+                                <div>
+                                    <div className="dmod-title">Evaluate RA Monthly Plan</div>
+                                    <div className="dmod-meta">
+                                        <span style={{ fontWeight: 500 }}>{raEvalModal.employee?.name}</span>
+                                        <span className="dmod-meta-sep" />
+                                        <span>{raEvalModal.month}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <button className="dmod-close" onClick={() => { setRAEvalModal(null); setRAScore(''); setRARemarks(''); }}><FiX size={16} /></button>
+                        </div>
+                        <div className="dmod-body">
+                            <div style={{ marginBottom: '16px' }}>
+                                <label style={{ display: 'block', fontWeight: 600, marginBottom: '6px', fontSize: '0.875rem' }}>
+                                    Score (1–10) <span style={{ color: '#EF4444' }}>*</span>
+                                </label>
+                                <input
+                                    id="ra-eval-score"
+                                    type="number" min="1" max="10" step="1"
+                                    value={raScore}
+                                    onChange={e => setRAScore(e.target.value)}
+                                    placeholder="Enter score 1-10"
+                                    style={{
+                                        width: '100%', padding: '10px 12px', borderRadius: '8px',
+                                        border: '1px solid var(--border-default, #E5E7EB)',
+                                        fontSize: '0.9rem', background: 'var(--bg-input, #fff)',
+                                        color: 'var(--text-primary, #111)',
+                                    }}
+                                />
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontWeight: 600, marginBottom: '6px', fontSize: '0.875rem' }}>
+                                    Remarks
+                                </label>
+                                <textarea
+                                    id="ra-eval-remarks"
+                                    rows={4}
+                                    value={raRemarks}
+                                    onChange={e => setRARemarks(e.target.value)}
+                                    placeholder="Add evaluation remarks..."
+                                    style={{
+                                        width: '100%', padding: '10px 12px', borderRadius: '8px',
+                                        border: '1px solid var(--border-default, #E5E7EB)',
+                                        fontSize: '0.9rem', resize: 'vertical',
+                                        background: 'var(--bg-input, #fff)',
+                                        color: 'var(--text-primary, #111)',
+                                    }}
+                                />
+                            </div>
+                        </div>
+                        <div className="dmod-footer">
+                            <button className="dmod-btn-close" onClick={() => { setRAEvalModal(null); setRAScore(''); setRARemarks(''); }}>Cancel</button>
+                            <button
+                                id="ra-eval-submit-btn"
+                                onClick={handleEvaluateRA}
+                                disabled={raEvalSubmitting || !raScore}
+                                style={{
+                                    padding: '8px 20px', borderRadius: '8px', border: 'none',
+                                    background: 'var(--accent-primary, #6366F1)', color: '#fff',
+                                    fontWeight: 600, cursor: raEvalSubmitting ? 'not-allowed' : 'pointer',
+                                    opacity: raEvalSubmitting ? 0.6 : 1,
+                                }}
+                            >
+                                {raEvalSubmitting ? 'Submitting…' : 'Submit Evaluation'}
+                            </button>
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
+
+            {/* ── RA Plans Tab Content ── */}
+            {activeTab === 'ra' && (
+                <div>
+                    <div className="page-header" style={{ marginBottom: '12px' }}>
+                        <div>
+                            <h2 style={{ fontSize: '1.1rem', margin: 0 }}>RA Monthly Plans</h2>
+                            <p style={{ margin: '4px 0 0', fontSize: '0.85rem', opacity: 0.7 }}>
+                                RA employees submit their own plans. As MD, you evaluate them directly.
+                            </p>
+                        </div>
+                    </div>
+                    {raEvalsLoading ? (
+                        <div className="mmo-loading"><div className="spinner" /><p>Loading RA evaluations...</p></div>
+                    ) : raEvals.length === 0 ? (
+                        <div className="mmo-empty">
+                            <div className="mmo-empty-icon"><FiFileText /></div>
+                            <h3>No RA plans found</h3>
+                            <p>No RA employees have submitted plans for the selected month, or no RAs report to you.</p>
+                        </div>
+                    ) : (
+                        <div className="mmo-table-card">
+                            <table className="mmo-table">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>RA Employee</th>
+                                        <th>Month</th>
+                                        <th>Plan Preview</th>
+                                        <th>Achievement</th>
+                                        <th>Status</th>
+                                        <th>Score</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {raEvals.map((ev, idx) => (
+                                        <tr key={ev.id} className={`mmo-row ${ev.monthlyPlan?.status === 'REJECTED' ? 'mmo-row-rejected' : ''}`} onClick={() => setSelected(ev)}>
+                                            <td className="mmo-cell-num">{idx + 1}</td>
+                                            <td>
+                                                <div className="mmo-emp-cell">
+                                                    <div className="mmo-avatar">{getInitials(ev.employee?.name)}</div>
+                                                    <div>
+                                                        <div className="mmo-emp-name">{ev.employee?.name || '—'}</div>
+                                                        <div className="mmo-emp-code">{ev.employee?.employeeCode} · {ev.employee?.department || ''}</div>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="mmo-cell-month">{ev.month}</td>
+                                            <td>
+                                                <div className="mmo-plan-preview">
+                                                    {ev.monthlyPlan
+                                                        ? (ev.monthlyPlan.planDetails || (ev.monthlyPlan.planItems?.[0]?.itemText) || '—')
+                                                        : <em style={{ opacity: 0.5 }}>No plan submitted yet</em>}
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <span className={`mmo-badge ${ev.hasAchievement ? 'achievement' : 'submitted'}`}>
+                                                    {ev.hasAchievement ? 'Submitted' : 'Pending'}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <span className={`mmo-badge ${ev.status === 'EVALUATED' ? 'evaluated' : 'submitted'}`}>
+                                                    {ev.status === 'EVALUATED' ? 'Evaluated' : 'Pending Review'}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                {ev.status === 'EVALUATED'
+                                                    ? <span style={{ fontWeight: 700, color: scoreColor(ev.score) }}>{ev.score}/10</span>
+                                                    : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                                            </td>
+                                            <td>
+                                                {ev.status === 'EVALUATED' ? (
+                                                    <span style={{ fontSize: '0.78rem', color: '#10B981', fontWeight: 600 }}>✓ Done</span>
+                                                ) : ev.monthlyPlan ? (
+                                                    <button
+                                                        id={`ra-eval-btn-${ev.id}`}
+                                                        className="mmo-view-btn"
+                                                        onClick={(e) => { e.stopPropagation(); setRAEvalModal(ev); setRAScore(''); setRARemarks(''); }}
+                                                        style={{ background: 'var(--accent-primary, #6366F1)', color: '#fff', border: 'none', cursor: 'pointer' }}
+                                                    >
+                                                        <FiCheckCircle size={12} /> Evaluate
+                                                    </button>
+                                                ) : (
+                                                    <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Awaiting plan</span>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* ── Employee Plans Tab Content (existing UI, conditionally rendered) ── */}
+            {activeTab === 'employee' && <>
+
             {/* Stats row - Premium UI */}
             <div className="mmo-stats-grid">
                 <div className="mmo-stat-card sc-blue">
@@ -761,14 +1039,14 @@ const MDMonthlyOverviewPage = () => {
                                     const isEval     = plan.evaluationStatus === 'EVALUATED';
                                     const isRejected = plan.status === 'REJECTED';
                                     return (
-                                        <tr key={plan._id} className={`mmo-row ${isRejected ? 'mmo-row-rejected' : ''}`} onClick={() => setSelected(plan)}>
+                                        <tr key={plan.id} className={`mmo-row ${isRejected ? 'mmo-row-rejected' : ''}`} onClick={() => setSelected(plan)}>
                                             <td className="mmo-cell-num">{(page - 1) * PAGE_SIZE + idx + 1}</td>
                                             <td>
                                                 <div className="mmo-emp-cell">
-                                                    <div className="mmo-avatar">{getInitials(plan.employeeId?.name)}</div>
+                                                    <div className="mmo-avatar">{getInitials(plan.employee?.name)}</div>
                                                     <div>
-                                                        <div className="mmo-emp-name">{plan.employeeId?.name || '—'}</div>
-                                                        <div className="mmo-emp-code">{plan.employeeId?.employeeCode}</div>
+                                                        <div className="mmo-emp-name">{plan.employee?.name || '—'}</div>
+                                                        <div className="mmo-emp-code">{plan.employee?.employeeCode}</div>
                                                     </div>
                                                 </div>
                                             </td>
@@ -842,6 +1120,7 @@ const MDMonthlyOverviewPage = () => {
                     )}
                 </>
             )}
+                </>}
 
             {renderDetail()}
         </div>

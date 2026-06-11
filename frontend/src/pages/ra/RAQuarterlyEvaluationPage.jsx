@@ -152,7 +152,7 @@
 //         if (!selectedDetail) return;
 //         setSavingRemarks(true);
 //         try {
-//             await api.put(`/ra/quarterly-evaluations/${selectedDetail._id}/remarks`, {
+//             await api.put(`/ra/quarterly-evaluations/${selectedDetail.id}/remarks`, {
 //                 remarks: remarksText
 //             });
 //             toast.success('Remarks updated');
@@ -207,9 +207,9 @@
 //                 <div className="qtr-reports-grid">
 //                     {evaluations.map(ev => (
 //                         <div
-//                             key={ev._id}
+//                             key={ev.id}
 //                             className="qtr-report-card"
-//                             onClick={() => openDetail(ev._id)}
+//                             onClick={() => openDetail(ev.id)}
 //                         >
 //                             <div className="qtr-report-card-top">
 //                                 <div className="qtr-report-avatar">
@@ -528,9 +528,9 @@ const RAQuarterlyEvaluationPage = () => {
                         const sb = getScoreBg(ev.averageScore);
                         return (
                             <div
-                                key={ev._id}
+                                key={ev.id}
                                 className="qtr-report-card"
-                                onClick={() => navigate(`/ra/quarterly-evaluation/${ev._id}`)}
+                                onClick={() => navigate(`/ra/quarterly-evaluation/${ev.id}`)}
                             >
                                 <div className="qtr-report-card-top">
                                     <div className="qtr-report-avatar">

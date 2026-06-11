@@ -121,8 +121,8 @@ function getProgressTokens(progress) {
 
 function getPlanItems(plan) {
     if (!plan) return [];
-    if (Array.isArray(plan.planItems) && plan.planItems.filter(Boolean).length > 0)
-        return plan.planItems.filter(Boolean);
+    if (Array.isArray(plan.planItems) && plan.planItems.length > 0)
+        return plan.planItems.map(p => typeof p === 'string' ? p : p.itemText).filter(Boolean);
     if (plan.planDetails)
         return plan.planDetails.split('\n').map(s => s.trim()).filter(Boolean);
     return [];
@@ -293,7 +293,7 @@ const MonthlyPlanPage = () => {
             const [plansRes, achievementsRes, evalsRes] = await Promise.all([
                 api.get('/employee/monthly-plans'),
                 api.get('/employee/monthly-achievements'),
-                api.get('/ra/monthly-evaluations', { params: { limit: 100 } }),
+                api.get('/ra/monthly-evaluations', { params: { limit: 100, selfView: 'true' } }),
             ]);
             setPlans(plansRes.data);
             setAchievements(achievementsRes.data);
@@ -310,7 +310,7 @@ const MonthlyPlanPage = () => {
     const achievementByPlanId = useMemo(() => {
         const map = {};
         achievements.forEach(a => {
-            const planId = a.monthlyPlanId?._id || a.monthlyPlanId;
+            const planId = a.monthlyPlanId?.id || a.monthlyPlanId;
             if (planId) map[planId] = a;
         });
         return map;
@@ -349,14 +349,14 @@ const MonthlyPlanPage = () => {
             yearPlans = plans.filter(p => fyMonths.includes(p.month));
         }
         const total = yearPlans.length;
-        const withAch = yearPlans.filter(p => { const a = achievementByPlanId[p._id]; return a && a.status !== 'DRAFT'; }).length;
-        const drafts = yearPlans.filter(p => { const a = achievementByPlanId[p._id]; return a && a.status === 'DRAFT'; }).length;
+        const withAch = yearPlans.filter(p => { const a = achievementByPlanId[p.id]; return a && a.status !== 'DRAFT'; }).length;
+        const drafts = yearPlans.filter(p => { const a = achievementByPlanId[p.id]; return a && a.status === 'DRAFT'; }).length;
         const evaluated = yearPlans.filter(p => { const ev = evaluationByMonth[p.month]; return ev && ev.status === 'EVALUATED'; }).length;
         return { total, withAch, drafts, evaluated };
     }, [plans, filterFY, filterYear, achievementByPlanId, evaluationByMonth]);
 
     const getProgress = (plan) => {
-        const ach = achievementByPlanId[plan._id];
+        const ach = achievementByPlanId[plan.id];
         const ev = evaluationByMonth[plan.month];
         const isEval = ev && ev.status === 'EVALUATED';
         const isPlanDraft = plan.status === 'DRAFT';
@@ -430,7 +430,7 @@ const MonthlyPlanPage = () => {
     };
 
     const openAchModal = (plan) => {
-        const existing = achievementByPlanId[plan._id];
+        const existing = achievementByPlanId[plan.id];
         const itemList = getPlanItems(plan);
         setAchModal(plan);
         if (existing) {
@@ -510,7 +510,7 @@ const MonthlyPlanPage = () => {
         const legacyDetails = achItems.map((a, i) => `Plan ${i + 1} [${a.progress || 0}%]: ${a.achievementDetails || '—'}`).join('\n') + (additionalStr ? `\nAdditional: ${additionalStr}` : '');
         try {
             await api.post('/employee/monthly-achievement', {
-                monthlyPlanId: achModal._id,
+                monthlyPlanId: achModal.id,
                 planAchievements: achItems.map((a, i) => ({ planIndex: i, achievementDetails: a.achievementDetails || '', progress: a.progress || 0 })),
                 additionalAchievement: additionalStr, achievementDetails: legacyDetails,
                 status: asDraft ? 'DRAFT' : 'SUBMITTED',
@@ -619,7 +619,7 @@ const MonthlyPlanPage = () => {
     ====================================================== */
     const renderAchModal = () => {
         if (!achModal) return null;
-        const existing = achievementByPlanId[achModal._id];
+        const existing = achievementByPlanId[achModal.id];
         const isDraft = existing?.status === 'DRAFT';
         const planItemsList = getPlanItems(achModal);
         const overallProgress = achItems.length > 0
@@ -742,7 +742,7 @@ const MonthlyPlanPage = () => {
     const renderDetailModal = () => {
         if (!selectedPlan) return null;
 
-        const ach = achievementByPlanId[selectedPlan._id];
+        const ach = achievementByPlanId[selectedPlan.id];
         const ev = evaluationByMonth[selectedPlan.month];
         const isEval = ev && ev.status === 'EVALUATED';
         const prog = getProgress(selectedPlan);
@@ -1228,7 +1228,7 @@ const MonthlyPlanPage = () => {
             ) : (
                 <div className="mp-unified-grid">
                     {filteredPlans.map(plan => {
-                        const ach = achievementByPlanId[plan._id];
+                        const ach = achievementByPlanId[plan.id];
                         const ev = evaluationByMonth[plan.month];
                         const isEval = ev && ev.status === 'EVALUATED';
                         const st = getStatusInfo(plan);
@@ -1242,7 +1242,7 @@ const MonthlyPlanPage = () => {
                         const achCompleted = effectivePlanAch ? effectivePlanAch.filter(a => (a.progress || 0) >= 100).length : 0;
 
                         return (
-                            <div key={plan._id} className={`mp-unified-card status-${st.cls}`}>
+                            <div key={plan.id} className={`mp-unified-card status-${st.cls}`}>
                                 <div className="mp-unified-header">
                                     <div className="mp-month-chip-card" style={{ background: chipStyle.bg, color: chipStyle.color }}>
                                         <span className="mp-month-chip-mon">{shortMonth(plan.month)}</span>

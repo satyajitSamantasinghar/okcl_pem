@@ -242,8 +242,8 @@ const MDDashboard = () => {
         const ras = allEmployees.filter(emp => emp.role === 'RA');
 
         ras.forEach(ra => {
-            raMap[ra._id] = {
-                id: ra._id,
+            raMap[ra.id] = {
+                id: ra.id,
                 name: ra.name,
                 teamEmployeeIds: new Set(),
                 plansSubmitted: 0,
@@ -256,16 +256,16 @@ const MDDashboard = () => {
         // Map employees to their RA
         allEmployees.forEach(emp => {
             if (emp.role === 'EMPLOYEE' && emp.reportingAuthorityId) {
-                const raId = emp.reportingAuthorityId?._id || emp.reportingAuthorityId;
+                const raId = emp.reportingAuthorityId?.id || emp.reportingAuthorityId;
                 if (raMap[raId]) {
-                    raMap[raId].teamEmployeeIds.add(String(emp._id));
+                    raMap[raId].teamEmployeeIds.add(String(emp.id));
                 }
             }
         });
 
         // Monthly plan stats per RA team
         monthlyPlansList.forEach(p => {
-            const empId = String(p.employeeId?._id || p.employeeId);
+            const empId = String(p.employeeId?.id || p.employeeId);
             const isCurrentMonth = p.month === currentMonth;
 
             // Find which RA this employee belongs to
@@ -291,40 +291,21 @@ const MDDashboard = () => {
         }).sort((a, b) => b.evaluated - a.evaluated || b.achPct - a.achPct);
     }, [allEmployees, monthlyPlansList, currentMonth]);
 
-    // Pending Action Queue - Filter and dedup
+    // Pending Action Queue — Yearly Plans only (monthly plan rejection moved to RA)
     const pendingQueue = useMemo(() => {
         const queue = [];
         const seen = new Set();
 
-        monthlyPlansList.forEach(p => {
-            if (p.status === 'SUBMITTED' || p.status === 'PENDING') {
-                const key = `mp-${p._id}`;
-                if (!seen.has(key)) {
-                    seen.add(key);
-                    queue.push({
-                        id: p._id,
-                        name: p.employeeId?.name || "Unknown",
-                        raName: p.employeeId?.reportingAuthorityId?.name || null,
-                        department: p.employeeId?.department || null,
-                        type: 'Monthly',
-                        entity: 'MONTHLY_PLAN',
-                        date: p.submittedAt || p.createdAt,
-                        val: p
-                    });
-                }
-            }
-        });
-
         yearlyPlansList.forEach(p => {
             if (p.status === 'PENDING') {
-                const key = `yp-${p._id}`;
+                const key = `yp-${p.id}`;
                 if (!seen.has(key)) {
                     seen.add(key);
                     queue.push({
-                        id: p._id,
-                        name: p.employeeId?.name || "Unknown",
+                        id: p.id,
+                        name: p.employee?.name || p.employeeId?.name || "Unknown",
                         raName: null,
-                        department: p.employeeId?.department || null,
+                        department: p.employee?.department || p.employeeId?.department || null,
                         type: 'Yearly Plan',
                         entity: 'YEARLY_PLAN',
                         date: p.submittedAt || p.createdAt,
@@ -335,7 +316,7 @@ const MDDashboard = () => {
         });
 
         return queue.sort((a, b) => new Date(b.date) - new Date(a.date));
-    }, [monthlyPlansList, yearlyPlansList]);
+    }, [yearlyPlansList]);
 
     const displayedPending = pendingQueue.slice(0, 5);
     const totalPending = pendingQueue.length;
@@ -361,41 +342,33 @@ const MDDashboard = () => {
         setSearchOpen(false);
         setSearchQuery('');
         try {
-            const res = await api.get(`/md/employee/${emp._id}`);
+            const res = await api.get(`/md/employee/${emp.id}`);
             setEmpDetail(res.data);
         } catch { toast.error('Failed to load employee detail'); }
         finally { setEmpDetailLoading(false); }
     };
 
     const handleRejectSubmit = async () => {
-        if (!rejectTarget) return;
+        if (!rejectTarget || rejectTarget.entity !== 'YEARLY_PLAN') return;
         try {
-            if (rejectTarget.entity === 'MONTHLY_PLAN') {
-                await api.put(`/md/monthly-plan/${rejectTarget.id}/reject`, { mdRemarks: rejectRemarks });
-                fetchMonthlyPlans();
-            } else if (rejectTarget.entity === 'YEARLY_PLAN') {
-                await api.put(`/md/yearly-plan/${rejectTarget.id}`, { decision: 'REJECT', mdRemarks: rejectRemarks });
-                fetchYearlyPlans();
-            }
-            toast.success(`${rejectTarget.type} rejected`);
+            await api.put(`/md/yearly-plan/${rejectTarget.id}`, { decision: 'REJECT', mdRemarks: rejectRemarks });
+            fetchYearlyPlans();
+            toast.success('Yearly Plan rejected');
             setRejectTarget(null);
             setRejectRemarks('');
             fetchDashboard();
         } catch (err) {
-            toast.error(err.response?.data?.message || 'Failed to reject');
+            toast.error(err.response?.data?.message || 'Failed to reject yearly plan');
         }
     };
 
     const handleApprove = async (item) => {
+        if (item.entity !== 'YEARLY_PLAN') return;
         try {
-            if (item.entity === 'YEARLY_PLAN') {
-                await api.put(`/md/yearly-plan/${item.id}`, { decision: 'APPROVE' });
-                toast.success('Yearly Plan approved');
-                fetchYearlyPlans();
-                fetchDashboard();
-            } else if (item.entity === 'MONTHLY_PLAN') {
-                toast.success('Direct approval of Monthly Plans from MD dash handled differently. Open full appraisal to proceed.');
-            }
+            await api.put(`/md/yearly-plan/${item.id}`, { decision: 'APPROVE' });
+            toast.success('Yearly Plan approved');
+            fetchYearlyPlans();
+            fetchDashboard();
         } catch (err) {
             toast.error(err.response?.data?.message || 'Failed to approve');
         }
@@ -475,7 +448,7 @@ const MDDashboard = () => {
                     {searchOpen && searchResults.length > 0 && (
                         <div className="md-search-dropdown" style={{ top: '110%' }}>
                             {searchResults.map(emp => (
-                                <div key={emp._id} className="md-search-item" onClick={() => loadEmployeeDetail(emp)}>
+                                <div key={emp.id} className="md-search-item" onClick={() => loadEmployeeDetail(emp)}>
                                     <div className="md-search-avatar">{getInitials(emp.name)}</div>
                                     <div className="md-search-info">
                                         <div className="md-search-name">{emp.name}</div>
@@ -512,9 +485,9 @@ const MDDashboard = () => {
                             <span className="md-health-label">Evaluations done</span>
                             <span className={`md-health-value ${getRatioColorClass(evalPct)}`}>{evaluationsThisMonth}</span>
                         </div>
-                        {/* Metric 4: Pending approvals */}
+                        {/* Metric 4: Pending yearly plan approvals */}
                         <div className="md-health-item md-health-urgent">
-                            <span className="md-health-label">Pending approvals</span>
+                            <span className="md-health-label">Yearly plans pending</span>
                             <span className="md-health-value" style={{ color: '#EF4444' }}>{totalPending}</span>
                         </div>
                     </div>
@@ -952,7 +925,7 @@ function EmployeeDetailView({ employee, data, tab, setTab, onBack }) {
                     {tab === 'monthly' && (
                         <div className="md-plan-list">
                             {monthlyPlans.length === 0 ? <p className="md-empty-state">No monthly plans</p> : monthlyPlans.map(plan => (
-                                <div key={plan._id} className="md-plan-item">
+                                <div key={plan.id} className="md-plan-item">
                                     <div className="md-plan-month">{plan.month}</div>
                                     <div className="md-plan-text">{plan.planDetails}</div>
                                     <span className={`md-plan-badge ${plan.status?.toLowerCase()}`}>{plan.status}</span>
@@ -963,7 +936,7 @@ function EmployeeDetailView({ employee, data, tab, setTab, onBack }) {
                     {tab === 'quarterly' && (
                         <>
                             {quarterlyEvals.length === 0 ? <p className="md-empty-state">No quarterly evaluations</p> : quarterlyEvals.map(qe => (
-                                <div key={qe._id} className="md-eval-row">
+                                <div key={qe.id} className="md-eval-row">
                                     <div className="md-eval-month">{qe.quarter}</div>
                                     <div className="md-eval-score">{qe.averageScore?.toFixed(1)}/10</div>
                                 </div>
@@ -973,7 +946,7 @@ function EmployeeDetailView({ employee, data, tab, setTab, onBack }) {
                     {tab === 'yearly' && (
                         <>
                             {yearlyPlans.length === 0 ? <p className="md-empty-state">No yearly plans</p> : yearlyPlans.map(plan => (
-                                <div key={plan._id} className="yp-plan-card" style={{ marginBottom: '10px' }}>
+                                <div key={plan.id} className="yp-plan-card" style={{ marginBottom: '10px' }}>
                                     <div className="yp-plan-year"><FiCalendar /> FY {plan.financialYear}</div>
                                     <span className={`yp-status ${plan.status.toLowerCase()}`}>{plan.status}</span>
                                 </div>

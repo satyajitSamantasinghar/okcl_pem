@@ -104,13 +104,6 @@ router.post(
   hrdController.generateYearlyAppraisal
 );
 
-router.post(
-  "/review",
-  verifyToken,
-  authorizeRoles("HRD"),
-  hrdController.hrdReview
-);
-
 router.put(
   "/yearly-report/:id",
   verifyToken,

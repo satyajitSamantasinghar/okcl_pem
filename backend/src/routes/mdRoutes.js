@@ -57,14 +57,6 @@ router.put(
   mdController.evaluateYearlyReport
 );
 
-/* Legacy: final approval */
-router.post(
-  "/final-approval",
-  verifyToken,
-  authorizeRoles("MD"),
-  mdController.finalApproval
-);
-
 /* Monthly Plans list (for dashboard) */
 router.get(
   "/monthly-plans",
@@ -97,4 +89,21 @@ router.get(
   mdController.getYearlyReports
 );
 
+/* ── MD evaluates an RA's monthly plan (evaluatorId flow) ── */
+router.post(
+  "/monthly-evaluation",
+  verifyToken,
+  authorizeRoles("MD"),
+  mdController.submitMonthlyEvaluationForRA
+);
+
+/* ── MD: list monthly evaluations for RAs under MD ── */
+router.get(
+  "/ra-monthly-evaluations",
+  verifyToken,
+  authorizeRoles("MD"),
+  mdController.getRAMonthlyEvaluations
+);
+
 module.exports = router;
+

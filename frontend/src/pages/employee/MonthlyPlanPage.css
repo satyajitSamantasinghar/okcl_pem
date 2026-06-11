@@ -886,12 +886,12 @@
     position: relative;
 }
 
-/* Top row: [chip] [title/meta] [close] */
+/* Top row: [chip] [title/meta] — close button is absolute, needs right-padding clearance */
 .dmod-hdr-top {
     display: flex;
     align-items: center;
     gap: 14px;
-    padding: 18px 20px 14px;
+    padding: 18px 56px 14px 20px;
     flex-shrink: 0;
 }
 
@@ -980,8 +980,11 @@
     color: #7C3AED;
 }
 
-/* Close button — circular, top-right */
+/* Close button — absolute top-right, industry standard */
 .dmod-close {
+    position: absolute;
+    top: 14px;
+    right: 14px;
     width: 32px;
     height: 32px;
     border-radius: 50%;
@@ -994,7 +997,7 @@
     cursor: pointer;
     transition: all .15s;
     flex-shrink: 0;
-    margin-left: auto;
+    z-index: 1;
     box-shadow: 0 1px 3px rgba(0, 0, 0, .08);
 }
 
@@ -2500,4 +2503,4 @@
     color: #B91C1C;
     font-style: italic;
     opacity: 0.85;
-}
+}

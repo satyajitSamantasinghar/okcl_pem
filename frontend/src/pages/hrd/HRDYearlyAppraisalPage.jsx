@@ -3,9 +3,9 @@ import toast from 'react-hot-toast';
 import {
     FiArrowLeft, FiAward, FiBriefcase, FiCalendar, FiCheckCircle,
     FiChevronDown, FiChevronUp, FiClock, FiEdit3, FiEye,
-    FiFileText, FiPenTool, FiPlus, FiStar, FiTarget, FiUsers,
-    FiXCircle, FiAlertTriangle, FiTrendingUp, FiZap, FiBarChart2,
-    FiRefreshCw, FiColumns,
+    FiFileText, FiInfo, FiLayers, FiLink, FiPenTool, FiPlus,
+    FiStar, FiTarget, FiTrendingUp, FiUsers, FiXCircle,
+    FiAlertTriangle, FiZap, FiBarChart2, FiRefreshCw, FiColumns,
 } from 'react-icons/fi';
 import api from '../../services/api';
 import '../ra/RAYearlyAppraisalPage.css';
@@ -33,56 +33,37 @@ const formatDate = (value) => {
 
 const getStatusInfo = (status) => {
     const map = {
-        PENDING: { label: 'Pending Assessment', cls: 'pending', icon: <FiClock /> },
-        SUBMITTED: { label: 'Submitted', cls: 'pending', icon: <FiClock /> },
-        APPROVED: { label: 'MD Approved', cls: 'approved', icon: <FiCheckCircle /> },
-        REJECTED: { label: 'MD Rejected', cls: 'rejected', icon: <FiXCircle /> },
-        EDITED: { label: 'Edited Before Approval', cls: 'edited', icon: <FiEdit3 /> },
-        EDITED_AFTER_APPROVAL: { label: 'Edited After Approval', cls: 'edited', icon: <FiEdit3 /> },
-        RA_EVALUATED: { label: 'RA Evaluated', cls: 'ra-done', icon: <FiCheckCircle /> },
-        HRD_EVALUATED: { label: 'HRD Evaluated', cls: 'hrd-done', icon: <FiCheckCircle /> },
-        MD_EVALUATED: { label: 'MD Evaluated', cls: 'completed', icon: <FiCheckCircle /> },
-        COMPLETED: { label: 'Completed', cls: 'completed', icon: <FiCheckCircle /> },
+        PENDING:              { label: 'Pending Assessment',     cls: 'pending',   icon: <FiClock /> },
+        SUBMITTED:            { label: 'Submitted',              cls: 'pending',   icon: <FiClock /> },
+        APPROVED:             { label: 'MD Approved',            cls: 'approved',  icon: <FiCheckCircle /> },
+        REJECTED:             { label: 'MD Rejected',            cls: 'rejected',  icon: <FiXCircle /> },
+        EDITED:               { label: 'Edited Before Approval', cls: 'edited',    icon: <FiEdit3 /> },
+        EDITED_AFTER_APPROVAL:{ label: 'Edited After Approval',  cls: 'edited',    icon: <FiEdit3 /> },
+        RA_EVALUATED:         { label: 'RA Evaluated',           cls: 'ra-done',   icon: <FiCheckCircle /> },
+        HRD_EVALUATED:        { label: 'HRD Evaluated',          cls: 'hrd-done',  icon: <FiCheckCircle /> },
+        MD_EVALUATED:         { label: 'MD Evaluated',           cls: 'completed', icon: <FiCheckCircle /> },
+        COMPLETED:            { label: 'Completed',              cls: 'completed', icon: <FiCheckCircle /> },
     };
     return map[status] || { label: status || 'Unknown', cls: 'pending', icon: <FiClock /> };
 };
 
-/* Workflow stepper config */
 const getWorkflowStep = (status) => {
     if (!status || status === 'SUBMITTED') return 1;
     if (status === 'RA_EVALUATED') return 2;
     if (status === 'HRD_EVALUATED') return 3;
     if (status === 'MD_EVALUATED') return 4;
     if (status === 'COMPLETED') return 5;
-
-    // For plans
     if (status === 'PENDING') return 0;
     if (status === 'REJECTED') return -1;
     if (status === 'APPROVED' || status === 'EDITED_AFTER_APPROVAL') return 1;
-
     return 1;
 };
 
 const getPlanStatusInfo = (status) => {
     if (!status) return null;
-    if (status === 'APPROVED') return {
-        variant: 'approved',
-        label: 'Approved Plan',
-        icon: '✅',
-        badge: 'Approved',
-    };
-    if (status === 'PENDING' || status === 'SUBMITTED') return {
-        variant: 'pending',
-        label: 'Pending MD Review',
-        icon: '⏳',
-        badge: 'Pending MD Review',
-    };
-    if (status === 'EDITED') return {
-        variant: 'edited',
-        label: 'Edited Before Approval',
-        icon: '✏️',
-        badge: 'Edited Before Approval',
-    };
+    if (status === 'APPROVED') return { variant: 'approved', label: 'Approved Plan', icon: '✅', badge: 'Approved' };
+    if (status === 'PENDING' || status === 'SUBMITTED') return { variant: 'pending', label: 'Pending MD Review', icon: '⏳', badge: 'Pending MD Review' };
+    if (status === 'EDITED') return { variant: 'edited', label: 'Edited Before Approval', icon: '✏️', badge: 'Edited Before Approval' };
     return { variant: 'pending', label: status, icon: '⏳', badge: status };
 };
 
@@ -90,7 +71,6 @@ const getPlanStatusInfo = (status) => {
    MICRO COMPONENTS
 ══════════════════════════════════════════════════════════ */
 
-/* Status Badge */
 const StatusBadge = ({ status }) => {
     const info = getStatusInfo(status);
     return (
@@ -100,7 +80,6 @@ const StatusBadge = ({ status }) => {
     );
 };
 
-/* Score Bar */
 const ScoreBar = ({ value, max, color = 'primary' }) => {
     const pct = max > 0 ? Math.min(100, (Number(value || 0) / max) * 100) : 0;
     return (
@@ -110,7 +89,6 @@ const ScoreBar = ({ value, max, color = 'primary' }) => {
     );
 };
 
-/* Score Card (dashboard view) */
 const ScoreCard = ({ label, value, max, color = 'primary', highlight = false }) => {
     const display = value != null ? value : '—';
     const pct = value != null && max > 0 ? Math.round((value / max) * 100) : null;
@@ -129,7 +107,99 @@ const ScoreCard = ({ label, value, max, color = 'primary', highlight = false }) 
     );
 };
 
-/* Phase 3 — baseline banner shown below hero */
+/* ── SECTION 1: Redesigned Summary Panel ── */
+const SummaryPanel = ({ plans, reports }) => {
+    const pendingReports = reports.filter((r) => r.status === 'RA_EVALUATED').length;
+    const doneReports    = reports.filter((r) => ['HRD_EVALUATED', 'MD_EVALUATED', 'COMPLETED'].includes(r.status)).length;
+
+    return (
+        <div className="yap-summary-panel">
+            <div className="yap-summary-chip yap-summary-chip--neutral">
+                <div className="yap-summary-chip-icon yap-summary-chip-icon--blue"><FiUsers size={14} /></div>
+                <div className="yap-summary-chip-body">
+                    <div className="yap-summary-chip-count">{plans.length}</div>
+                    <div className="yap-summary-chip-label">Total Plans</div>
+                </div>
+            </div>
+            <div className="yap-summary-chip yap-summary-chip--pending">
+                <div className="yap-summary-chip-icon yap-summary-chip-icon--amber"><FiClock size={14} /></div>
+                <div className="yap-summary-chip-body">
+                    <div className="yap-summary-chip-count">{pendingReports}</div>
+                    <div className="yap-summary-chip-label">Pending HRD</div>
+                </div>
+            </div>
+            <div className="yap-summary-chip yap-summary-chip--evaluated">
+                <div className="yap-summary-chip-icon yap-summary-chip-icon--green"><FiCheckCircle size={14} /></div>
+                <div className="yap-summary-chip-body">
+                    <div className="yap-summary-chip-count">{doneReports}</div>
+                    <div className="yap-summary-chip-label">Evaluated</div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+/* Workflow Stepper */
+const WorkflowStepper = ({ status, isReport = false }) => {
+    const step     = getWorkflowStep(status);
+    const rejected = status === 'REJECTED';
+
+    const steps = isReport ? [
+        { icon: <FiFileText />,     label: 'Report\nSubmitted' },
+        { icon: <FiStar />,         label: 'RA\nEvaluation' },
+        { icon: <FiUsers />,        label: 'HRD\nEvaluation' },
+        { icon: <FiAward />,        label: 'MD\nFinal' },
+        { icon: <FiCheckCircle />,  label: 'Completed' },
+    ] : [
+        { icon: <FiFileText />,     label: 'Plan\nSubmitted' },
+        { icon: <FiCheckCircle />,  label: 'MD\nReview' },
+    ];
+
+    return (
+        <div className="yap-stepper">
+            {steps.map((s, i) => {
+                const done       = step > i;
+                const active     = step === i;
+                const isRejected = rejected && i === 1;
+                return (
+                    <div key={i} className="yap-stepper-item">
+                        {i > 0 && (
+                            <div className={`yap-stepper-line${done || (active && i > 0) ? ' yap-stepper-line--done' : ''}`} />
+                        )}
+                        <div className={`yap-stepper-dot${done ? ' yap-stepper-dot--done' : ''}${active ? ' yap-stepper-dot--active' : ''}${isRejected ? ' yap-stepper-dot--rejected' : ''}`}>
+                            {isRejected ? <FiXCircle /> : done ? <FiCheckCircle /> : s.icon}
+                        </div>
+                        <span
+                            className={`yap-stepper-label${active ? ' yap-stepper-label--active' : ''}`}
+                            style={{ whiteSpace: 'pre-line', textAlign: 'center' }}
+                        >
+                            {s.label}
+                        </span>
+                    </div>
+                );
+            })}
+        </div>
+    );
+};
+
+const RejectionAlert = ({ remark }) => (
+    <div className="yap-rejection-alert">
+        <div className="yap-rejection-header">
+            <FiAlertTriangle className="yap-rejection-icon" />
+            <div>
+                <div className="yap-rejection-title">Plan Rejected by MD</div>
+                <div className="yap-rejection-sub">The employee needs to revise and resubmit</div>
+            </div>
+        </div>
+        {remark && (
+            <div className="yap-rejection-body">
+                <span className="yap-rejection-label">MD's Reason:</span>
+                <p className="yap-rejection-text">"{remark}"</p>
+            </div>
+        )}
+    </div>
+);
+
 const PlanBaselineBanner = ({ plan }) => {
     if (!plan) {
         return (
@@ -139,8 +209,7 @@ const PlanBaselineBanner = ({ plan }) => {
             </div>
         );
     }
-    const s = plan.status;
-    if (s === 'APPROVED') {
+    if (plan.status === 'APPROVED') {
         return (
             <div className="yap-baseline-banner yap-baseline-banner--approved">
                 <FiCheckCircle size={14} />
@@ -156,8 +225,90 @@ const PlanBaselineBanner = ({ plan }) => {
     );
 };
 
+/* ── KRA REFERENCE TABLE (plan.kras) ── */
+const KRATable = ({ kras }) => {
+    if (!kras || kras.length === 0) {
+        return (
+            <div className="yap-legacy-banner">
+                <FiInfo size={15} />
+                <span>No KRA data found for this plan. This may be a legacy plan submitted before the KRA update.</span>
+            </div>
+        );
+    }
+    return (
+        <div className="yap-kra-table-wrapper">
+            <table className="yap-kra-table">
+                <thead>
+                    <tr>
+                        <th className="yap-kra-col--num">#</th>
+                        <th className="yap-kra-col--desc">KRA Description</th>
+                        <th className="yap-kra-col--target">Target / Measurable Outcome</th>
+                        <th className="yap-kra-col--timeline">Timeline / Milestone</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {[...kras]
+                        .sort((a, b) => (a.kraIndex ?? 0) - (b.kraIndex ?? 0))
+                        .map((kra, idx) => (
+                            <tr key={kra.id || idx} className={idx % 2 === 0 ? 'yap-kra-row--even' : 'yap-kra-row--odd'}>
+                                <td className="yap-kra-col--num">
+                                    <div className="yap-kra-num-badge">{(kra.kraIndex ?? idx) + 1}</div>
+                                </td>
+                                <td className="yap-kra-col--desc">{kra.description}</td>
+                                <td className="yap-kra-col--target">{kra.target}</td>
+                                <td className="yap-kra-col--timeline">
+                                    <span className="yap-kra-timeline-badge">{kra.timeline}</span>
+                                </td>
+                            </tr>
+                        ))}
+                </tbody>
+            </table>
+        </div>
+    );
+};
 
+/* ── KRA ACHIEVEMENT CARD LIST (kraAssessments array) ── */
+const KRAAssessmentCardList = ({ kraAssessments }) => {
+    if (!kraAssessments || kraAssessments.length === 0) {
+        return (
+            <div className="yap-legacy-banner">
+                <FiInfo size={15} />
+                <span>No KRA-based self-assessment found. This may be a legacy record submitted before the KRA update.</span>
+            </div>
+        );
+    }
+    return (
+        <div className="yap-kra-cards-list">
+            {[...kraAssessments]
+                .sort((a, b) => (a.kraIndex ?? 0) - (b.kraIndex ?? 0))
+                .map((kra, idx) => (
+                    <div key={kra.id || idx} className="yap-kra-card">
+                        <div className="yap-kra-card-header">
+                            <div className="yap-kra-num-badge">{(kra.kraIndex ?? idx) + 1}</div>
+                            <div className="yap-kra-card-header-content">
+                                <div className="yap-kra-card-desc">{kra.description}</div>
+                                <div className="yap-kra-pills">
+                                    <span className="yap-kra-pill"><strong>Target:</strong> {kra.target}</span>
+                                    <span className="yap-kra-pill yap-kra-pill--timeline">{kra.timeline}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="yap-kra-card-body">
+                            <div className="yap-kra-achievement-label">Employee Achievement</div>
+                            <p className="yap-kra-achievement-text">
+                                {kra.achievement && kra.achievement.trim()
+                                    ? kra.achievement
+                                    : <em style={{ color: 'var(--text-muted)' }}>No achievement text submitted for this KRA.</em>
+                                }
+                            </p>
+                        </div>
+                    </div>
+                ))}
+        </div>
+    );
+};
 
+/* ── YEARLY PLAN TAB (right panel) ── */
 const YearlyPlanTab = ({ plan, showHistory, setShowHistory }) => {
     if (!plan) {
         return (
@@ -191,18 +342,18 @@ const YearlyPlanTab = ({ plan, showHistory, setShowHistory }) => {
                 </div>
             )}
 
+            {/* KRA Reference Table */}
             <div className="yap-block" style={{ marginTop: 12 }}>
                 <div className="yap-block-header">
-                    <div className="yap-block-icon yap-block-icon--blue"><FiTarget /></div>
-                    <div><h3>Plan & Objectives</h3><p>Submitted yearly goals</p></div>
+                    <div className="yap-block-icon yap-block-icon--blue"><FiLayers /></div>
+                    <div><h3>KRA Reference Table</h3><p>Approved yearly KRAs and targets</p></div>
                 </div>
-                <div style={{ padding: '14px 18px', fontSize: '0.875rem', lineHeight: 1.8 }}>
-                    {plan.planAndObjectives
-                        ? <pre className="yap-pre">{plan.planAndObjectives}</pre>
-                        : <span className="yap-muted">No objectives submitted.</span>}
+                <div style={{ padding: '14px 18px' }}>
+                    <KRATable kras={plan.kras} />
                 </div>
             </div>
 
+            {/* Edit History */}
             {plan.editHistory?.length > 0 && (
                 <div className="yap-block" style={{ marginTop: 10 }}>
                     <div
@@ -223,7 +374,7 @@ const YearlyPlanTab = ({ plan, showHistory, setShowHistory }) => {
                                     <div className="yap-history-num">{i + 1}</div>
                                     <div>
                                         <div className="yap-history-note">{edit.note || 'Plan updated'}</div>
-                                        <div className="yap-history-date">{new Date(edit.editedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
+                                        <div className="yap-history-date">{formatDate(edit.editedAt)}</div>
                                     </div>
                                 </li>
                             ))}
@@ -235,112 +386,13 @@ const YearlyPlanTab = ({ plan, showHistory, setShowHistory }) => {
     );
 };
 
-/* Workflow Stepper */
-const WorkflowStepper = ({ status, isReport = false }) => {
-    const step = getWorkflowStep(status);
-    const rejected = status === 'REJECTED';
-
-    const steps = isReport ? [
-        { icon: <FiFileText />, label: 'Report Submitted' },
-        { icon: <FiStar />, label: 'RA Evaluation' },
-        { icon: <FiUsers />, label: 'HRD Evaluation' },
-        { icon: <FiAward />, label: 'MD Final' },
-        { icon: <FiCheckCircle />, label: 'Completed' },
-    ] : [
-        { icon: <FiFileText />, label: 'Plan Submitted' },
-        { icon: <FiCheckCircle />, label: 'MD Review' }
-    ];
-
-    return (
-        <div className="yap-stepper">
-            {steps.map((s, i) => {
-                const done = step > i;
-                const active = step === i;
-                const isRejected = rejected && i === 1;
-                return (
-                    <div key={i} className="yap-stepper-item">
-                        {i > 0 && (
-                            <div className={`yap-stepper-line${done || (active && i > 0) ? ' yap-stepper-line--done' : ''}`} />
-                        )}
-                        <div className={`yap-stepper-dot
-                            ${done ? 'yap-stepper-dot--done' : ''}
-                            ${active ? 'yap-stepper-dot--active' : ''}
-                            ${isRejected ? 'yap-stepper-dot--rejected' : ''}`}
-                        >
-                            {isRejected ? <FiXCircle /> : done ? <FiCheckCircle /> : s.icon}
-                        </div>
-                        <span className={`yap-stepper-label${active ? ' yap-stepper-label--active' : ''}`}>
-                            {s.label}
-                        </span>
-                    </div>
-                );
-            })}
-        </div>
-    );
-};
-
-/* MD Rejection Alert */
-const RejectionAlert = ({ remark }) => (
-    <div className="yap-rejection-alert">
-        <div className="yap-rejection-header">
-            <FiAlertTriangle className="yap-rejection-icon" />
-            <div>
-                <div className="yap-rejection-title">Plan Rejected by MD</div>
-                <div className="yap-rejection-sub">The employee needs to revise and resubmit</div>
-            </div>
-        </div>
-        {remark && (
-            <div className="yap-rejection-body">
-                <span className="yap-rejection-label">MD's Reason:</span>
-                <p className="yap-rejection-text">"{remark}"</p>
-            </div>
-        )}
-    </div>
-);
-
-/* Summary Stats panel */
-const SummaryPanel = ({ plans, reports }) => {
-    const pendingReports = reports.filter(
-        (r) => r.status === 'RA_EVALUATED'
-    ).length;
-    const doneReports = reports.filter(
-        (r) => ['HRD_EVALUATED', 'MD_EVALUATED', 'COMPLETED'].includes(r.status)
-    ).length;
-
-    return (
-        <div className="yap-summary-panel">
-            <div className="yap-summary-stat">
-                <div className="yap-summary-icon yap-summary-icon--blue"><FiUsers /></div>
-                <div>
-                    <div className="yap-summary-val">{plans.length}</div>
-                    <div className="yap-summary-label">Plans</div>
-                </div>
-            </div>
-            <div className="yap-summary-stat">
-                <div className="yap-summary-icon yap-summary-icon--amber"><FiClock /></div>
-                <div>
-                    <div className="yap-summary-val">{pendingReports}</div>
-                    <div className="yap-summary-label">Pending HRD</div>
-                </div>
-            </div>
-            <div className="yap-summary-stat">
-                <div className="yap-summary-icon yap-summary-icon--green"><FiCheckCircle /></div>
-                <div>
-                    <div className="yap-summary-val">{doneReports}</div>
-                    <div className="yap-summary-label">Evaluated</div>
-                </div>
-            </div>
-        </div>
-    );
-};
-
 /* ══════════════════════════════════════════════════════════
    RESIZE HOOKS
 ══════════════════════════════════════════════════════════ */
-const SPLIT_KEY = 'hrd_yap_split_pct';
-const DEFAULT_PCT = 68;
-const MIN_PCT = 40;
-const MAX_PCT = 80;
+const SPLIT_KEY      = 'hrd_yap_split_pct';
+const DEFAULT_PCT    = 68;
+const MIN_PCT        = 40;
+const MAX_PCT        = 80;
 
 const useSplitPane = () => {
     const [leftPct, setLeftPct] = useState(() => {
@@ -349,12 +401,12 @@ const useSplitPane = () => {
         return (n >= MIN_PCT && n <= MAX_PCT) ? n : DEFAULT_PCT;
     });
     const containerRef = useRef(null);
-    const dragging = useRef(false);
+    const dragging     = useRef(false);
 
     const onMouseMove = useCallback((e) => {
         if (!dragging.current || !containerRef.current) return;
-        const rect = containerRef.current.getBoundingClientRect();
-        const rawPct = ((e.clientX - rect.left) / rect.width) * 100;
+        const rect    = containerRef.current.getBoundingClientRect();
+        const rawPct  = ((e.clientX - rect.left) / rect.width) * 100;
         const clamped = Math.min(MAX_PCT, Math.max(MIN_PCT, rawPct));
         setLeftPct(clamped);
     }, []);
@@ -394,7 +446,7 @@ const useSplitPane = () => {
 };
 
 const COMPARE_SPLIT_KEY = 'hrd_yap_compare_split';
-const MIN_COMPARE_PCT = 20;
+const MIN_COMPARE_PCT   = 20;
 
 const useCompareSplitPane = () => {
     const [splits, setSplits] = useState(() => {
@@ -408,16 +460,15 @@ const useCompareSplitPane = () => {
         return { left: 33.33, mid: 33.33 };
     });
 
-    const containerRef = useRef(null);
-    const draggingRef = useRef(null);
+    const containerRef  = useRef(null);
+    const draggingRef   = useRef(null);
 
     const onMouseMove = useCallback((e) => {
         if (!draggingRef.current || !containerRef.current) return;
-        const rect = containerRef.current.getBoundingClientRect();
+        const rect   = containerRef.current.getBoundingClientRect();
         const rawPct = ((e.clientX - rect.left) / rect.width) * 100;
-
         setSplits(prev => {
-            let next = { ...prev };
+            const next = { ...prev };
             if (draggingRef.current === 'left') {
                 next.left = Math.min(Math.max(MIN_COMPARE_PCT, rawPct), 100 - prev.mid - MIN_COMPARE_PCT);
             } else if (draggingRef.current === 'right') {
@@ -470,48 +521,47 @@ const useCompareSplitPane = () => {
    MAIN COMPONENT
 ══════════════════════════════════════════════════════════ */
 const HRDYearlyAppraisalPage = () => {
-    const [activeTab, setActiveTab] = useState('plans');
-    const [year, setYear] = useState(getCurrentFinancialYear());
-    const [plans, setPlans] = useState([]);
-    const [reports, setReports] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const [activeTab, setActiveTab]     = useState('plans');
+    const [year, setYear]               = useState(getCurrentFinancialYear());
+    const [plans, setPlans]             = useState([]);
+    const [reports, setReports]         = useState([]);
+    const [loading, setLoading]         = useState(true);
     const [selectedView, setSelectedView] = useState(null);
     const [showHistory, setShowHistory] = useState(false);
 
     // HRD Evaluation State
     const [isEvaluating, setIsEvaluating] = useState(false);
-    const [hrdScore, setHrdScore] = useState('');
-    const [hrdRemarks, setHrdRemarks] = useState('');
-    const [submitting, setSubmitting] = useState(false);
+    const [hrdScore, setHrdScore]         = useState('');
+    const [hrdRemarks, setHrdRemarks]     = useState('');
+    const [submitting, setSubmitting]     = useState(false);
 
-    // Compare Mode states
+    // Compare Mode
     const [compareMode, setCompareMode] = useState(false);
-    const [syncScroll, setSyncScroll] = useState(false);
+    const [syncScroll, setSyncScroll]   = useState(false);
     const leftCompareRef = useRef(null);
-    const midCompareRef = useRef(null);
-    const [rightTab, setRightTab] = useState('scoring');
+    const midCompareRef  = useRef(null);
+    const [rightTab, setRightTab]       = useState('scoring');
 
     const { leftPct, containerRef, onDividerMouseDown, onDividerDblClick } = useSplitPane();
     const {
         splits: compareSplits,
         containerRef: compareContainerRef,
         onDividerMouseDown: onCompareDividerMouseDown,
-        onDividerDblClick: onCompareDividerDblClick
+        onDividerDblClick: onCompareDividerDblClick,
     } = useCompareSplitPane();
 
     const fetchData = async () => {
         setLoading(true);
         try {
             const [plansRes, reportsRes] = await Promise.all([
-                api.get('/hrd/yearly-plans', { params: { financialYear: year } }),
+                api.get('/hrd/yearly-plans',   { params: { financialYear: year } }),
                 api.get('/hrd/yearly-reports', { params: { financialYear: year } }),
             ]);
-            setPlans(plansRes.data || []);
+            setPlans(plansRes.data   || []);
             setReports(reportsRes.data || []);
-
             if (selectedView) {
                 const source = activeTab === 'plans' ? plansRes.data : reportsRes.data;
-                const next = source.find((i) => i._id === selectedView._id);
+                const next   = source.find((i) => i.id === selectedView.id);
                 setSelectedView(next || null);
             }
         } catch {
@@ -526,19 +576,41 @@ const HRDYearlyAppraisalPage = () => {
         setSelectedView(null);
         setIsEvaluating(false);
         setShowHistory(false);
+        setCompareMode(false);
+        setRightTab('scoring');
     }, [year]);
+
+    // Sync-scroll effect
+    useEffect(() => {
+        if (!syncScroll || !compareMode) return;
+        const left = leftCompareRef.current;
+        const mid  = midCompareRef.current;
+        if (!left || !mid) return;
+        const onLeftScroll = () => { mid.scrollTop = left.scrollTop; };
+        const onMidScroll  = () => { left.scrollTop = mid.scrollTop; };
+        left.addEventListener('scroll', onLeftScroll);
+        mid.addEventListener('scroll', onMidScroll);
+        return () => {
+            left.removeEventListener('scroll', onLeftScroll);
+            mid.removeEventListener('scroll', onMidScroll);
+        };
+    }, [syncScroll, compareMode]);
 
     const handleTabChange = (tab) => {
         setActiveTab(tab);
         setSelectedView(null);
         setIsEvaluating(false);
         setShowHistory(false);
+        setCompareMode(false);
+        setRightTab('scoring');
     };
 
     const openDetail = (item) => {
         setSelectedView(item);
         setIsEvaluating(false);
         setShowHistory(false);
+        setCompareMode(false);
+        setRightTab('scoring');
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
@@ -557,9 +629,9 @@ const HRDYearlyAppraisalPage = () => {
         }
         setSubmitting(true);
         try {
-            await api.put(`/hrd/yearly-report/${selectedView._id}`, {
+            await api.put(`/hrd/yearly-report/${selectedView.id}`, {
                 hrdTotalScore: score,
-                hrdRemarks: hrdRemarks
+                hrdRemarks:    hrdRemarks,
             });
             toast.success('Evaluation submitted successfully!');
             setIsEvaluating(false);
@@ -585,7 +657,8 @@ const HRDYearlyAppraisalPage = () => {
        LIST VIEW
     ══════════════════════════════════════════════════════ */
     if (!selectedView) {
-        const items = activeTab === 'plans' ? plans : reports;
+        const items         = activeTab === 'plans' ? plans : reports;
+        const pendingCount  = reports.filter((r) => r.status === 'RA_EVALUATED').length;
 
         return (
             <div className="yap-page fade-in">
@@ -619,24 +692,18 @@ const HRDYearlyAppraisalPage = () => {
                         className={`yap-tab${activeTab === 'plans' ? ' yap-tab--active' : ''}`}
                         onClick={() => handleTabChange('plans')}
                     >
-                        <FiTarget size={15} />
-                        Yearly Plans
+                        <FiTarget size={15} /> Yearly Plans
                         <span className="yap-tab-badge">{plans.length}</span>
                     </button>
                     <button
                         className={`yap-tab${activeTab === 'reports' ? ' yap-tab--active' : ''}`}
                         onClick={() => handleTabChange('reports')}
                     >
-                        <FiBarChart2 size={15} />
-                        Appraisal Reports
-                        {reports.filter((r) => r.status === 'RA_EVALUATED').length > 0 && (
-                            <span className="yap-tab-badge yap-tab-badge--alert">
-                                {reports.filter((r) => r.status === 'RA_EVALUATED').length} pending HRD
-                            </span>
-                        )}
-                        {reports.filter((r) => r.status === 'RA_EVALUATED').length === 0 && (
-                            <span className="yap-tab-badge">{reports.length}</span>
-                        )}
+                        <FiBarChart2 size={15} /> Appraisal Reports
+                        {pendingCount > 0
+                            ? <span className="yap-tab-badge yap-tab-badge--alert">{pendingCount} pending HRD</span>
+                            : <span className="yap-tab-badge">{reports.length}</span>
+                        }
                     </button>
                 </div>
 
@@ -650,25 +717,21 @@ const HRDYearlyAppraisalPage = () => {
                 ) : (
                     <div className="yap-cards-grid">
                         {items.map((item) => {
-                            const employee = item.employeeId;
-                            const isPlan = activeTab === 'plans';
+                            const employee  = item.employee;
+                            const isPlan    = activeTab === 'plans';
                             const needsEval = !isPlan && item.status === 'RA_EVALUATED';
+                            const hasHRDEval = item.hrdTotalScore != null;
+                            const kraCount  = !isPlan ? (item.kraAssessments?.length ?? 0) : (item.kras?.length ?? 0);
 
                             return (
                                 <div
-                                    key={item._id}
+                                    key={item.id}
                                     className={`yap-card${needsEval ? ' yap-card--action-required' : ''}`}
                                     onClick={() => openDetail(item)}
                                     role="button"
                                     tabIndex={0}
                                     onKeyDown={(e) => e.key === 'Enter' && openDetail(item)}
                                 >
-                                    {needsEval && (
-                                        <div className="yap-card-action-pill">
-                                            <FiZap size={10} /> Action Required
-                                        </div>
-                                    )}
-
                                     {/* Head */}
                                     <div className="yap-card-head">
                                         <div className="yap-card-avatar">{getInitials(employee?.name)}</div>
@@ -676,9 +739,21 @@ const HRDYearlyAppraisalPage = () => {
                                             <div className="yap-card-name">{employee?.name || 'Unknown'}</div>
                                             <div className="yap-card-sub">
                                                 {employee?.employeeCode} · {employee?.department || 'N/A'}
+                                                {kraCount > 0 && (
+                                                    <span className="yap-card-kra-count">
+                                                        <FiLayers size={10} /> {kraCount} KRA{kraCount !== 1 ? 's' : ''}
+                                                    </span>
+                                                )}
                                             </div>
                                         </div>
-                                        <StatusBadge status={item.status} />
+                                        <div className="yap-card-head-right">
+                                            <StatusBadge status={item.status} />
+                                            {needsEval && (
+                                                <div className="yap-card-action-pill">
+                                                    <FiZap size={10} /> Action Required
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
 
                                     {/* Meta chips */}
@@ -693,30 +768,64 @@ const HRDYearlyAppraisalPage = () => {
                                         )}
                                     </div>
 
-                                    {/* Score strip for reports */}
+                                    {/* Three score mini-cards for reports */}
                                     {!isPlan && (
-                                        <div className="yap-card-score-strip">
-                                            <span className="yap-score-chip yap-score-chip--ra">
-                                                RA {item.raTotalScore ?? '—'}/80
-                                            </span>
-                                            <span className="yap-score-chip yap-score-chip--hrd">
-                                                HRD {item.hrdTotalScore ?? '—'}/5
-                                            </span>
-                                            <span className="yap-score-chip yap-score-chip--md">
-                                                MD {item.mdFinalScore ?? '—'}/15
-                                            </span>
+                                        <div className="yap-score-mini-cards">
+                                            <div className="yap-score-mini-card yap-score-mini-card--ra">
+                                                <div className="yap-score-mini-stage">RA score</div>
+                                                <div className="yap-score-mini-value">
+                                                    {item.raTotalScore != null ? item.raTotalScore : '—'} / 80
+                                                </div>
+                                                <div className="yap-score-mini-status">
+                                                    {item.raTotalScore != null ? 'RA evaluated' : 'Pending RA'}
+                                                </div>
+                                            </div>
+                                            <div className="yap-score-mini-card yap-score-mini-card--hrd">
+                                                <div className="yap-score-mini-stage">HRD score</div>
+                                                <div className="yap-score-mini-value">
+                                                    {item.hrdTotalScore != null ? item.hrdTotalScore : '—'} / 5
+                                                </div>
+                                                <div className="yap-score-mini-status">
+                                                    {item.hrdTotalScore != null ? 'HRD evaluated' : 'Pending your evaluation'}
+                                                </div>
+                                            </div>
+                                            <div className="yap-score-mini-card yap-score-mini-card--md">
+                                                <div className="yap-score-mini-stage">MD score</div>
+                                                <div className="yap-score-mini-value">
+                                                    {item.mdFinalScore != null ? item.mdFinalScore : '—'} / 15
+                                                </div>
+                                                <div className="yap-score-mini-status">
+                                                    {item.mdFinalScore != null ? 'MD evaluated' : 'Awaiting MD'}
+                                                </div>
+                                            </div>
                                         </div>
                                     )}
 
-                                    {/* CTA */}
+                                    {/* CTA footer */}
                                     <div className="yap-card-footer">
-                                        <button
-                                            className={`yap-card-btn${needsEval ? ' yap-card-btn--primary' : ' yap-card-btn--secondary'}`}
-                                            onClick={(e) => { e.stopPropagation(); openDetail(item); }}
-                                        >
-                                            <FiEye size={13} />
-                                            {isPlan ? 'View Plan' : needsEval ? 'Start Evaluation' : 'View Report'}
-                                        </button>
+                                        {isPlan ? (
+                                            <button
+                                                className="yap-card-btn yap-card-btn--secondary"
+                                                onClick={(e) => { e.stopPropagation(); openDetail(item); }}
+                                            >
+                                                <FiEye size={13} /> View Plan
+                                            </button>
+                                        ) : needsEval ? (
+                                            <button
+                                                className="yap-card-btn yap-card-btn--primary"
+                                                style={{ background: '#0d9488' }}
+                                                onClick={(e) => { e.stopPropagation(); openDetail(item); }}
+                                            >
+                                                <FiStar size={13} /> Start HRD Evaluation
+                                            </button>
+                                        ) : (
+                                            <button
+                                                className="yap-card-btn yap-card-btn--secondary"
+                                                onClick={(e) => { e.stopPropagation(); openDetail(item); }}
+                                            >
+                                                <FiEye size={13} /> View Report
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                             );
@@ -730,30 +839,29 @@ const HRDYearlyAppraisalPage = () => {
     /* ══════════════════════════════════════════════════════
        DETAIL VIEW
     ══════════════════════════════════════════════════════ */
-    const item = selectedView;
-    const employee = item.employeeId;
-    const isPlan = activeTab === 'plans';
-    const hasHRDEval = item.hrdTotalScore != null;
-    const isLocked = ['MD_EVALUATED', 'COMPLETED'].includes(item.status);
+    const item        = selectedView;
+    const employee    = item.employee;
+    const isPlan      = activeTab === 'plans';
+    const hasHRDEval  = item.hrdTotalScore != null;
+    const isLocked    = ['MD_EVALUATED', 'COMPLETED'].includes(item.status);
     const canEvaluate = item.status === 'RA_EVALUATED' || (hasHRDEval && !isLocked);
+    // HRD API returns the linked plan on `linkedYearlyPlan` field
+    const linkedPlan  = !isPlan ? (item.linkedYearlyPlan || null) : null;
 
     return (
         <div className="yap-detail-page fade-in">
 
             {/* ══ FIXED HEADER CHROME ══ */}
             <div className="yap-detail-header">
-                {/* Back */}
                 <button
                     className="yap-back-btn"
-                    onClick={() => { setSelectedView(null); setIsEvaluating(false); }}
+                    onClick={() => { setSelectedView(null); setIsEvaluating(false); setCompareMode(false); }}
                 >
                     <FiArrowLeft size={14} /> Back to List
                 </button>
 
-                {/* Workflow Stepper */}
                 <WorkflowStepper status={item.status} isReport={!isPlan} />
 
-                {/* Hero Header */}
                 <div className="yap-hero">
                     <div className="yap-hero-left">
                         <div className="yap-hero-avatar">{getInitials(employee?.name)}</div>
@@ -775,11 +883,10 @@ const HRDYearlyAppraisalPage = () => {
                         </div>
                     </div>
                     <div className="yap-hero-right">
-                        {!isPlan && item.yearlyPlanId && (
+                        {!isPlan && linkedPlan && (
                             <button
                                 className={`yap-compare-btn${compareMode ? ' yap-compare-btn--active' : ''}`}
                                 onClick={() => setCompareMode(m => !m)}
-                                title="Toggle Compare Mode"
                             >
                                 {compareMode ? <FiXCircle size={14} /> : <FiColumns size={14} />}
                                 {compareMode ? '✖ Exit Compare Mode' : '📊 Compare with Plan'}
@@ -802,7 +909,7 @@ const HRDYearlyAppraisalPage = () => {
                                     <FiCheckCircle size={13} /> Finalized - Read Only
                                 </span>
                             ) : canEvaluate && !hasHRDEval ? (
-                                <button className="yap-cta-btn" onClick={() => startEvaluation(item)}>
+                                <button className="yap-cta-btn" style={{ background: '#0d9488' }} onClick={() => startEvaluation(item)}>
                                     <FiStar size={14} /> Start HRD Evaluation
                                 </button>
                             ) : canEvaluate && hasHRDEval ? (
@@ -814,36 +921,35 @@ const HRDYearlyAppraisalPage = () => {
                     </div>
                 </div>
 
-                {/* MD Rejection Alert */}
-                {item.status === 'REJECTED' && (
-                    <RejectionAlert remark={item.mdRemarks} />
-                )}
+                {!isPlan && <PlanBaselineBanner plan={linkedPlan} />}
+                {item.status === 'REJECTED' && <RejectionAlert remark={item.mdRemarks} />}
             </div>
 
-            {/* ══ SCROLLABLE SPLIT-PANE BODY ══ */}
+            {/* ══ SCROLLABLE BODY ══ */}
             {compareMode && !isPlan ? (
-                /* ═══ 3-COLUMN COMPARE MODE ═══ */
+                /* 3-COLUMN COMPARE MODE */
                 <div className="yap-compare-body" ref={compareContainerRef}>
-                    {/* Left: Yearly Plan pane */}
-                    <div 
-                        className="yap-compare-pane yap-compare-pane--plan" 
-                        ref={leftCompareRef} 
+
+                    {/* Left: KRA Reference Table */}
+                    <div
+                        className="yap-compare-pane yap-compare-pane--plan"
+                        ref={leftCompareRef}
                         style={{ flexBasis: `${compareSplits.left}%`, flexGrow: 0, flexShrink: 0 }}
                         onScroll={(e) => {
                             if (!syncScroll || !midCompareRef.current) return;
-                            if (Math.abs(midCompareRef.current.scrollTop - e.target.scrollTop) > 5) {
+                            if (Math.abs(midCompareRef.current.scrollTop - e.target.scrollTop) > 5)
                                 midCompareRef.current.scrollTop = e.target.scrollTop;
-                            }
                         }}
                     >
-                        <div className="yap-compare-pane-hd">📋 YEARLY PLAN</div>
-                        {item.yearlyPlanId?.planAndObjectives
-                            ? <pre className="yap-pre" style={{ padding: '16px 20px' }}>{item.yearlyPlanId.planAndObjectives}</pre>
-                            : <span className="yap-muted" style={{ padding: 20, display: 'block' }}>No plan objectives linked.</span>
-                        }
+                        <div className="yap-compare-pane-hd">📋 YEARLY PLAN — KRA REFERENCE</div>
+                        <div style={{ padding: '16px 20px 40px' }}>
+                            {linkedPlan
+                                ? <KRATable kras={linkedPlan.kras} />
+                                : <span className="yap-muted" style={{ display: 'block' }}>No plan linked.</span>
+                            }
+                        </div>
                     </div>
 
-                    {/* DIVIDER 1 */}
                     <div
                         className="yap-split-divider"
                         onMouseDown={(e) => onCompareDividerMouseDown(e, 'left')}
@@ -851,84 +957,38 @@ const HRDYearlyAppraisalPage = () => {
                         title="Drag to resize · Double-click to reset"
                     />
 
-                    {/* Middle: Appraisal Report pane */}
-                    <div 
-                        className="yap-compare-pane yap-compare-pane--report" 
-                        ref={midCompareRef} 
+                    {/* Middle: KRA Achievement Cards */}
+                    <div
+                        className="yap-compare-pane yap-compare-pane--report"
+                        ref={midCompareRef}
                         style={{ flexBasis: `${compareSplits.mid}%`, flexGrow: 0, flexShrink: 0 }}
                         onScroll={(e) => {
                             if (!syncScroll || !leftCompareRef.current) return;
-                            if (Math.abs(leftCompareRef.current.scrollTop - e.target.scrollTop) > 5) {
+                            if (Math.abs(leftCompareRef.current.scrollTop - e.target.scrollTop) > 5)
                                 leftCompareRef.current.scrollTop = e.target.scrollTop;
-                            }
                         }}
                     >
                         <div className="yap-compare-pane-hd" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span>📝 APPRAISAL REPORT</span>
+                            <span>📝 SELF-ASSESSMENT — KRA ACHIEVEMENTS</span>
                             <button
                                 className={`yap-sync-btn${syncScroll ? ' yap-sync-btn--on' : ''}`}
                                 onClick={() => setSyncScroll(s => !s)}
                                 style={{ margin: '-4px 0' }}
                             >
-                                <FiRefreshCw size={12} />
-                                Sync Scroll: {syncScroll ? 'ON' : 'OFF'}
+                                <FiLink size={12} /> Sync Scroll: {syncScroll ? 'ON' : 'OFF'}
                             </button>
                         </div>
-                        <div style={{ padding: '0 20px 40px' }}>
-                            <div className="yap-section">
-                                <div className="yap-section-hd yap-section-hd--blue">
-                                    <div className="yap-section-hd-icon"><FiBriefcase /></div>
-                                    <div>
-                                        <div className="yap-section-hd-title">Works as per KRA</div>
-                                        <div className="yap-section-hd-sub">Self-assessment against mapped KRA goals</div>
-                                    </div>
-                                </div>
-                                <div className="yap-section-body">
-                                    {item.workKRA
-                                        ? <pre className="yap-pre">{item.workKRA}</pre>
-                                        : <span className="yap-muted">No data provided.</span>}
-                                </div>
-                            </div>
-
+                        <div style={{ padding: '16px 20px 40px' }}>
+                            <KRAAssessmentCardList kraAssessments={item.kraAssessments} />
                             {item.additionalAssignments && (
-                                <div className="yap-section">
-                                    <div className="yap-section-hd yap-section-hd--teal">
-                                        <div className="yap-section-hd-icon"><FiPlus /></div>
-                                        <div>
-                                            <div className="yap-section-hd-title">Additional Assignments</div>
-                                            <div className="yap-section-hd-sub">Extracurricular work beyond KRA</div>
-                                        </div>
-                                    </div>
-                                    <div className="yap-section-body">
-                                        <pre className="yap-pre">{item.additionalAssignments}</pre>
-                                    </div>
-                                </div>
-                            )}
-
-                            {(item.raRemarks || item.mdRemarks) && (
-                                <div className="yap-section">
-                                    <div className="yap-section-hd yap-section-hd--purple">
-                                        <div className="yap-section-hd-icon"><FiFileText /></div>
-                                        <div>
-                                            <div className="yap-section-hd-title">Evaluator Remarks</div>
-                                            <div className="yap-section-hd-sub">Notes left by authorities</div>
-                                        </div>
-                                    </div>
-                                    {[
-                                        { role: 'RA Remarks', cls: 'ra', text: item.raRemarks },
-                                        { role: 'MD Remarks', cls: 'md', text: !isPlan ? item.mdRemarks : null },
-                                    ].filter(r => r.text).map(({ role, cls, text }) => (
-                                        <div key={cls} className={`yap-remark-item yap-remark-item--${cls}`}>
-                                            <div className="yap-remark-item-hd">{role}</div>
-                                            <div className="yap-remark-item-body">{text}</div>
-                                        </div>
-                                    ))}
+                                <div style={{ marginTop: 16 }} className="yap-additional-block">
+                                    <div className="yap-additional-block-label">Additional Assignments</div>
+                                    <p className="yap-additional-block-text">{item.additionalAssignments}</p>
                                 </div>
                             )}
                         </div>
                     </div>
 
-                    {/* DIVIDER 2 */}
                     <div
                         className="yap-split-divider"
                         onMouseDown={(e) => onCompareDividerMouseDown(e, 'right')}
@@ -936,56 +996,43 @@ const HRDYearlyAppraisalPage = () => {
                         title="Drag to resize · Double-click to reset"
                     />
 
-                    {/* Right: Scoring sidebar */}
+                    {/* Right: Scoring */}
                     <div className="yap-compare-pane yap-compare-pane--scoring" style={{ flex: 1, minWidth: 260 }}>
                         <div className="yap-compare-pane-hd">⭐ SCORING</div>
                         <div style={{ padding: '0 0 40px' }}>
                             <div className="yap-block">
                                 <div className="yap-block-header">
-                                    <div>
-                                        <h3 className="yap-block-title">Score Dashboard</h3>
-                                        <p className="yap-block-desc">Current valuation standings</p>
-                                    </div>
+                                    <div className="yap-block-icon yap-block-icon--teal"><FiTrendingUp /></div>
+                                    <div><h3>Score Dashboard</h3><p>All stages</p></div>
                                 </div>
-                                <div className="yap-block-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                                    <ScoreCard label="RA Final Score" value={item.raTotalScore} max={80} color="primary" />
-                                    <ScoreCard label="HRD Score" value={item.hrdTotalScore} max={5} color="secondary" highlight />
-                                    <ScoreCard label="MD Score" value={item.mdFinalScore} max={15} color="success" />
+                                <div className="yap-score-grid">
+                                    <ScoreCard label="RA Score"    value={item.raTotalScore}  max={80}  color="primary" />
+                                    <ScoreCard label="HRD Score"   value={item.hrdTotalScore} max={5}   color="teal" />
+                                    <ScoreCard label="MD Score"    value={item.mdFinalScore}  max={15}  color="indigo" />
+                                    <ScoreCard label="Grand Total" value={item.grandTotal}    max={100} color="success" highlight />
                                 </div>
                             </div>
-                            
-                            <div className="yap-block yap-eval-sticky">
+
+                            <div className="yap-block yap-eval-sticky" style={{ marginTop: 12 }}>
                                 <div className="yap-block-header">
-                                    <div className="yap-block-icon yap-block-bg-secondary"><FiUsers /></div>
-                                    <div>
-                                        <h3 className="yap-block-title">HRD Final Appraisal</h3>
-                                        <p className="yap-block-desc">Provide final score (Max 5)</p>
-                                    </div>
+                                    <div className="yap-block-icon yap-block-icon--teal"><FiStar /></div>
+                                    <div><h3>HRD Final Appraisal</h3><p>Discretionary Score (max 5)</p></div>
                                 </div>
-                                <div className="yap-block-body">
+                                <div style={{ padding: '0 0 8px' }}>
                                     {isEvaluating ? (
-                                        <form onSubmit={handleEvaluate} style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '16px' }}>
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                                <label style={{ fontSize: '0.85rem', fontWeight: '600' }}>Score (Max 5)<span style={{ color: 'var(--error)' }}>*</span></label>
-                                                <input 
-                                                    style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-default)', fontFamily: 'inherit' }}
-                                                    type="number" min="0" max="5" step="0.5" 
-                                                    required
-                                                    value={hrdScore}
-                                                    onChange={(e) => setHrdScore(e.target.value)}
-                                                />
+                                        <form onSubmit={handleEvaluate} style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: 16 }}>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                                <label style={{ fontSize: '0.85rem', fontWeight: 600 }}>Score (Max 5)<span style={{ color: 'var(--error)' }}>*</span></label>
+                                                <input style={{ padding: 10, borderRadius: 8, border: '1px solid var(--border-default)', fontFamily: 'inherit' }}
+                                                    type="number" min="0" max="5" step="0.5" required
+                                                    value={hrdScore} onChange={(e) => setHrdScore(e.target.value)} />
                                             </div>
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                                <label style={{ fontSize: '0.85rem', fontWeight: '600' }}>Remarks</label>
-                                                <textarea 
-                                                    style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-default)', width: '100%', fontFamily: 'inherit', resize: 'vertical' }}
-                                                    rows="3"
-                                                    placeholder="Optional remarks..."
-                                                    value={hrdRemarks}
-                                                    onChange={(e) => setHrdRemarks(e.target.value)}
-                                                />
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                                <label style={{ fontSize: '0.85rem', fontWeight: 600 }}>Remarks</label>
+                                                <textarea style={{ padding: 10, borderRadius: 8, border: '1px solid var(--border-default)', width: '100%', fontFamily: 'inherit', resize: 'vertical' }}
+                                                    rows="3" placeholder="Optional remarks..." value={hrdRemarks} onChange={(e) => setHrdRemarks(e.target.value)} />
                                             </div>
-                                            <div style={{ display: 'flex', gap: '8px' }}>
+                                            <div style={{ display: 'flex', gap: 8 }}>
                                                 <button type="submit" className="yap-cta-btn" style={{ flex: 1, justifyContent: 'center' }} disabled={submitting}>
                                                     {submitting ? 'Saving...' : 'Submit Score'}
                                                 </button>
@@ -993,18 +1040,18 @@ const HRDYearlyAppraisalPage = () => {
                                             </div>
                                         </form>
                                     ) : (
-                                        <div style={{ padding: '16px' }}>
+                                        <div style={{ padding: 16 }}>
                                             {isLocked ? (
-                                                <div style={{ padding: '12px', background: 'var(--success-bg)', color: 'var(--success)', borderRadius: '8px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                    <FiCheckCircle /> HRD Evaluation Finalized. All scoring completed.
+                                                <div style={{ padding: 12, background: 'var(--success-bg)', color: 'var(--success)', borderRadius: 8, fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                    <FiCheckCircle /> HRD Evaluation Finalized.
                                                 </div>
                                             ) : canEvaluate ? (
-                                                <button className="yap-cta-btn" style={{ width: '100%', justifyContent: 'center' }} onClick={() => startEvaluation(item)}>
+                                                <button className="yap-cta-btn" style={{ width: '100%', justifyContent: 'center', background: '#0d9488' }} onClick={() => startEvaluation(item)}>
                                                     <FiAward /> Evaluate Report
                                                 </button>
                                             ) : (
-                                                <div style={{ padding: '12px', background: 'var(--warning-bg)', color: 'var(--warning)', borderRadius: '8px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                    <FiClock /> Evaluation pending RA submission.
+                                                <div style={{ padding: 12, background: 'var(--warning-bg)', color: 'var(--warning)', borderRadius: 8, fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                    <FiClock /> Awaiting RA evaluation.
                                                 </div>
                                             )}
                                         </div>
@@ -1015,293 +1062,284 @@ const HRDYearlyAppraisalPage = () => {
                     </div>
                 </div>
             ) : (
-            <div className="yap-detail-body" ref={containerRef}>
+                /* STANDARD 2-PANE SPLIT */
+                <div className="yap-detail-body" ref={containerRef}>
 
-                {/* LEFT — independently scrollable */}
-                <div className="yap-detail-left" style={{ flexBasis: `${leftPct}%`, flexGrow: 0, flexShrink: 0 }}>
-                    {isPlan ? (
-                        <>
-                            {/* Plan Objectives */}
-                            <div className="yap-section">
-                                <div className="yap-section-hd yap-section-hd--blue">
-                                    <div className="yap-section-hd-icon"><FiTarget /></div>
-                                    <div>
-                                        <div className="yap-section-hd-title">Yearly Plan Objectives</div>
-                                        <div className="yap-section-hd-sub">Employee's focus areas and goals for FY {item.financialYear}</div>
-                                    </div>
-                                </div>
-                                <div className="yap-section-body">
-                                    {item.planAndObjectives
-                                        ? <pre className="yap-pre">{item.planAndObjectives}</pre>
-                                        : <span className="yap-muted">No objectives submitted.</span>}
-                                </div>
-                            </div>
-
-                            {/* MD Remarks (non-rejection) */}
-                            {item.mdRemarks && item.status !== 'REJECTED' && (
+                    {/* LEFT — independently scrollable */}
+                    <div className="yap-detail-left" style={{ flexBasis: `${leftPct}%`, flexGrow: 0, flexShrink: 0 }}>
+                        {isPlan ? (
+                            <>
+                                {/* Plan KRA Table */}
                                 <div className="yap-section">
-                                    <div className="yap-section-hd yap-section-hd--green">
-                                        <div className="yap-section-hd-icon"><FiCheckCircle /></div>
+                                    <div className="yap-section-hd yap-section-hd--blue">
+                                        <div className="yap-section-hd-icon"><FiLayers /></div>
                                         <div>
-                                            <div className="yap-section-hd-title">MD Remarks</div>
-                                            <div className="yap-section-hd-sub">Feedback from the Managing Director</div>
+                                            <div className="yap-section-hd-title">Yearly Plan KRAs</div>
+                                            <div className="yap-section-hd-sub">Employee's focus areas and goals for FY {item.financialYear}</div>
                                         </div>
                                     </div>
-                                    <div className="yap-section-body yap-text-content--approved">
-                                        {item.mdRemarks}
+                                    <div className="yap-section-body" style={{ padding: 12 }}>
+                                        <KRATable kras={item.kras} />
                                     </div>
                                 </div>
-                            )}
 
-                            {/* Edit History */}
-                            {item.editHistory?.length > 0 && (
+                                {/* MD Remarks (non-rejection) */}
+                                {item.mdRemarks && item.status !== 'REJECTED' && (
+                                    <div className="yap-section">
+                                        <div className="yap-section-hd yap-section-hd--green">
+                                            <div className="yap-section-hd-icon"><FiCheckCircle /></div>
+                                            <div>
+                                                <div className="yap-section-hd-title">MD Remarks</div>
+                                                <div className="yap-section-hd-sub">Feedback from the Managing Director</div>
+                                            </div>
+                                        </div>
+                                        <div className="yap-section-body yap-text-content--approved">{item.mdRemarks}</div>
+                                    </div>
+                                )}
+
+                                {/* Edit History */}
+                                {item.editHistory?.length > 0 && (
+                                    <div className="yap-section">
+                                        <div
+                                            className="yap-section-hd yap-section-hd--amber"
+                                            style={{ cursor: 'pointer' }}
+                                            onClick={() => setShowHistory(!showHistory)}
+                                        >
+                                            <div className="yap-section-hd-icon"><FiPenTool /></div>
+                                            <div style={{ flex: 1 }}>
+                                                <div className="yap-section-hd-title">Edit History</div>
+                                                <div className="yap-section-hd-sub">{item.editHistory.length} revision{item.editHistory.length !== 1 ? 's' : ''} recorded</div>
+                                            </div>
+                                            <div style={{ marginLeft: 'auto', color: 'var(--text-muted)' }}>
+                                                {showHistory ? <FiChevronUp /> : <FiChevronDown />}
+                                            </div>
+                                        </div>
+                                        {showHistory && (
+                                            <ul className="yap-history-list">
+                                                {item.editHistory.map((edit, i) => (
+                                                    <li key={i} className="yap-history-item">
+                                                        <div className="yap-history-num">{i + 1}</div>
+                                                        <div>
+                                                            <div className="yap-history-note">{edit.note || 'Plan updated'}</div>
+                                                            <div className="yap-history-date">{formatDate(edit.editedAt)}</div>
+                                                        </div>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        )}
+                                    </div>
+                                )}
+                            </>
+                        ) : (
+                            <>
+                                {/* KRA Achievement Cards */}
                                 <div className="yap-section">
-                                    <div
-                                        className="yap-section-hd yap-section-hd--amber"
-                                        style={{ cursor: 'pointer' }}
-                                        onClick={() => setShowHistory(!showHistory)}
-                                    >
-                                        <div className="yap-section-hd-icon"><FiPenTool /></div>
-                                        <div style={{ flex: 1 }}>
-                                            <div className="yap-section-hd-title">Edit History</div>
-                                            <div className="yap-section-hd-sub">{item.editHistory.length} revision{item.editHistory.length !== 1 ? 's' : ''} recorded</div>
-                                        </div>
-                                        <div style={{ marginLeft: 'auto', color: 'var(--text-muted)' }}>
-                                            {showHistory ? <FiChevronUp /> : <FiChevronDown />}
-                                        </div>
-                                    </div>
-                                    {showHistory && (
-                                        <ul className="yap-history-list">
-                                            {item.editHistory.map((edit, i) => (
-                                                <li key={i} className="yap-history-item">
-                                                    <div className="yap-history-num">{i + 1}</div>
-                                                    <div>
-                                                        <div className="yap-history-note">{edit.note || 'Plan updated'}</div>
-                                                        <div className="yap-history-date">{formatDate(edit.editedAt)}</div>
-                                                    </div>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    )}
-                                </div>
-                            )}
-                        </>
-                    ) : (
-                        <>
-                            {/* Work KRA */}
-                            <div className="yap-section">
-                                <div className="yap-section-hd yap-section-hd--blue">
-                                    <div className="yap-section-hd-icon"><FiBriefcase /></div>
-                                    <div>
-                                        <div className="yap-section-hd-title">Work Done Against KRA</div>
-                                        <div className="yap-section-hd-sub">Employee's self-reported delivery against yearly targets</div>
-                                    </div>
-                                </div>
-                                <div className="yap-section-body">
-                                    {item.workKRA
-                                        ? <pre className="yap-pre">{item.workKRA}</pre>
-                                        : <span className="yap-muted">No self-assessment submitted.</span>}
-                                </div>
-                            </div>
-
-                            {/* Additional Assignments */}
-                            <div className="yap-section">
-                                <div className="yap-section-hd yap-section-hd--teal">
-                                    <div className="yap-section-hd-icon"><FiPlus /></div>
-                                    <div>
-                                        <div className="yap-section-hd-title">Additional Assignments</div>
-                                        <div className="yap-section-hd-sub">Extra responsibilities handled outside the planned KRA</div>
-                                    </div>
-                                </div>
-                                <div className="yap-section-body">
-                                    {item.additionalAssignments
-                                        ? <pre className="yap-pre">{item.additionalAssignments}</pre>
-                                        : <span className="yap-muted">No additional assignments recorded.</span>}
-                                </div>
-                            </div>
-
-                            {/* Evaluator Remarks */}
-                            {(item.raRemarks || item.hrdRemarks || item.mdRemarks) && (
-                                <div className="yap-section">
-                                    <div className="yap-section-hd yap-section-hd--purple">
-                                        <div className="yap-section-hd-icon"><FiFileText /></div>
+                                    <div className="yap-section-hd yap-section-hd--blue">
+                                        <div className="yap-section-hd-icon"><FiLayers /></div>
                                         <div>
-                                            <div className="yap-section-hd-title">Evaluator Remarks</div>
-                                            <div className="yap-section-hd-sub">Feedback from RA, HRD and MD stages</div>
+                                            <div className="yap-section-hd-title">KRA Self-Assessment</div>
+                                            <div className="yap-section-hd-sub">Employee's self-reported delivery against yearly targets</div>
                                         </div>
                                     </div>
+                                    <KRAAssessmentCardList kraAssessments={item.kraAssessments} />
+                                </div>
+
+                                {/* Additional Assignments */}
+                                <div className="yap-section">
+                                    <div className="yap-section-hd yap-section-hd--teal">
+                                        <div className="yap-section-hd-icon"><FiPlus /></div>
+                                        <div>
+                                            <div className="yap-section-hd-title">Additional Assignments</div>
+                                            <div className="yap-section-hd-sub">Extra responsibilities handled outside the planned KRA</div>
+                                        </div>
+                                    </div>
+                                    <div className="yap-additional-block">
+                                        <p className="yap-additional-block-text">
+                                            {item.additionalAssignments && item.additionalAssignments.trim()
+                                                ? item.additionalAssignments
+                                                : <em>No additional assignments recorded.</em>
+                                            }
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Evaluator Remarks */}
+                                {(item.raRemarks || item.hrdRemarks || item.mdRemarks) && (
+                                    <div className="yap-section">
+                                        <div className="yap-section-hd yap-section-hd--purple">
+                                            <div className="yap-section-hd-icon"><FiFileText /></div>
+                                            <div>
+                                                <div className="yap-section-hd-title">Evaluator Remarks</div>
+                                                <div className="yap-section-hd-sub">Feedback from RA, HRD and MD stages</div>
+                                            </div>
+                                        </div>
+                                        {[
+                                            { role: 'RA Remarks',  cls: 'ra',  text: item.raRemarks  },
+                                            { role: 'HRD Remarks', cls: 'hrd', text: item.hrdRemarks },
+                                            { role: 'MD Remarks',  cls: 'md',  text: item.mdRemarks  },
+                                        ].filter(r => r.text).map(({ role, cls, text }) => (
+                                            <div key={cls} className={`yap-remark-item yap-remark-item--${cls}`}>
+                                                <div className="yap-remark-item-hd">{role}</div>
+                                                <div className="yap-remark-item-body">{text}</div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </>
+                        )}
+                    </div>
+
+                    {/* DIVIDER */}
+                    <div
+                        className="yap-split-divider"
+                        onMouseDown={onDividerMouseDown}
+                        onDoubleClick={onDividerDblClick}
+                        title="Drag to resize · Double-click to reset"
+                    />
+
+                    {/* RIGHT — Sidebar */}
+                    <div className="yap-detail-right" style={{ flex: 1, minWidth: 280 }}>
+                        {isPlan ? (
+                            <div className="yap-block">
+                                <div className="yap-block-header">
+                                    <div className="yap-block-icon yap-block-icon--indigo"><FiCalendar /></div>
+                                    <div><h3>Plan Summary</h3><p>Submission &amp; approval details</p></div>
+                                </div>
+                                <div className="yap-side-stack">
                                     {[
-                                        { role: 'RA Remarks', cls: 'ra', text: item.raRemarks },
-                                        { role: 'HRD Remarks', cls: 'hrd', text: item.hrdRemarks },
-                                        { role: 'MD Remarks', cls: 'md', text: item.mdRemarks },
-                                    ].filter(r => r.text).map(({ role, cls, text }) => (
-                                        <div key={cls} className={`yap-remark-item yap-remark-item--${cls}`}>
-                                            <div className="yap-remark-item-hd">{role}</div>
-                                            <div className="yap-remark-item-body">{text}</div>
+                                        { label: 'Financial Year', value: item.financialYear },
+                                        { label: 'Version',        value: `v${item.version || 1}` },
+                                        { label: 'Submitted',      value: formatDate(item.submittedAt) },
+                                        { label: 'Current Status', value: getStatusInfo(item.status).label },
+                                    ].map((r) => (
+                                        <div key={r.label} className="yap-side-row">
+                                            <span className="yap-side-label">{r.label}</span>
+                                            <span className="yap-side-val">{r.value}</span>
                                         </div>
                                     ))}
                                 </div>
-                            )}
-                        </>
-                    )}
+                            </div>
+                        ) : (
+                            <>
+                                <div className="yap-right-tabs">
+                                    <button
+                                        className={`yap-right-tab${rightTab === 'plan' ? ' yap-right-tab--active' : ''}`}
+                                        onClick={() => setRightTab('plan')}
+                                    >
+                                        📋 Yearly Plan
+                                    </button>
+                                    <button
+                                        className={`yap-right-tab${rightTab === 'scoring' ? ' yap-right-tab--active' : ''}`}
+                                        onClick={() => setRightTab('scoring')}
+                                    >
+                                        ⭐ Scoring
+                                    </button>
+                                </div>
+
+                                {rightTab === 'plan' ? (
+                                    <YearlyPlanTab
+                                        plan={linkedPlan}
+                                        showHistory={showHistory}
+                                        setShowHistory={setShowHistory}
+                                    />
+                                ) : (
+                                    <>
+                                        {/* Score Dashboard */}
+                                        <div className="yap-block">
+                                            <div className="yap-block-header">
+                                                <div className="yap-block-icon yap-block-icon--teal"><FiTrendingUp /></div>
+                                                <div><h3>Score Dashboard</h3><p>Evaluation scores across stages</p></div>
+                                            </div>
+                                            <div className="yap-score-grid">
+                                                <ScoreCard label="RA Score"    value={item.raTotalScore}  max={80}  color="primary" />
+                                                <ScoreCard label="HRD Score"   value={item.hrdTotalScore} max={5}   color="teal" />
+                                                <ScoreCard label="MD Score"    value={item.mdFinalScore}  max={15}  color="indigo" />
+                                                <ScoreCard label="Grand Total" value={item.grandTotal}    max={100} color="success" highlight />
+                                            </div>
+                                        </div>
+
+                                        {/* Evaluation form or CTA */}
+                                        {isEvaluating ? (
+                                            <div className="yap-block">
+                                                <div className="yap-block-header">
+                                                    <div className="yap-block-icon yap-block-icon--teal"><FiStar /></div>
+                                                    <div><h3>HRD Evaluation Form</h3><p>Discretionary Score (max 5)</p></div>
+                                                </div>
+                                                <form className="yap-eval-form" onSubmit={handleEvaluate}>
+                                                    <div className="yap-eval-field">
+                                                        <label>HRD Discretionary Score</label>
+                                                        <span className="yap-eval-hint">Evaluate the employee's overall performance.</span>
+                                                        <input
+                                                            type="number" min="0" max="5" step="0.5"
+                                                            placeholder="Score out of 5"
+                                                            value={hrdScore}
+                                                            onChange={(e) => setHrdScore(e.target.value)}
+                                                        />
+                                                    </div>
+                                                    <div className="yap-eval-field" style={{ marginTop: 8 }}>
+                                                        <label>HRD Remarks</label>
+                                                        <textarea
+                                                            rows={3}
+                                                            placeholder="Add concise appraisal remarks…"
+                                                            value={hrdRemarks}
+                                                            onChange={(e) => setHrdRemarks(e.target.value)}
+                                                        />
+                                                    </div>
+                                                    <div className="yap-form-actions" style={{ marginTop: 8 }}>
+                                                        <button type="submit" className="btn btn-primary" disabled={submitting}>
+                                                            {submitting ? 'Submitting…' : 'Submit Evaluation'}
+                                                        </button>
+                                                        <button type="button" className="btn btn-secondary" onClick={() => setIsEvaluating(false)}>
+                                                            Cancel
+                                                        </button>
+                                                    </div>
+                                                </form>
+                                            </div>
+                                        ) : !hasHRDEval && canEvaluate ? (
+                                            <div className="yap-cta-block">
+                                                <div className="yap-cta-block-icon" style={{ background: 'rgba(13,148,136,0.1)', color: '#0d9488' }}>
+                                                    <FiStar />
+                                                </div>
+                                                <div className="yap-cta-block-text">
+                                                    <strong>Evaluation Required</strong>
+                                                    <p>This report is awaiting your HRD-stage scoring (out of 5).</p>
+                                                </div>
+                                                <button className="yap-cta-btn" style={{ background: '#0d9488' }} onClick={() => startEvaluation(item)}>
+                                                    Start HRD Evaluation
+                                                </button>
+                                            </div>
+                                        ) : hasHRDEval && !isLocked ? (
+                                            <div className="yap-eval-edit">
+                                                <button className="yap-btn-sm yap-btn-sm--ghost" style={{ borderColor: '#0d9488', color: '#0d9488' }} onClick={() => startEvaluation(item)}>
+                                                    <FiEdit3 /> Update Evaluation
+                                                </button>
+                                            </div>
+                                        ) : isLocked ? (
+                                            <div className="yap-locked-block">
+                                                <FiCheckCircle className="yap-locked-block-icon" />
+                                                <div>
+                                                    <strong>Appraisal Finalized</strong>
+                                                    <p>MD has completed evaluation. No further updates allowed.</p>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="yap-cta-block" style={{ borderStyle: 'solid', borderColor: 'var(--border-default)', background: 'var(--bg-muted)' }}>
+                                                <div className="yap-cta-block-icon" style={{ background: 'var(--bg-card)', color: 'var(--text-muted)' }}>
+                                                    <FiClock />
+                                                </div>
+                                                <div className="yap-cta-block-text">
+                                                    <strong>Waiting for RA</strong>
+                                                    <p>This report cannot be HRD-evaluated until the Reporting Authority completes their assessment.</p>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+                            </>
+                        )}
+                    </div>
                 </div>
-
-                {/* DIVIDER */}
-                <div
-                    className="yap-split-divider"
-                    onMouseDown={onDividerMouseDown}
-                    onDoubleClick={onDividerDblClick}
-                    title="Drag to resize · Double-click to reset"
-                />
-
-                {/* RIGHT — Sidebar */}
-                <div className="yap-detail-right" style={{ flex: 1, minWidth: 280 }}>
-                    {isPlan ? (
-                        /* Plan summary sidebar */
-                        <div className="yap-block">
-                            <div className="yap-block-header">
-                                <div className="yap-block-icon yap-block-icon--indigo"><FiCalendar /></div>
-                                <div><h3>Plan Summary</h3><p>Submission & approval details</p></div>
-                            </div>
-                            <div className="yap-side-stack">
-                                {[
-                                    { label: 'Financial Year', value: item.financialYear },
-                                    { label: 'Version', value: `v${item.version || 1}` },
-                                    { label: 'Submitted', value: formatDate(item.submittedAt) },
-                                    { label: 'Current Status', value: getStatusInfo(item.status).label },
-                                ].map((r) => (
-                                    <div key={r.label} className="yap-side-row">
-                                        <span className="yap-side-label">{r.label}</span>
-                                        <span className="yap-side-val">{r.value}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    ) : (
-                        <>
-                            <div className="yap-right-tabs">
-                                <button
-                                    className={"yap-right-tab" + (rightTab === 'plan' ? ' yap-right-tab--active' : '')}
-                                    onClick={() => setRightTab('plan')}
-                                >
-                                    📋 Yearly Plan
-                                </button>
-                                <button
-                                    className={"yap-right-tab" + (rightTab === 'scoring' ? ' yap-right-tab--active' : '')}
-                                    onClick={() => setRightTab('scoring')}
-                                >
-                                    ⭐ Scoring
-                                </button>
-                            </div>
-
-                            {rightTab === 'plan' ? (
-                                <YearlyPlanTab
-                                    plan={item.yearlyPlanId}
-                                    showHistory={showHistory}
-                                    setShowHistory={setShowHistory}
-                                />
-                            ) : (
-                                <>
-                                    {/* Score Dashboard */}
-                                    <div className="yap-block">
-                                <div className="yap-block-header">
-                                    <div className="yap-block-icon yap-block-icon--orange"><FiTrendingUp /></div>
-                                    <div><h3>Score Dashboard</h3><p>Evaluation scores across stages</p></div>
-                                </div>
-                                <div className="yap-score-grid">
-                                    <ScoreCard label="RA Score" value={item.raTotalScore} max={80} color="primary" />
-                                    <ScoreCard label="HRD Score" value={item.hrdTotalScore} max={5} color="teal" />
-                                    <ScoreCard label="MD Score" value={item.mdFinalScore} max={15} color="indigo" />
-                                    <ScoreCard label="Grand Total" value={item.grandTotal} max={100} color="success" highlight />
-                                </div>
-                            </div>
-
-                            {/* ── Evaluation Form or CTA ── */}
-                            {isEvaluating ? (
-                                <div className="yap-block">
-                                    <div className="yap-block-header">
-                                        <div className="yap-block-icon yap-block-icon--teal"><FiStar /></div>
-                                        <div>
-                                            <h3>HRD Evaluation Form</h3>
-                                            <p>Discretionary Score (max 5)</p>
-                                        </div>
-                                    </div>
-
-                                    <form className="yap-eval-form" onSubmit={handleEvaluate}>
-                                        <div className="yap-eval-field">
-                                            <label>HRD Discretionary Score</label>
-                                            <span className="yap-eval-hint">Evaluate the employee's overall performance.</span>
-                                            <input
-                                                type="number"
-                                                min="0"
-                                                max="5"
-                                                step="0.5"
-                                                placeholder="Score out of 5"
-                                                value={hrdScore}
-                                                onChange={(e) => setHrdScore(e.target.value)}
-                                            />
-                                        </div>
-
-                                        <div className="yap-eval-field" style={{ marginTop: 16 }}>
-                                            <label>HRD Remarks</label>
-                                            <textarea
-                                                rows={3}
-                                                placeholder="Add concise appraisal remarks…"
-                                                value={hrdRemarks}
-                                                onChange={(e) => setHrdRemarks(e.target.value)}
-                                            />
-                                        </div>
-
-                                        <div className="yap-form-actions" style={{ marginTop: '16px' }}>
-                                            <button type="submit" className="yap-card-btn yap-card-btn--primary" disabled={submitting}>
-                                                {submitting ? 'Submitting…' : 'Submit Evaluation'}
-                                            </button>
-                                            <button type="button" className="yap-card-btn yap-card-btn--secondary" onClick={() => setIsEvaluating(false)}>
-                                                Cancel
-                                            </button>
-                                        </div>
-                                    </form>
-                                </div>
-                            ) : (
-                                /* Start/Update CTA block */
-                                !hasHRDEval && canEvaluate ? (
-                                    <div className="yap-cta-block">
-                                        <div className="yap-cta-block-icon" style={{ background: 'rgba(13, 148, 136, 0.1)', color: '#0d9488' }}>
-                                            <FiStar />
-                                        </div>
-                                        <div className="yap-cta-block-text">
-                                            <strong>Evaluation Required</strong>
-                                            <p>This report is awaiting your HRD-stage scoring (out of 5). Click to begin.</p>
-                                        </div>
-                                        <button className="yap-cta-btn" style={{ background: '#0d9488' }} onClick={() => startEvaluation(item)}>
-                                            Start Evaluation
-                                        </button>
-                                    </div>
-                                ) : hasHRDEval && !isLocked ? (
-                                    <div className="yap-eval-edit">
-                                        <button className="yap-btn-sm yap-btn-sm--ghost" onClick={() => startEvaluation(item)}>
-                                            <FiEdit3 /> Update Evaluation
-                                        </button>
-                                    </div>
-                                ) : !canEvaluate && !hasHRDEval ? (
-                                    <div className="yap-cta-block" style={{ borderStyle: 'solid', borderColor: 'var(--border-default)', background: 'var(--bg-muted)' }}>
-                                        <div className="yap-cta-block-icon" style={{ background: 'var(--bg-card)', color: 'var(--text-muted)' }}>
-                                            <FiClock />
-                                        </div>
-                                        <div className="yap-cta-block-text">
-                                            <strong>Waiting for RA</strong>
-                                            <p>This report cannot be evaluated until the Reporting Authority has completed their assessment.</p>
-                                        </div>
-                                    </div>
-                                ) : null
-                            )}
-                        </>
-                    )}
-                </>
             )}
-        </div>
-    </div>
-)}
         </div>
     );
 };

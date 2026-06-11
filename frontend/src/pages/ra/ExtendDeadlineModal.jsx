@@ -65,7 +65,7 @@ const ExtendDeadlineModal = ({
         setLoading(true);
         try {
             await api.patch('/ra/extend-deadline', {
-                employeeId: employee._id,
+                employeeId: employee.id,
                 month: monthYear?.month,
                 year: monthYear?.year,
                 type: missingType,

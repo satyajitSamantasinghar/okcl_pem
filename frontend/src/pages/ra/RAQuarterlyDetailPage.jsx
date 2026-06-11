@@ -40,8 +40,8 @@ function getInitials(name) {
 }
 function getPlanItems(plan) {
     if (!plan) return [];
-    if (Array.isArray(plan.planItems) && plan.planItems.filter(Boolean).length > 0)
-        return plan.planItems.filter(Boolean);
+    if (Array.isArray(plan.planItems) && plan.planItems.length > 0)
+        return plan.planItems.map(p => typeof p === 'string' ? p : p.itemText).filter(Boolean);
     if (plan.planDetails)
         return plan.planDetails.split('\n').map(s => s.trim()).filter(Boolean);
     return [];

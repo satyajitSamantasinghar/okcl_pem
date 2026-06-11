@@ -1,49 +1,54 @@
-const mongoose = require("mongoose");
+const { DataTypes } = require("sequelize");
 
-const yearlyPlanSchema = new mongoose.Schema({
-  employeeId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "User",
-    required: true
-  },
+// Three embedded arrays from Mongoose → three separate tables:
+//   kras         → YearlyPlanKra
+//   revisionLog  → YearlyPlanRevisionLog
+//   editHistory  → YearlyPlanEditHistory
 
-  financialYear: {
-    type: String, // "2025-26"
-    required: true
-  },
-
-  planAndObjectives: {
-    type: String,
-    required: true
-  },
-
-  status: {
-    type: String,
-    enum: ["PENDING", "APPROVED", "REJECTED", "EDITED", "EDITED_AFTER_APPROVAL"],
-    default: "PENDING"
-  },
-
-  mdRemarks: String,
-
-  editHistory: [
+module.exports = (sequelize) => {
+  const YearlyPlan = sequelize.define(
+    "YearlyPlan",
     {
-      editedAt: { type: Date, default: Date.now },
-      previousStatus: String,
-      note: String
+      id: {
+        type:         DataTypes.UUID,
+        defaultValue: DataTypes.UUIDV4,
+        primaryKey:   true,
+      },
+      employeeId: {
+        type:      DataTypes.UUID,
+        allowNull: false,
+      },
+      financialYear: {
+        type:      DataTypes.STRING, // "2025-26"
+        allowNull: false,
+      },
+      status: {
+        type:         DataTypes.ENUM("DRAFT", "PENDING", "APPROVED", "REJECTED"),
+        defaultValue: "DRAFT",
+      },
+      mdRemarks: {
+        type:         DataTypes.TEXT,
+        defaultValue: null,
+      },
+      version: {
+        type:         DataTypes.INTEGER,
+        defaultValue: 1,
+      },
+      submittedAt: {
+        type:         DataTypes.DATE,
+        defaultValue: DataTypes.NOW,
+      },
+    },
+    {
+      tableName:   "yearly_plans",
+      underscored: true,
+      timestamps:  true, // createdAt + updatedAt
+      indexes: [
+        // ✅ One yearly plan per employee per financial year
+        { unique: true, fields: ["employee_id", "financial_year"] },
+      ],
     }
-  ],
+  );
 
-  version: {
-    type: Number,
-    default: 1
-  },
-
-  submittedAt: {
-    type: Date,
-    default: Date.now
-  }
-});
-
-yearlyPlanSchema.index({ employeeId: 1, financialYear: 1 }, { unique: true });
-
-module.exports = mongoose.model("YearlyPlan", yearlyPlanSchema);
+  return YearlyPlan;
+};

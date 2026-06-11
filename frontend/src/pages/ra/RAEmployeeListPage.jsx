@@ -243,7 +243,7 @@ const RAEmployeeListPage = () => {
 
                         return (
                             <div
-                                key={emp._id}
+                                key={emp.id}
                                 className={`rel-card rel-card--${status}`}
                             >
                                 {/* Head: avatar + badge */}
@@ -301,7 +301,7 @@ const RAEmployeeListPage = () => {
                                 <div className="rel-card-actions">
                                     <button
                                         className={`rel-btn-primary rel-btn-primary--${status}`}
-                                        onClick={() => goToDetail(emp._id)}
+                                        onClick={() => goToDetail(emp.id)}
                                     >
                                         <FiEye /> View Profile
                                         <FiArrowRight className="rel-btn-arrow" />
@@ -334,9 +334,9 @@ const RAEmployeeListPage = () => {
                                 const pct    = getProgressPct(emp);
                                 return (
                                     <tr
-                                        key={emp._id}
+                                        key={emp.id}
                                         className={`rel-row rel-row--${status}`}
-                                        onClick={() => goToDetail(emp._id)}
+                                        onClick={() => goToDetail(emp.id)}
                                     >
                                         <td className="rel-td-num">{i + 1}</td>
                                         <td>
@@ -369,7 +369,7 @@ const RAEmployeeListPage = () => {
                                         <td>
                                             <button
                                                 className={`rel-td-btn rel-td-btn--${status}`}
-                                                onClick={e => { e.stopPropagation(); goToDetail(emp._id); }}
+                                                onClick={e => { e.stopPropagation(); goToDetail(emp.id); }}
                                             >
                                                 <FiEye /> View Profile
                                             </button>

@@ -1,87 +1,88 @@
-const mongoose = require("mongoose");
+const { DataTypes } = require("sequelize");
 
-const yearlyAppraisalReportSchema = new mongoose.Schema({
-    employeeId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
-        required: true
+// Two embedded arrays from Mongoose → two separate tables:
+//   kraAssessments        → YearlyAppraisalKraAssessment
+//   quarterlyEvaluations  → AppraisalQuarterlyEvaluation (junction table)
+
+module.exports = (sequelize) => {
+  const YearlyAppraisalReport = sequelize.define(
+    "YearlyAppraisalReport",
+    {
+      id: {
+        type:         DataTypes.UUID,
+        defaultValue: DataTypes.UUIDV4,
+        primaryKey:   true,
+      },
+      employeeId: {
+        type:      DataTypes.UUID,
+        allowNull: false,
+      },
+      // null for mid-year hires with no approved yearly plan
+      linkedYearlyPlanId: {
+        type:         DataTypes.UUID,
+        allowNull:    true,
+        defaultValue: null,
+      },
+      financialYear: {
+        type:      DataTypes.STRING, // "2025-26"
+        allowNull: false,
+      },
+      additionalAssignments: {
+        type:         DataTypes.TEXT,
+        defaultValue: null,
+      },
+
+      /* ── RA EVALUATION (max 80) ── */
+      raWorkKraScore:         { type: DataTypes.DECIMAL(5, 2), defaultValue: null },
+      raAdditionalScore:      { type: DataTypes.DECIMAL(5, 2), defaultValue: null },
+      raPersonalAttributes:   { type: DataTypes.DECIMAL(5, 2), defaultValue: null },
+      raTeamAttributes:       { type: DataTypes.DECIMAL(5, 2), defaultValue: null },
+      raLeadershipAttributes: { type: DataTypes.DECIMAL(5, 2), defaultValue: null },
+      raTotalScore:           { type: DataTypes.DECIMAL(5, 2), defaultValue: null },
+      raRemarks:              { type: DataTypes.TEXT,          defaultValue: null },
+      raEvaluatedAt:          { type: DataTypes.DATE,          defaultValue: null },
+
+      /* ── HRD EVALUATION (max 5) ── */
+      hrdOfficeTimeDiscipline: { type: DataTypes.DECIMAL(5, 2), defaultValue: null },
+      hrdLeaveTraits:          { type: DataTypes.DECIMAL(5, 2), defaultValue: null },
+      hrdTotalScore:           { type: DataTypes.DECIMAL(5, 2), defaultValue: null },
+      hrdRemarks:              { type: DataTypes.TEXT,          defaultValue: null },
+      hrdEvaluatedAt:          { type: DataTypes.DATE,          defaultValue: null },
+
+      /* ── MD FINAL EVALUATION (max 15) ── */
+      mdFinalScore:  { type: DataTypes.DECIMAL(5, 2), defaultValue: null },
+      mdRemarks:     { type: DataTypes.TEXT,          defaultValue: null },
+      mdEvaluatedAt: { type: DataTypes.DATE,          defaultValue: null },
+
+      /* Grand total (max 100) — auto-computed when all three evaluations are done */
+      grandTotal: { type: DataTypes.DECIMAL(5, 2), defaultValue: null },
+
+      status: {
+        type: DataTypes.ENUM(
+          "DRAFT",
+          "SUBMITTED",
+          "RA_EVALUATED",
+          "HRD_EVALUATED",
+          "MD_EVALUATED",
+          "COMPLETED"
+        ),
+        defaultValue: "SUBMITTED",
+      },
+      submittedAt: {
+        type:         DataTypes.DATE,
+        defaultValue: DataTypes.NOW,
+      },
     },
-
-    yearlyPlanId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "YearlyPlan"
-    },
-
-    financialYear: {
-        type: String, // "2025-26"
-        required: true
-    },
-
-    /* ----- Employee Self-Assessment ----- */
-    workKRA: {
-        type: String, // Work done against KRA
-        required: true
-    },
-
-    additionalAssignments: {
-        type: String // Additional work beyond plan
-    },
-
-    /* =====================================================
-       RA EVALUATION (Total out of 80)
-       Sub-categories: no fixed individual limits,
-       but sum must not exceed 80
-    ===================================================== */
-    raWorkKRAScore: { type: Number, default: null },
-    raAdditionalScore: { type: Number, default: null },
-    raPersonalAttributes: { type: Number, default: null },
-    raTeamAttributes: { type: Number, default: null },
-    raLeadershipAttributes: { type: Number, default: null },
-    raTotalScore: { type: Number, default: null }, // sum, max 80
-    raRemarks: String,
-    raEvaluatedAt: Date,
-
-    /* =====================================================
-       HRD EVALUATION (Total out of 5)
-       Sub-categories: no fixed individual limits,
-       but sum must not exceed 5
-    ===================================================== */
-    hrdOfficeTimeDiscipline: { type: Number, default: null },
-    hrdLeaveTraits: { type: Number, default: null },
-    hrdTotalScore: { type: Number, default: null }, // sum, max 5
-    hrdRemarks: String,
-    hrdEvaluatedAt: Date,
-
-    /* =====================================================
-       MD FINAL EVALUATION (out of 15)
-    ===================================================== */
-    mdFinalScore: { type: Number, default: null }, // max 15
-    mdRemarks: String,
-    mdEvaluatedAt: Date,
-
-    /* Grand total (max 100) */
-    grandTotal: { type: Number, default: null },
-
-    /* ----- Quarterly refs (auto-populated) ----- */
-    quarterlyEvaluations: [
-        {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "QuarterlyEvaluation"
-        }
-    ],
-
-    status: {
-        type: String,
-        enum: ["SUBMITTED", "RA_EVALUATED", "HRD_EVALUATED", "MD_EVALUATED", "COMPLETED"],
-        default: "SUBMITTED"
-    },
-
-    submittedAt: {
-        type: Date,
-        default: Date.now
+    {
+      tableName:   "yearly_appraisal_reports",
+      underscored: true,
+      timestamps:  true, // createdAt + updatedAt
+      indexes: [
+        // ✅ One appraisal report per employee per financial year
+        { unique: true, fields: ["employee_id", "financial_year"] },
+      ],
     }
-}, { timestamps: true });
+  );
 
-yearlyAppraisalReportSchema.index({ employeeId: 1, financialYear: 1 }, { unique: true });
-
-module.exports = mongoose.model("YearlyAppraisalReport", yearlyAppraisalReportSchema);
+  return YearlyAppraisalReport;
+};

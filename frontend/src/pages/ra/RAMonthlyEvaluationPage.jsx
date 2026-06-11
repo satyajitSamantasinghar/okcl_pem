@@ -19,8 +19,8 @@ import { FaFile } from 'react-icons/fa';
 ───────────────────────────────────────── */
 function getPlanItems(plan) {
     if (!plan) return [];
-    if (Array.isArray(plan.planItems) && plan.planItems.filter(Boolean).length > 0)
-        return plan.planItems.filter(Boolean);
+    if (Array.isArray(plan.planItems) && plan.planItems.length > 0)
+        return plan.planItems.map(p => typeof p === 'string' ? p : p.itemText).filter(Boolean);
     if (plan.planDetails)
         return plan.planDetails.split('\n').map(s => s.trim()).filter(Boolean);
     return [];
@@ -214,7 +214,7 @@ const ScoreBar = ({ score }) => {
     return (
         <div className="meval-score-wrap">
             <span className={`meval-score-num ${cls}`}>
-                {score}<span className="meval-score-denom">/10</span>
+                {Number(score)}<span className="meval-score-denom">/10</span>
             </span>
             <div className="meval-score-bar-track">
                 <div className={`meval-score-bar-fill ${cls}`} style={{ width: `${(score / 10) * 100}%` }} />
@@ -508,7 +508,7 @@ const DetailModal = ({ ev, detail, detailLoading, onClose, onEvaluate, onReject,
                                             {detail.remarks && <div className="meval-ra-done">{detail.remarks}</div>}
                                             {detail.score != null && detail.score !== 0 && (
                                                 <div className="meval-ra-score-row">
-                                                    Score: <strong>{detail.score}/10</strong>
+                                                    Score: <strong>{Number(detail.score)}/10</strong>
                                                     <span className={`meval-score-label-chip ${getScoreColor(detail.score)}`}>
                                                         {getScoreLabel(detail.score)}
                                                     </span>
@@ -521,7 +521,7 @@ const DetailModal = ({ ev, detail, detailLoading, onClose, onEvaluate, onReject,
                                 </div>
                                 {isEvaluated && detail.score != null && detail.score !== 0 && (
                                     <div className={`meval-score-chip meval-score-chip--${getScoreColor(detail.score)}`}>
-                                        {detail.score}/10
+                                        {Number(detail.score)}/10
                                     </div>
                                 )}
                             </div>
@@ -554,15 +554,23 @@ const DetailModal = ({ ev, detail, detailLoading, onClose, onEvaluate, onReject,
                         /* ── Normal footer ── */
                         <>
                             <span className="meval-vmodal-ftr-state">
-                                {isEvaluated ? 'Evaluated' : hasAch ? 'Awaiting RA review' : 'Achievement pending'}
+                                {isEvaluated ? 'Evaluated'
+                                    : (ev.monthlyPlanId?.status === 'REJECTED' || detail?.plan?.status === 'REJECTED') ? 'Plan rejected — awaiting resubmission'
+                                    : hasAch ? 'Awaiting RA review'
+                                    : 'Achievement pending'}
                             </span>
                             <div style={{ display: 'flex', gap: 8 }}>
-                                {!isEvaluated && hasAch && onEvaluate && (
+                                {/* Evaluate button: hidden when plan is REJECTED — employee must resubmit first */}
+                                {!isEvaluated
+                                    && hasAch
+                                    && onEvaluate
+                                    && ev.monthlyPlanId?.status !== 'REJECTED'
+                                    && detail?.plan?.status !== 'REJECTED' && (
                                     <button className="btn btn-primary" onClick={onEvaluate}>
                                         <FiStar size={13} /> Evaluate
                                     </button>
                                 )}
-                                {!isEvaluated && ev.monthlyPlanId?.status !== 'REJECTED' && onReject && (
+                                {!isEvaluated && ev.monthlyPlanId?.status !== 'REJECTED' && detail?.plan?.status !== 'REJECTED' && onReject && (
                                     <button className="btn btn-danger" onClick={onReject}>
                                         <FiXCircle size={13} /> Reject Plan
                                     </button>
@@ -590,7 +598,7 @@ const EvaluateModal = ({ item, onClose, onSubmit, submitting }) => {
     // Load context detail for the evaluate modal
     useEffect(() => {
         if (!item) return;
-        api.get(`/ra/monthly-evaluations/${item._id}`)
+        api.get(`/ra/monthly-evaluations/${item.id}`)
             .then(res => setCtxDetail(res.data))
             .catch(() => setCtxDetail(null));
     }, [item]);
@@ -741,7 +749,7 @@ const RejectModal = ({ item, planStatus, planRemarks, onClose, onSubmit, submitt
     // Fetch plan + achievement context (same endpoint as EvaluateModal)
     useEffect(() => {
         if (!item) return;
-        api.get(`/ra/monthly-evaluations/${item._id}`)
+        api.get(`/ra/monthly-evaluations/${item.id}`)
             .then(res => setCtxDetail(res.data))
             .catch(() => setCtxDetail(null));
     }, [item]);
@@ -972,14 +980,14 @@ const RAMonthlyEvaluationPage = () => {
         const achievementsSet = new Set();
 
         evaluations.forEach(ev => {
-            const empId = ev.employee?._id?.toString();
+            const empId = ev.employee?.id?.toString();
             if (!empId) return;
             if (ev.monthlyPlanId) submittedSet.add(empId);
             if (ev.hasAchievement || ev.status === 'EVALUATED') achievementsSet.add(empId);
         });
 
         return employeesList.map(emp => {
-            const empId = emp._id?.toString();
+            const empId = emp.id?.toString();
             const hasPlan = submittedSet.has(empId);
             const hasAch = achievementsSet.has(empId);
 
@@ -1007,11 +1015,11 @@ const RAMonthlyEvaluationPage = () => {
             }
 
             // Return shape expected by table and ExtendModal
-            const existingEv = evaluations.find(e => e.employee?._id?.toString() === empId) || {};
+            const existingEv = evaluations.find(e => e.employee?.id?.toString() === empId) || {};
 
             return {
                 ...existingEv,
-                _id: existingEv._id || `missed-${empId}`,
+                _id: existingEv.id || `missed-${empId}`,
                 employee: emp,
                 missingType,
                 originalDeadline
@@ -1044,7 +1052,7 @@ const RAMonthlyEvaluationPage = () => {
 
     const handleRejectPlan = async ({ raRemarks }) => {
         if (!rejectingItem) return;
-        const planId = rejectingItem.monthlyPlanId?._id || rejectingItem.monthlyPlanId;
+        const planId = rejectingItem.monthlyPlanId?.id || rejectingItem.monthlyPlanId;
         if (!planId) { toast.error('Could not identify the monthly plan to reject.'); return; }
         setSubmitting(true);
         try {
@@ -1053,8 +1061,8 @@ const RAMonthlyEvaluationPage = () => {
             setRejectingItem(null);
             fetchEvaluations();
             // Refresh detail panel if it's open for the same employee/month
-            if (detailItem && detailItem._id === rejectingItem._id) {
-                const res = await api.get(`/ra/monthly-evaluations/${detailItem._id}`);
+            if (detailItem && detailItem.id === rejectingItem.id) {
+                const res = await api.get(`/ra/monthly-evaluations/${detailItem.id}`);
                 setDetailData(res.data);
             }
         } catch (err) {
@@ -1106,7 +1114,7 @@ const RAMonthlyEvaluationPage = () => {
     const openDetail = async (ev, isMissed = false) => {
         setDetailItem(ev); setDetailData(null); setDetailLoading(true); setDetailIsMissed(isMissed);
         try {
-            const res = await api.get(`/ra/monthly-evaluations/${ev._id}`);
+            const res = await api.get(`/ra/monthly-evaluations/${ev.id}`);
             setDetailData({ ...res.data, employee: ev.employee });
         } catch { toast.error('Failed to load details'); }
         finally { setDetailLoading(false); }
@@ -1118,7 +1126,7 @@ const RAMonthlyEvaluationPage = () => {
         setSubmitting(true);
         try {
             await api.post('/ra/monthly-evaluation', {
-                evaluationId: evaluatingItem._id,
+                evaluationId: evaluatingItem.id,
                 score: Number(score),
                 remarks,
             });
@@ -1272,7 +1280,7 @@ const RAMonthlyEvaluationPage = () => {
 
                                     return (
                                         <div
-                                            key={ev._id}
+                                            key={ev.id}
                                             className="meval-table-row meval-table-row--v2"
                                             onClick={() => openDetail(ev)}
                                             style={{ animationDelay: `${idx * 35}ms` }}
@@ -1472,13 +1480,13 @@ const RAMonthlyEvaluationPage = () => {
 
                             {/* Table rows */}
                             {missedEvaluations.map(ev => {
-                                const empId = ev.employee?._id?.toString() || ev._id?.toString();
+                                const empId = ev.employee?.id?.toString() || ev.id?.toString();
                                 const rowKey = `${empId}-${ev.missingType}`;
                                 const extended = extendedRows[rowKey];
 
                                 return (
                                     <div
-                                        key={ev._id}
+                                        key={ev.id}
                                         style={{
                                             display: 'grid',
                                             gridTemplateColumns: 'minmax(200px,2.5fr) minmax(130px,1fr) minmax(140px,1fr) minmax(160px,1.2fr) minmax(160px,1.2fr)',
@@ -1583,10 +1591,24 @@ const RAMonthlyEvaluationPage = () => {
                     detailLoading={detailLoading}
                     onClose={closeDetail}
                     isMissedDeadline={detailIsMissed}
-                    onEvaluate={detailIsMissed ? undefined : () => { closeDetail(); setEvaluatingItem(detailItem); }}
-                    onReject={detailIsMissed ? undefined : () => { closeDetail(); setRejectingItem(detailItem); }}
+                    onEvaluate={
+                        // Block evaluation when plan is rejected — employee must resubmit first
+                        detailIsMissed
+                        || detailItem.monthlyPlanId?.status === 'REJECTED'
+                        || detailData?.plan?.status === 'REJECTED'
+                            ? undefined
+                            : () => { closeDetail(); setEvaluatingItem(detailItem); }
+                    }
+                    onReject={
+                        // Block re-rejection of an already rejected plan
+                        detailIsMissed
+                        || detailItem.monthlyPlanId?.status === 'REJECTED'
+                        || detailData?.plan?.status === 'REJECTED'
+                            ? undefined
+                            : () => { closeDetail(); setRejectingItem(detailItem); }
+                    }
                     onExtendDeadline={() => {
-                        const missed = missedEvaluations.find(m => m._id === detailItem._id);
+                        const missed = missedEvaluations.find(m => m.id === detailItem.id);
                         if (missed) openExtendModal(missed.employee, missed.missingType, missed.originalDeadline);
                     }}
                 />
@@ -1619,7 +1641,7 @@ const RAMonthlyEvaluationPage = () => {
                     onClose={closeExtendModal}
                     onConfirm={(newDeadline, reason, notify, empName) => {
                         // Mark row as extended (optimistic UI)
-                        const empId = selectedEmployeeForExtension._id?.toString();
+                        const empId = selectedEmployeeForExtension.id?.toString();
                         const rowKey = `${empId}-${selectedEmployeeForExtension.missingType}`;
                         setExtendedRows(prev => ({ ...prev, [rowKey]: { newDate: newDeadline } }));
                         closeExtendModal();

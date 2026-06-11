@@ -782,6 +782,122 @@
 }
 
 /* ══════════════════════════════════════════
+   MY PERFORMANCE — colour variants
+   Indigo · Sky · Teal
+   (same left-accent pattern as orange/blue/yellow)
+   ══════════════════════════════════════════ */
+
+/* ── Indigo (My Monthly Plan) ── */
+.ra-action-tile.indigo::before {
+    background: #6366F1;
+}
+
+.ra-action-tile.indigo:hover {
+    border-color: rgba(99, 102, 241, 0.28);
+    box-shadow: 0 14px 32px -4px rgba(99, 102, 241, 0.12), 0 4px 8px rgba(99, 102, 241, 0.08);
+}
+
+.ra-action-tile.indigo:hover .ra-at-icon {
+    background: #EEF2FF;
+    color: #6366F1;
+    transform: scale(1.1);
+}
+
+.ra-action-tile.indigo:hover .ra-at-arrow {
+    transform: translateX(5px);
+    color: #6366F1;
+}
+
+/* ── Sky (My Yearly Plan) ── */
+.ra-action-tile.sky::before {
+    background: #0EA5E9;
+}
+
+.ra-action-tile.sky:hover {
+    border-color: rgba(14, 165, 233, 0.28);
+    box-shadow: 0 14px 32px -4px rgba(14, 165, 233, 0.12), 0 4px 8px rgba(14, 165, 233, 0.08);
+}
+
+.ra-action-tile.sky:hover .ra-at-icon {
+    background: #E0F2FE;
+    color: #0EA5E9;
+    transform: scale(1.1);
+}
+
+.ra-action-tile.sky:hover .ra-at-arrow {
+    transform: translateX(5px);
+    color: #0EA5E9;
+}
+
+/* ── Teal (My Quarterly Review) ── */
+.ra-action-tile.teal::before {
+    background: #10B981;
+}
+
+.ra-action-tile.teal:hover {
+    border-color: rgba(16, 185, 129, 0.28);
+    box-shadow: 0 14px 32px -4px rgba(16, 185, 129, 0.12), 0 4px 8px rgba(16, 185, 129, 0.08);
+}
+
+.ra-action-tile.teal:hover .ra-at-icon {
+    background: #D1FAE5;
+    color: #10B981;
+    transform: scale(1.1);
+}
+
+.ra-action-tile.teal:hover .ra-at-arrow {
+    transform: translateX(5px);
+    color: #10B981;
+}
+
+/* ══════════════════════════════════════════
+   MY PERFORMANCE — wrapper tint
+   Subtle indigo wash to visually separate
+   this section from Quick Actions above
+   ══════════════════════════════════════════ */
+.ra-perf-grid {
+    background: linear-gradient(135deg,
+            rgba(99, 102, 241, 0.045) 0%,
+            rgba(139, 92, 246, 0.045) 100%);
+    border: 1px solid rgba(99, 102, 241, 0.11);
+    border-radius: var(--rad-radius);
+    padding: 12px;
+}
+
+/* ══════════════════════════════════════════
+   DISABLED / COMING-SOON TILE
+   Add  class="ra-action-tile <color> coming-soon"
+   to any tile you want to disable before going live.
+   ══════════════════════════════════════════ */
+.ra-action-tile.coming-soon {
+    opacity: 0.52;
+    pointer-events: none;
+    cursor: not-allowed;
+    user-select: none;
+    position: relative;
+}
+
+/* "Coming Soon" pill — top-right corner */
+.ra-action-tile.coming-soon::after {
+    content: 'Coming Soon';
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    background: #F1F5F9;
+    color: #64748B;
+    font-size: 0.62rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 2px 8px;
+    border-radius: 20px;
+    border: 1px solid #E2E8F0;
+    line-height: 1.6;
+    /* override the left-border ::before pseudo — both share the element */
+    z-index: 1;
+}
+
+/* ══════════════════════════════════════════
    NEW: 6-MONTH ACTIVITY TREND — FULL WIDTH
    Dedicated section with proper breathing room
    ══════════════════════════════════════════ */

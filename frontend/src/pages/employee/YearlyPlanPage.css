@@ -83,9 +83,25 @@
     color: var(--primary);
 }
 
+.yp-btn-ghost {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-secondary);
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.yp-btn-ghost:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
 .yp-summary-strip {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     gap: 14px;
 }
 
@@ -321,7 +337,7 @@
     z-index: 2;
 }
 
-.yp-table-group-row > td {
+.yp-table-group-row>td {
     padding: 0;
     border: none;
 }
@@ -1027,18 +1043,56 @@
 }
 
 @keyframes yp-shimmer {
-    100% { transform: translateX(100%); }
+    100% {
+        transform: translateX(100%);
+    }
 }
 
-.yp-skeleton--kicker { width: 150px; height: 24px; }
-.yp-skeleton--title { width: 280px; height: 30px; }
-.yp-skeleton--subtitle { width: 460px; max-width: 100%; height: 16px; }
-.yp-skeleton--button { width: 150px; height: 42px; }
-.yp-skeleton--icon { width: 42px; height: 42px; }
-.yp-skeleton--stat-label { width: 110px; height: 12px; }
-.yp-skeleton--stat-value { width: 72px; height: 28px; }
-.yp-skeleton--control { width: 148px; height: 42px; }
-.yp-skeleton--search { width: 280px; height: 42px; }
+.yp-skeleton--kicker {
+    width: 150px;
+    height: 24px;
+}
+
+.yp-skeleton--title {
+    width: 280px;
+    height: 30px;
+}
+
+.yp-skeleton--subtitle {
+    width: 460px;
+    max-width: 100%;
+    height: 16px;
+}
+
+.yp-skeleton--button {
+    width: 150px;
+    height: 42px;
+}
+
+.yp-skeleton--icon {
+    width: 42px;
+    height: 42px;
+}
+
+.yp-skeleton--stat-label {
+    width: 110px;
+    height: 12px;
+}
+
+.yp-skeleton--stat-value {
+    width: 72px;
+    height: 28px;
+}
+
+.yp-skeleton--control {
+    width: 148px;
+    height: 42px;
+}
+
+.yp-skeleton--search {
+    width: 280px;
+    height: 42px;
+}
 
 .yp-skeleton-row {
     display: grid;
@@ -1048,10 +1102,25 @@
     border-bottom: 1px solid #eef2f7;
 }
 
-.yp-skeleton--row-large { height: 16px; }
-.yp-skeleton--row-small { height: 16px; width: 70%; }
-.yp-skeleton--row-badge { height: 30px; width: 90%; border-radius: 999px; }
-.yp-skeleton--row-action { height: 38px; width: 110px; }
+.yp-skeleton--row-large {
+    height: 16px;
+}
+
+.yp-skeleton--row-small {
+    height: 16px;
+    width: 70%;
+}
+
+.yp-skeleton--row-badge {
+    height: 30px;
+    width: 90%;
+    border-radius: 999px;
+}
+
+.yp-skeleton--row-action {
+    height: 38px;
+    width: 110px;
+}
 
 @media (max-width: 1024px) {
     .yp-summary-strip {
@@ -1142,7 +1211,7 @@
         overflow: hidden;
     }
 
-    .yp-mobile-card + .yp-mobile-card {
+    .yp-mobile-card+.yp-mobile-card {
         margin-top: 10px;
     }
 
@@ -1193,5 +1262,730 @@
 
     .yp-skeleton--subtitle {
         width: 100%;
+    }
+}
+
+/* KRA TABLE */
+.yp-kra-table-wrap {
+    width: 100%;
+    overflow-x: auto;
+    padding: 0 0 4px;
+}
+
+.yp-kra-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+    min-width: 540px;
+}
+
+.yp-kra-th {
+    text-align: left;
+    padding: 10px 12px;
+    background: #f8fafc;
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    border-bottom: 2px solid #e2e8f0;
+    border-top: 1px solid #e2e8f0;
+    white-space: nowrap;
+}
+
+.yp-kra-th--num {
+    width: 40px;
+    text-align: center;
+}
+
+.yp-kra-th--action {
+    width: 48px;
+}
+
+.yp-kra-tr:nth-child(even) {
+    background: #fafbfc;
+}
+
+.yp-kra-tr:hover {
+    background: #fffaf5;
+}
+
+.yp-kra-td {
+    padding: 10px 12px;
+    border-bottom: 1px solid #edf2f7;
+    color: var(--text-primary);
+    vertical-align: middle;
+}
+
+.yp-kra-td--num {
+    text-align: center;
+    font-size: 0.78rem;
+    font-weight: 800;
+    color: var(--text-muted);
+    width: 40px;
+}
+
+.yp-kra-td--action {
+    width: 48px;
+    text-align: center;
+}
+
+.yp-kra-table--readonly .yp-kra-td {
+    font-size: 0.9rem;
+    line-height: 1.55;
+}
+
+.yp-kra-input {
+    width: 100%;
+    min-width: 120px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 7px 10px;
+    font-size: 0.88rem;
+    font-family: inherit;
+    color: var(--text-primary);
+    background: #fff;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease;
+    outline: none;
+}
+
+.yp-kra-input:focus {
+    border-color: rgba(249, 115, 22, 0.38);
+    box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.08);
+}
+
+.yp-kra-trash-btn {
+    width: 32px;
+    height: 32px;
+    border: 1px solid #fecaca;
+    border-radius: 8px;
+    background: #fff5f5;
+    color: #dc2626;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.18s ease;
+    font-size: 0.9rem;
+}
+
+.yp-kra-trash-btn:hover:not(:disabled) {
+    background: #fee2e2;
+    border-color: #fca5a5;
+    transform: translateY(-1px);
+}
+
+.yp-kra-trash-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.yp-kra-add-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    margin-top: 12px;
+    padding: 9px 16px;
+    border: 1.5px dashed rgba(249, 115, 22, 0.4);
+    border-radius: 10px;
+    background: #fffbf7;
+    color: var(--primary);
+    font-size: 0.85rem;
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    transition: border-color 0.18s ease, background 0.18s ease;
+}
+
+.yp-kra-add-btn:hover {
+    border-color: var(--primary);
+    background: #fff7ed;
+}
+
+.yp-kra-empty {
+    padding: 18px;
+    color: var(--text-muted);
+    font-size: 0.88rem;
+    font-style: italic;
+    text-align: center;
+}
+
+.yp-revision-timeline {
+    padding: 0 18px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    position: relative;
+}
+
+.yp-revision-entry {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 14px 0;
+}
+
+.yp-revision-entry+.yp-revision-entry {
+    border-top: 1px dashed #e2e8f0;
+}
+
+.yp-revision-version {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+    border: 1.5px solid #fed7aa;
+    color: var(--primary);
+    font-size: 0.75rem;
+    font-weight: 800;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.yp-revision-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.yp-revision-body strong {
+    display: block;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+    font-weight: 700;
+}
+
+.yp-revision-body p {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    line-height: 1.6;
+}
+
+.yp-warning-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 16px;
+    border: 1px solid #fcd34d;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #fffbeb 0%, #fef9c3 100%);
+    margin-top: 10px;
+}
+
+.yp-warning-icon {
+    color: #d97706;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.yp-warning-banner strong {
+    display: block;
+    color: #92400e;
+    font-size: 0.88rem;
+    font-weight: 800;
+    margin-bottom: 3px;
+}
+
+.yp-warning-banner p {
+    margin: 0;
+    color: #78350f;
+    font-size: 0.84rem;
+    line-height: 1.55;
+}
+
+.yp-summary-card--draft {
+    border-color: rgba(100, 116, 139, 0.25);
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+}
+
+.yp-summary-card--draft span {
+    color: #64748b;
+}
+
+.yp-summary-card--draft strong {
+    color: #334155;
+}
+
+.yp-remarks-inline {
+    font-size: 0.84rem;
+    color: var(--text-primary);
+    text-align: right;
+    max-width: 200px;
+    word-break: break-word;
+    line-height: 1.5;
+}
+
+.yp-remarks-inline--awaiting {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.yp-awaiting {
+    color: var(--text-muted) !important;
+    font-style: italic;
+}
+
+.btn-ghost {
+    background: transparent;
+    border: 1px solid var(--border-default);
+    color: var(--text-secondary);
+    padding: 8px 16px;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.btn-ghost:hover {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   APPRAISAL REPORT MODAL — 3-STEP STEPPER
+   Added for the per-KRA achievement card refactor.
+═══════════════════════════════════════════════════════════════════════════════ */
+
+/* ── Stepper bars in modal header ─────────────────────────────────────────── */
+.yp-modal-stepper {
+    margin-top: 10px;
+}
+
+.yp-stepper {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.yp-stepper-bar {
+    height: 4px;
+    width: 52px;
+    border-radius: 999px;
+    background: #e2e8f0;
+    transition: background 0.28s ease, width 0.18s ease;
+}
+
+/* Completed step — green */
+.yp-stepper-bar.is-done {
+    background: #22c55e;
+}
+
+/* Current active step — orange (brand primary) */
+.yp-stepper-bar.is-active {
+    background: var(--primary, #f97316);
+    width: 68px;
+    /* slightly wider to emphasise current step */
+}
+
+/* ── Step footer layout ───────────────────────────────────────────────────── */
+.yp-step-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+}
+
+.yp-step-footer-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.yp-step-footer-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+/* Inline warning: "X KRAs still empty" */
+.yp-step-empty-warn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #dc2626;
+    white-space: nowrap;
+}
+
+/* "Draft saved ✓" flash message */
+.yp-draft-saved {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #16a34a;
+    white-space: nowrap;
+    animation: yp-fade-up 0.22s ease both;
+}
+
+@keyframes yp-fade-up {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   KRA ASSESSMENT CARDS  (KRAAssessmentCards.jsx)
+   Used in:
+     • Submit Appraisal modal — editable textareas + progress bar
+     • Accordion expanded view — read-only display
+═══════════════════════════════════════════════════════════════════════════════ */
+
+/* ── Outer wrapper ────────────────────────────────────────────────────────── */
+.kra-ac-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+/* Empty / no-KRA message */
+.kra-ac-no-kras {
+    padding: 20px;
+    color: var(--text-muted, #94a3b8);
+    font-size: 0.88rem;
+    font-style: italic;
+    text-align: center;
+    background: #f8fafc;
+    border: 1px dashed #e2e8f0;
+    border-radius: 12px;
+}
+
+/* ── Progress bar row ─────────────────────────────────────────────────────── */
+.kra-ac-progress-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 12px 16px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+}
+
+.kra-ac-progress-label {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--text-secondary, #64748b);
+    white-space: nowrap;
+}
+
+.kra-ac-progress-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    justify-content: flex-end;
+}
+
+.kra-ac-progress-track {
+    height: 6px;
+    background: #e2e8f0;
+    border-radius: 999px;
+    width: 140px;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.kra-ac-progress-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #4ade80 0%, #16a34a 100%);
+    transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    min-width: 0;
+}
+
+.kra-ac-progress-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--text-muted, #94a3b8);
+    white-space: nowrap;
+}
+
+.kra-ac-progress-icon {
+    color: var(--text-muted, #94a3b8);
+    font-size: 0.82rem;
+}
+
+.kra-ac-progress-icon--done {
+    color: #16a34a;
+    font-size: 0.82rem;
+}
+
+/* ── Card list ────────────────────────────────────────────────────────────── */
+.kra-ac-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* ── Individual card ──────────────────────────────────────────────────────── */
+.kra-ac-card {
+    border: 1.5px solid var(--border-default, #e2e8f0);
+    border-radius: 16px;
+    background: #fff;
+    overflow: hidden;
+    transition: border-color 0.22s ease, box-shadow 0.22s ease;
+}
+
+.kra-ac-card:focus-within {
+    box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.1);
+}
+
+/* Green border when the achievement textarea has content */
+.kra-ac-card.kra-ac-card--filled {
+    border-color: #16a34a;
+}
+
+.kra-ac-card.kra-ac-card--filled:focus-within {
+    box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.1);
+}
+
+/* Read-only variant — no interactive hover states */
+.kra-ac-card.kra-ac-card--readonly {
+    border-color: #e2e8f0;
+    box-shadow: none;
+}
+
+/* ── Card header (grey background, always read-only) ─────────────────────── */
+.kra-ac-header {
+    padding: 14px 16px 12px;
+    background: #f8fafc;
+    border-bottom: 1px solid #eef2f7;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+}
+
+.kra-ac-header-top {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+/* Circular KRA number badge */
+.kra-ac-num-badge {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+    border: 1.5px solid #fed7aa;
+    color: var(--primary, #f97316);
+    font-size: 0.75rem;
+    font-weight: 800;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+
+/* KRA description text */
+.kra-ac-description {
+    flex: 1;
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: var(--text-primary, #1e293b);
+    line-height: 1.55;
+}
+
+/* Filled / Empty status badge (top-right of header) */
+.kra-ac-fill-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+    flex-shrink: 0;
+    background: #f1f5f9;
+    color: var(--text-muted, #94a3b8);
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.kra-ac-fill-badge.kra-ac-fill-badge--done {
+    background: #dcfce7;
+    color: #15803d;
+}
+
+/* ── Meta pills (target + timeline) ──────────────────────────────────────── */
+.kra-ac-meta-pills {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    flex-wrap: wrap;
+    /* Indent to align with description text (skips badge width + gap) */
+    padding-left: 38px;
+}
+
+.kra-ac-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border: 1px solid #e2e8f0;
+    border-radius: 999px;
+    background: #fff;
+    font-size: 0.76rem;
+    font-weight: 600;
+    color: var(--text-secondary, #64748b);
+    max-width: 360px;
+}
+
+.kra-ac-pill span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.kra-ac-pill svg {
+    font-size: 0.78rem;
+    flex-shrink: 0;
+}
+
+.kra-ac-pill--target svg {
+    color: var(--primary, #f97316);
+}
+
+.kra-ac-pill--timeline svg {
+    color: #6366f1;
+}
+
+/* ── Card body ────────────────────────────────────────────────────────────── */
+.kra-ac-body {
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* Label above textarea */
+.kra-ac-textarea-label {
+    font-size: 0.84rem;
+    font-weight: 700;
+    color: var(--text-secondary, #64748b);
+    cursor: default;
+}
+
+.kra-ac-textarea-label .required {
+    color: #dc2626;
+    margin-left: 2px;
+}
+
+/* Achievement textarea (edit mode) */
+.kra-ac-textarea {
+    width: 100%;
+    min-height: 100px;
+    resize: vertical;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 10px 13px;
+    font-size: 0.9rem;
+    font-family: inherit;
+    color: var(--text-primary, #1e293b);
+    background: #fafafa;
+    line-height: 1.65;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+    outline: none;
+}
+
+.kra-ac-textarea:focus {
+    border-color: rgba(249, 115, 22, 0.38);
+    box-shadow: 0 0 0 4px rgba(249, 115, 22, 0.08);
+    background: #fff;
+}
+
+.kra-ac-textarea::placeholder {
+    color: var(--text-muted, #94a3b8);
+    font-style: italic;
+}
+
+/* Achievement text block (read-only mode) */
+.kra-ac-achievement-text {
+    font-size: 0.92rem;
+    color: var(--text-primary, #1e293b);
+    line-height: 1.75;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* Placeholder for read-only cards with no achievement recorded */
+.kra-ac-achievement-empty {
+    color: var(--text-muted, #94a3b8);
+    font-style: italic;
+    font-size: 0.88rem;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   RESPONSIVE ADJUSTMENTS
+═══════════════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+
+    /* Stepper bars narrow on mobile */
+    .yp-stepper-bar {
+        width: 36px;
+    }
+
+    .yp-stepper-bar.is-active {
+        width: 48px;
+    }
+
+    /* Step footer stacks vertically */
+    .yp-step-footer {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+
+    .yp-step-footer-left,
+    .yp-step-footer-right {
+        width: 100%;
+        justify-content: flex-start;
+    }
+
+    .yp-step-footer-right {
+        flex-direction: row-reverse;
+        justify-content: flex-start;
+        flex-wrap: wrap;
+    }
+
+    /* Progress track narrower */
+    .kra-ac-progress-track {
+        width: 80px;
+    }
+
+    /* Pills wrap more gracefully */
+    .kra-ac-meta-pills {
+        padding-left: 0;
+    }
+
+    /* Full-width pills on very small screens */
+    .kra-ac-pill {
+        max-width: 100%;
     }
 }

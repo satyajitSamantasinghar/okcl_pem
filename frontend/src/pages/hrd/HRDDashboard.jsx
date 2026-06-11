@@ -182,7 +182,7 @@ const HRDDashboard = () => {
         if (selectedEmployeeIds.size === 0) { toast.error('Please select at least one employee'); return; }
         setAssignLoading(true);
         try {
-            await api.put(`/hrd/ra/${selectedRAForAssign._id}/assign-employees`, {
+            await api.put(`/hrd/ra/${selectedRAForAssign.id}/assign-employees`, {
                 employeeIds: Array.from(selectedEmployeeIds)
             });
             toast.success('Employees assigned successfully');
@@ -267,9 +267,9 @@ const HRDDashboard = () => {
         raList.forEach(ra => {
             const pending = ra.employeeCount - ra.evaluated;
             if (ra.employeeCount === 0) {
-                list.push({ id: `ra-empty-${ra._id}`, type: 'info', message: `${ra.name} has no employees assigned — setup incomplete`, cta: 'Fix' });
+                list.push({ id: `ra-empty-${ra.id}`, type: 'info', message: `${ra.name} has no employees assigned — setup incomplete`, cta: 'Fix' });
             } else if (pending >= 5) {
-                list.push({ id: `ra-pending-${ra._id}`, type: 'warning', message: `${ra.name} has ${pending} pending evaluations this month`, cta: 'Review' });
+                list.push({ id: `ra-pending-${ra.id}`, type: 'warning', message: `${ra.name} has ${pending} pending evaluations this month`, cta: 'Review' });
             }
         });
         if (stats.orgHealthScore < 30 && stats.totalEmployees > 0) {
@@ -329,7 +329,7 @@ const HRDDashboard = () => {
                                 {searchResults.length === 0 ? (
                                     <div className="hrd-search-empty">No results for "{searchQuery}"</div>
                                 ) : searchResults.map(u => (
-                                    <div key={u._id} className="hrd-search-item" onClick={() => goToDetail(u._id, u.role)}>
+                                    <div key={u.id} className="hrd-search-item" onClick={() => goToDetail(u.id, u.role)}>
                                         <div className={`hrd-search-avatar ${u.role === 'RA' ? 'ra' : ''}`}>{getInitials(u.name)}</div>
                                         <div className="hrd-search-info">
                                             <div className="hrd-search-name">{u.name}</div>
@@ -537,14 +537,14 @@ const HRDDashboard = () => {
             <div className="hrd-ra-grid">
                 {raList.map(ra => {
                     const progress = ra.employeeCount > 0 ? Math.round((ra.evaluated / ra.employeeCount) * 100) : 0;
-                    const isExpanded = expandedRA === ra._id;
+                    const isExpanded = expandedRA === ra.id;
                     const isEmpty = ra.employeeCount === 0;
                     return (
                         <div
-                            key={ra._id}
-                            id={`ra-${ra._id}`}
+                            key={ra.id}
+                            id={`ra-${ra.id}`}
                             className={`hrd-ra-card${isExpanded ? ' active' : ''}${isEmpty ? ' empty' : ''}`}
-                            onClick={() => !isEmpty && setExpandedRA(isExpanded ? null : ra._id)}
+                            onClick={() => !isEmpty && setExpandedRA(isExpanded ? null : ra.id)}
                         >
                             <div className="hrd-ra-top">
                                 <div className="hrd-ra-avatar">{getInitials(ra.name)}</div>
@@ -586,7 +586,7 @@ const HRDDashboard = () => {
 
             {/* ── Employees under expanded RA ── */}
             {expandedRA && (() => {
-                const ra = raList.find(r => r._id === expandedRA);
+                const ra = raList.find(r => r.id === expandedRA);
                 if (!ra || !ra.employees || ra.employees.length === 0) return null;
                 return (
                     <div className="hrd-emp-section">
@@ -599,7 +599,7 @@ const HRDDashboard = () => {
                                 const scoreColor = getScoreColor(emp.lastScore);
                                 const scoreBg = getScoreBg(emp.lastScore);
                                 return (
-                                    <div key={emp._id} className="hrd-emp-card" onClick={() => navigate(`/hrd/employee/${emp._id}`)}>
+                                    <div key={emp.id} className="hrd-emp-card" onClick={() => navigate(`/hrd/employee/${emp.id}`)}>
                                         <div className="hrd-emp-avatar">{getInitials(emp.name)}</div>
                                         <div className="hrd-emp-body">
                                             <div className="hrd-emp-top-row">
@@ -619,7 +619,7 @@ const HRDDashboard = () => {
                                             </div>
                                         </div>
                                         <div className="hrd-emp-actions">
-                                            <button className="hrd-emp-action-btn" title="View profile" onClick={e => { e.stopPropagation(); navigate(`/hrd/employee/${emp._id}`); }}><FiEye /></button>
+                                            <button className="hrd-emp-action-btn" title="View profile" onClick={e => { e.stopPropagation(); navigate(`/hrd/employee/${emp.id}`); }}><FiEye /></button>
                                         </div>
                                     </div>
                                 );
@@ -646,10 +646,10 @@ const HRDDashboard = () => {
                             ) : (
                                 <div className="hrd-assign-list">
                                     {availableEmployees.map(emp => {
-                                        const isSelected = selectedEmployeeIds.has(emp._id);
-                                        const isAlreadyAssigned = emp.reportingAuthorityId?._id === selectedRAForAssign._id;
+                                        const isSelected = selectedEmployeeIds.has(emp.id);
+                                        const isAlreadyAssigned = emp.reportingAuthorityId?.id === selectedRAForAssign.id;
                                         return (
-                                            <div key={emp._id} className={`hrd-assign-item${isSelected ? ' selected' : ''}${isAlreadyAssigned ? ' disabled' : ''}`} onClick={() => !isAlreadyAssigned && toggleEmployeeSelection(emp._id)}>
+                                            <div key={emp.id} className={`hrd-assign-item${isSelected ? ' selected' : ''}${isAlreadyAssigned ? ' disabled' : ''}`} onClick={() => !isAlreadyAssigned && toggleEmployeeSelection(emp.id)}>
                                                 <input type="checkbox" checked={isSelected || isAlreadyAssigned} disabled={isAlreadyAssigned} onChange={() => { }} />
                                                 <div className="hrd-assign-emp-info">
                                                     <div className="hrd-assign-emp-name">{emp.name}</div>

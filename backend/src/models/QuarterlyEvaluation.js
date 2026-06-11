@@ -1,48 +1,45 @@
-const mongoose = require("mongoose");
+const { DataTypes } = require("sequelize");
 
-const quarterlyEvaluationSchema = new mongoose.Schema(
-  {
-    employeeId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true
+module.exports = (sequelize) => {
+  const QuarterlyEvaluation = sequelize.define(
+    "QuarterlyEvaluation",
+    {
+      id: {
+        type:         DataTypes.UUID,
+        defaultValue: DataTypes.UUIDV4,
+        primaryKey:   true,
+      },
+      employeeId: {
+        type:      DataTypes.UUID,
+        allowNull: false,
+      },
+      quarter: {
+        type:      DataTypes.STRING, // "Q1-2026"
+        allowNull: false,
+      },
+      raId: {
+        type:      DataTypes.UUID,
+        allowNull: false,
+      },
+      averageScore: {
+        type:      DataTypes.DECIMAL(5, 2),
+        allowNull: false,
+        validate:  { min: 0, max: 10 },
+      },
+      remarks: {
+        type: DataTypes.TEXT,
+      },
     },
-
-    quarter: {
-      type: String, // "Q1-2026"
-      required: true
-    },
-
-    raId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true
-    },
-
-    averageScore: {
-      type: Number,
-      min: 0,
-      max: 10,
-      required: true
-    },
-
-    remarks: {
-      type: String,
-      default: null
+    {
+      tableName:   "quarterly_evaluations",
+      underscored: true,
+      timestamps:  true, // createdAt + updatedAt
+      indexes: [
+        // ✅ Prevent duplicate quarterly evaluations
+        { unique: true, fields: ["employee_id", "quarter"] },
+      ],
     }
-  },
-  {
-    timestamps: true
-  }
-);
+  );
 
-// ✅ Prevent duplicate quarterly evaluations
-quarterlyEvaluationSchema.index(
-  { employeeId: 1, quarter: 1 },
-  { unique: true }
-);
-
-module.exports = mongoose.model(
-  "QuarterlyEvaluation",
-  quarterlyEvaluationSchema
-);
+  return QuarterlyEvaluation;
+};

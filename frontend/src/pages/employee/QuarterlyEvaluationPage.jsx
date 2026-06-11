@@ -61,7 +61,7 @@ const QuarterlyEvaluationPage = () => {
             ) : (
                 <div className="cards-grid">
                     {evaluations.map((ev) => (
-                        <div key={ev._id} className="card">
+                        <div key={ev.id} className="card">
                             <div className="card-header">
                                 <h3>{ev.quarter}</h3>
                                 <span className="badge badge-evaluated">Evaluated</span>

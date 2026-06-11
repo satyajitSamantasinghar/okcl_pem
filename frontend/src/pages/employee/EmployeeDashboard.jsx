@@ -119,7 +119,7 @@ const EmployeeDashboard = () => {
 
                     if (plan.status === 'REJECTED') {
                         actions.push({
-                            id: `resubmit_plan_${plan._id}`,
+                            id: `resubmit_plan_${plan.id}`,
                             type: 'danger',
                             title: `Resubmit Monthly Plan`,
                             desc: `Your plan for ${monthDisplay} was rejected by your Reporting Authority (RA).`,
@@ -128,10 +128,10 @@ const EmployeeDashboard = () => {
                         });
                     } else if (['PENDING', 'APPROVED', 'RA_EVALUATED'].includes(plan.status)) {
                         // Check if achievement submitted
-                        const achievement = achievements.find(a => a.monthlyPlanId?._id === plan._id || a.monthlyPlanId === plan._id);
+                        const achievement = achievements.find(a => a.monthlyPlanId?.id === plan.id || a.monthlyPlanId === plan.id);
                         if (!achievement || achievement.status === 'DRAFT') {
                             actions.push({
-                                id: `submit_ach_${plan._id}`,
+                                id: `submit_ach_${plan.id}`,
                                 type: 'primary',
                                 title: `Submit Monthly Achievement`,
                                 desc: `Pending achievement submission for ${monthDisplay}.`,
@@ -182,7 +182,7 @@ const EmployeeDashboard = () => {
                 }
 
                 // Check if current month needs an achievement
-                const hasCurrentAchievement = achievements.some(a => a.monthlyPlanId?._id === currentPlan?._id || a.monthlyPlanId === currentPlan?._id);
+                const hasCurrentAchievement = achievements.some(a => a.monthlyPlanId?.id === currentPlan?.id || a.monthlyPlanId === currentPlan?.id);
                 if (currentPlan && !hasCurrentAchievement && achDiff >= -10) {
                     dls.push({
                         title: `Monthly Achievement (${currMonthDisplay})`,

@@ -124,7 +124,7 @@ const MDAuditPage = () => {
                             ) : logs.map(log => {
                                 const ai = getAuditIcon(log.action);
                                 return (
-                                    <tr key={log._id}>
+                                    <tr key={log.id}>
                                         <td>
                                             <div className={`md-audit-icon ${ai.cls}`} style={{ width: '28px', height: '28px', fontSize: '0.7rem' }}>
                                                 {ai.icon}

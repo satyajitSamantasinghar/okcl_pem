@@ -74,7 +74,7 @@ const MDEmployeeListPage = () => {
     const avgReports = stats.ras > 0 ? Math.round(stats.employees / stats.ras) : 0;
 
     const handleEmployeeClick = (emp) => {
-        navigate(`/md/employee/${emp._id}`);
+        navigate(`/md/employee/${emp.id}`);
     };
     
     const roleLabel = roleFilter === 'EMPLOYEE' ? 'Employees Only' : roleFilter === 'RA' ? 'Reporting Authorities Only' : '';
@@ -196,7 +196,7 @@ const MDEmployeeListPage = () => {
                         const isRA = emp.role === 'RA';
                         
                         return (
-                            <div key={emp._id} className="mel-card" onClick={() => handleEmployeeClick(emp)}>
+                            <div key={emp.id} className="mel-card" onClick={() => handleEmployeeClick(emp)}>
                                 <div className="mel-card-top-row">
                                     <span className="mel-role-badge" style={{ background: roleInfo.bg, color: roleInfo.color }}>
                                         {roleInfo.label}
@@ -241,7 +241,7 @@ const MDEmployeeListPage = () => {
                                 const roleInfo = ROLE_COLORS[emp.role] || ROLE_COLORS.EMPLOYEE;
                                 const isRA = emp.role === 'RA';
                                 return (
-                                    <tr key={emp._id} className="mel-row" onClick={() => handleEmployeeClick(emp)}>
+                                    <tr key={emp.id} className="mel-row" onClick={() => handleEmployeeClick(emp)}>
                                         <td className="mel-cell-num">{i + 1}</td>
                                         <td>
                                             <div className="mel-row-emp">

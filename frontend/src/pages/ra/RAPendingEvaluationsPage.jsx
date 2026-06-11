@@ -67,7 +67,7 @@ const RAPendingEvaluationsPage = () => {
 
             const detailResults = await Promise.allSettled(
                 rawPending.map((item) =>
-                    api.get(`/ra/monthly-evaluations/${item._id}`).then((res) => ({
+                    api.get(`/ra/monthly-evaluations/${item.id}`).then((res) => ({
                         item,
                         detail: res.data,
                     }))
@@ -87,7 +87,7 @@ const RAPendingEvaluationsPage = () => {
                     return;
                 }
 
-                nextCache[item._id] = itemDetail;
+                nextCache[item.id] = itemDetail;
                 validPending.push({
                     ...item,
                     hasAchievement: !!itemDetail.achievement,
@@ -128,7 +128,7 @@ const RAPendingEvaluationsPage = () => {
             .some((value) => value.toLowerCase().includes(query));
     });
 
-    const employeeCount = new Set(evaluations.map((item) => item.employee?._id).filter(Boolean)).size;
+    const employeeCount = new Set(evaluations.map((item) => item.employee?.id).filter(Boolean)).size;
     const achievementReadyCount = evaluations.filter((item) => item.hasAchievement).length;
     const awaitingAchievementCount = evaluations.length - achievementReadyCount;
 
@@ -138,7 +138,7 @@ const RAPendingEvaluationsPage = () => {
         setScore('');
         setRemarks('');
 
-        const cachedDetail = detailCache[item._id];
+        const cachedDetail = detailCache[item.id];
         if (cachedDetail) {
             setDetail(cachedDetail);
             setDetailLoading(false);
@@ -149,7 +149,7 @@ const RAPendingEvaluationsPage = () => {
         setDetailLoading(true);
 
         try {
-            const res = await api.get(`/ra/monthly-evaluations/${item._id}`);
+            const res = await api.get(`/ra/monthly-evaluations/${item.id}`);
             if (!res.data?.plan) {
                 toast.error('Monthly plan details are not available for this evaluation');
                 setSelectedItem(null);
@@ -159,7 +159,7 @@ const RAPendingEvaluationsPage = () => {
             setDetail(res.data);
             setDetailCache((currentCache) => ({
                 ...currentCache,
-                [item._id]: res.data,
+                [item.id]: res.data,
             }));
         } catch (err) {
             toast.error('Failed to load evaluation details');
@@ -191,7 +191,7 @@ const RAPendingEvaluationsPage = () => {
         setSubmitting(true);
         try {
             await api.post('/ra/monthly-evaluation', {
-                evaluationId: selectedItem._id,
+                evaluationId: selectedItem.id,
                 score: numericScore,
                 remarks,
             });
@@ -316,7 +316,7 @@ const RAPendingEvaluationsPage = () => {
                         </div>
 
                         {filteredEvaluations.map((item) => (
-                            <div className="ra-pending-list-row" key={item._id}>
+                            <div className="ra-pending-list-row" key={item.id}>
                                 <div className="ra-pending-employee">
                                     <strong>{item.employee?.name || 'Unknown Employee'}</strong>
                                     <span>{item.employee?.employeeCode || '-'} • {item.employee?.department || '-'}</span>

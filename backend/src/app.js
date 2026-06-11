@@ -32,8 +32,14 @@ app.use(express.json());
 app.get('/', (req, res) => {
     res.send('PAS Backend Running');
 });
-app.get("/test-db", (req, res) => {
-    res.json({ message: "MongoDB connected and API working" });
+app.get("/test-db", async (req, res) => {
+    const { sequelize } = require("./models");
+    try {
+        await sequelize.authenticate();
+        res.json({ message: "PostgreSQL connected and API working" });
+    } catch (err) {
+        res.status(500).json({ message: "PostgreSQL connection failed", error: err.message });
+    }
 });
 const notificationRoutes = require("./routes/notificationRoutes");
 app.use("/api/auth", authRoutes);

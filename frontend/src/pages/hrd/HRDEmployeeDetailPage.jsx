@@ -66,8 +66,8 @@ function getProgressTokens(p) {
 }
 function getPlanItems(plan) {
     if (!plan) return [];
-    if (Array.isArray(plan.planItems) && plan.planItems.filter(Boolean).length > 0)
-        return plan.planItems.filter(Boolean);
+    if (Array.isArray(plan.planItems) && plan.planItems.length > 0)
+        return plan.planItems.map(p => typeof p === 'string' ? p : p.itemText).filter(Boolean);
     if (plan.planDetails)
         return plan.planDetails.split('\n').map(s => s.trim()).filter(Boolean);
     return [];
@@ -274,8 +274,8 @@ const HRDEmployeeDetailPage = () => {
         .map(plan => {
             const evaluation = monthlyEvaluations.find(e => e.month === plan.month);
             const achievement = monthlyAchievements?.find(a => {
-                const planId = typeof a.monthlyPlanId === 'object' ? a.monthlyPlanId?._id : a.monthlyPlanId;
-                return planId === plan._id;
+                const planId = typeof a.monthlyPlanId === 'object' ? a.monthlyPlanId?.id : a.monthlyPlanId;
+                return planId === plan.id;
             });
             const isEval = !!evaluation && evaluation.status === 'EVALUATED';
             const hasAch = !!achievement && achievement.status !== 'DRAFT';
@@ -950,7 +950,7 @@ const HRDEmployeeDetailPage = () => {
                                 </thead>
                                 <tbody>
                                     {filteredMonths.map(plan => (
-                                        <tr key={plan._id} className="hed-table-row"
+                                        <tr key={plan.id} className="hed-table-row"
                                             onClick={() => setSelectedMonthDetail(plan)}>
                                             <td>
                                                 <div className="hed-month-cell">
@@ -1003,7 +1003,7 @@ const HRDEmployeeDetailPage = () => {
                             <p>No quarterly evaluations found for FY {filterYear}</p>
                         </div>
                     ) : filteredQuarterly.map(qe => (
-                        <div key={qe._id} className="hed-qtr-card" style={{ '--qclr': getScoreColor(qe.averageScore) }}>
+                        <div key={qe.id} className="hed-qtr-card" style={{ '--qclr': getScoreColor(qe.averageScore) }}>
                             <div className="hed-qtr-inner">
                                 <div className="hed-qtr-head">
                                     <span className="hed-qtr-label"><FiBarChart2 /> {qe.quarter?.replace('-', ' ')}</span>
@@ -1041,7 +1041,7 @@ const HRDEmployeeDetailPage = () => {
                                 <div className="hed-yearly-section">
                                     <h3 className="hed-yearly-section-title"><FiFileText /> Yearly Plans</h3>
                                     {filteredYearlyPlans.map(yp => (
-                                        <div key={yp._id} className="hed-yearly-card">
+                                        <div key={yp.id} className="hed-yearly-card">
                                             <div className="hed-yearly-card-header">
                                                 <span className="hed-yearly-fy">FY {yp.financialYear}</span>
                                                 <span className={`hed-badge hed-badge--${yp.status?.toLowerCase()}`}>{yp.status}</span>
@@ -1055,7 +1055,7 @@ const HRDEmployeeDetailPage = () => {
                                 <div className="hed-yearly-section">
                                     <h3 className="hed-yearly-section-title"><FiAward /> Appraisal Reports</h3>
                                     {filteredYearlyReports.map(yr => (
-                                        <div key={yr._id} className="hed-yearly-card">
+                                        <div key={yr.id} className="hed-yearly-card">
                                             <div className="hed-yearly-card-header">
                                                 <span className="hed-yearly-fy">FY {yr.financialYear}</span>
                                                 <span className={`hed-badge hed-badge--${yr.status?.toLowerCase()?.replace(/_/g, '-')}`}>
