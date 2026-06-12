@@ -1644,11 +1644,147 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════
-   KRA ASSESSMENT CARDS  (KRAAssessmentCards.jsx)
-   Used in:
-     • Submit Appraisal modal — editable textareas + progress bar
-     • Accordion expanded view — read-only display
+   RESIZABLE SPLIT PANEL
+   Drag-to-resize divider between the left (KRA content) and right (summary)
+   panes in the expanded plan/report accordion rows. Double-click resets.
 ═══════════════════════════════════════════════════════════════════════════════ */
+
+.yp-resizable-container {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    min-height: 0;
+}
+
+.yp-resizable-pane {
+    min-width: 0;
+    overflow: hidden;
+}
+
+/* ── Drag handle ──────────────────────────────────────────────────────────── */
+.yp-resizer {
+    flex: 0 0 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: col-resize;
+    position: relative;
+    background: transparent;
+    border-radius: 4px;
+    transition: background 0.18s ease;
+    z-index: 1;
+    /* Expand clickable area slightly beyond visual width */
+    margin: 0 -2px;
+    padding: 0 2px;
+}
+
+.yp-resizer:hover {
+    background: rgba(249, 115, 22, 0.06);
+}
+
+.yp-resizer:active {
+    background: rgba(249, 115, 22, 0.1);
+}
+
+/* Grip bar — thin vertical pill that turns orange on hover */
+.yp-resizer-grip {
+    width: 3px;
+    height: 56px;
+    border-radius: 999px;
+    background: #d1d5db;
+    opacity: 0.55;
+    transition: opacity 0.18s ease, background 0.18s ease, height 0.18s ease;
+    position: relative;
+}
+
+/* Three-dot visual detail using pseudo-elements */
+.yp-resizer-grip::before,
+.yp-resizer-grip::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: inherit;
+    transition: background 0.18s ease;
+}
+
+.yp-resizer-grip::before {
+    top: calc(50% - 9px);
+}
+
+.yp-resizer-grip::after {
+    top: calc(50% + 6px);
+}
+
+.yp-resizer:hover .yp-resizer-grip,
+.yp-resizer:active .yp-resizer-grip {
+    background: var(--primary, #f97316);
+    opacity: 1;
+    height: 64px;
+}
+
+/* Body class applied during drag for global cursor & text-select lock */
+body.yp-resizing {
+    cursor: col-resize !important;
+    user-select: none !important;
+}
+
+/* Collapse to stacked layout on tablet/mobile — resizer hidden */
+@media (max-width: 1024px) {
+    .yp-resizable-container {
+        flex-direction: column;
+    }
+
+    .yp-resizer {
+        display: none;
+    }
+
+    .yp-resizable-pane {
+        flex: none !important;
+        width: 100% !important;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   PLAN MODAL — YEAR DISPLAY (edit / locked mode)
+═══════════════════════════════════════════════════════════════════════════════ */
+
+.yp-form-year-display {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    height: 48px;
+    padding: 0 14px;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    background: #f8fafc;
+}
+
+.yp-form-year-display strong {
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.yp-form-year-lock {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.74rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    background: #eef2f7;
+    padding: 3px 9px;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+Used in: • Submit Appraisal modal — editable textareas+progress bar • Accordion expanded view — read-only display ═══════════════════════════════════════════════════════════════════════════════ */
 
 /* ── Outer wrapper ────────────────────────────────────────────────────────── */
 .kra-ac-wrap {

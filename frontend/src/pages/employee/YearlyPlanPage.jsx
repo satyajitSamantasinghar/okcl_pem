@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
@@ -363,6 +363,67 @@ const LoadingSkeleton = () => (
     </div>
 );
 
+// ─── Resizable split panel (VS Code–style drag divider) ───────────────────────
+
+const ResizablePanel = ({ left, right, defaultSplit = 62 }) => {
+    const [split, setSplit] = useState(defaultSplit);
+    const containerRef = useRef(null);
+    const isDragging = useRef(false);
+
+    const handleMouseDown = useCallback((e) => {
+        e.preventDefault();
+        isDragging.current = true;
+        document.body.classList.add('yp-resizing');
+    }, []);
+
+    const handleDoubleClick = useCallback(() => {
+        setSplit(defaultSplit);
+    }, [defaultSplit]);
+
+    useEffect(() => {
+        const onMove = (e) => {
+            if (!isDragging.current || !containerRef.current) return;
+            const rect = containerRef.current.getBoundingClientRect();
+            const pct = ((e.clientX - rect.left) / rect.width) * 100;
+            setSplit(Math.max(20, Math.min(80, pct)));
+        };
+        const onUp = () => {
+            if (isDragging.current) {
+                isDragging.current = false;
+                document.body.classList.remove('yp-resizing');
+            }
+        };
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+        return () => {
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+        };
+    }, []);
+
+    return (
+        <div ref={containerRef} className="yp-resizable-container">
+            <div className="yp-resizable-pane" style={{ flex: `0 0 ${split}%` }}>
+                {left}
+            </div>
+            <div
+                className="yp-resizer"
+                onMouseDown={handleMouseDown}
+                onDoubleClick={handleDoubleClick}
+                title="Drag to resize · Double-click to reset"
+                role="separator"
+                aria-orientation="vertical"
+                aria-label="Resize panels"
+            >
+                <div className="yp-resizer-grip" />
+            </div>
+            <div className="yp-resizable-pane" style={{ flex: '1 1 0' }}>
+                {right}
+            </div>
+        </div>
+    );
+};
+
 // ─── Generic accordion table ──────────────────────────────────────────────────
 
 const AccordionTable = ({ columns, rows, expandedId, onToggle, renderExpanded, emptyState }) => {
@@ -449,9 +510,9 @@ const YearlyPlanPage = () => {
     const [kras, setKras] = useState(DEFAULT_KRA());
     const [submitting, setSubmitting] = useState(false);
 
-    // ── Inline edit state (DRAFT plans) ──────────────────────────────────────
-    const [editingPlanId, setEditingPlanId] = useState(null);
-    const [editKras, setEditKras] = useState(DEFAULT_KRA());
+    // ── Edit plan via modal (DRAFT plans) ─────────────────────────────────────
+    // null = creating new plan, plan.id = editing an existing draft via modal
+    const [editPlanModalId, setEditPlanModalId] = useState(null);
 
     // ── Resubmit state (REJECTED plans) ──────────────────────────────────────
     const [resubmittingPlanId, setResubmittingPlanId] = useState(null);
@@ -621,6 +682,7 @@ const YearlyPlanPage = () => {
     const openPlanModal = () => {
         setKras(DEFAULT_KRA());
         setFinancialYear('');
+        setEditPlanModalId(null);
         setShowPlanForm(true);
         setShowReportForm(false);
     };
@@ -668,8 +730,18 @@ const YearlyPlanPage = () => {
         setShowPlanForm(false);
     };
 
-    const closePlanModal   = () => setShowPlanForm(false);
+    const closePlanModal   = () => { setShowPlanForm(false); setEditPlanModalId(null); };
     const closeReportModal = () => setShowReportForm(false);
+
+    // ── Open plan modal in edit mode (DRAFT) ──────────────────────────────────
+
+    const openEditPlanModal = (plan) => {
+        setKras(plan.kras && plan.kras.length > 0 ? [...plan.kras] : DEFAULT_KRA());
+        setFinancialYear(plan.financialYear);
+        setEditPlanModalId(plan.id);
+        setShowPlanForm(true);
+        setShowReportForm(false);
+    };
 
     // ── KRA validation helper ─────────────────────────────────────────────────
 
@@ -694,19 +766,42 @@ const YearlyPlanPage = () => {
             achievement: String(kraAchievements[i] || '').trim(),
         }));
 
-    // ── Submit Plan (new) ─────────────────────────────────────────────────────
+    // ── Submit Plan (new) OR Edit Draft via Modal ─────────────────────────────
 
     const handleSubmitPlan = async (e, asDraft = false) => {
         e.preventDefault();
-        if (!financialYear) { toast.error('Please select a financial year.'); return; }
-        if (!asDraft) {
-            const err = validateKras(kras);
-            if (err) { toast.error(err); return; }
-        }
+
         if (asDraft && (!Array.isArray(kras) || kras.length === 0)) {
             toast.error('Add at least one KRA before saving a draft.');
             return;
         }
+        if (!asDraft) {
+            const err = validateKras(kras);
+            if (err) { toast.error(err); return; }
+        }
+
+        // ── Editing an existing DRAFT plan via modal ─────────────────────────
+        if (editPlanModalId) {
+            setSubmitting(true);
+            try {
+                await api.put(`/employee/yearly-plan/${editPlanModalId}`, {
+                    kras,
+                    status: asDraft ? 'DRAFT' : 'PENDING',
+                });
+                toast.success(asDraft ? 'Draft updated successfully.' : 'Plan submitted for review.');
+                setShowPlanForm(false);
+                setEditPlanModalId(null);
+                await fetchData();
+            } catch (err) {
+                toast.error(err.response?.data?.message || 'Update failed');
+            } finally {
+                setSubmitting(false);
+            }
+            return;
+        }
+
+        // ── Creating a new plan ───────────────────────────────────────────────
+        if (!financialYear) { toast.error('Please select a financial year.'); return; }
         setSubmitting(true);
         try {
             await api.post('/employee/yearly-plan', {
@@ -720,38 +815,6 @@ const YearlyPlanPage = () => {
             setActiveTab('plans');
         } catch (err) {
             toast.error(err.response?.data?.message || 'Submission failed');
-        } finally {
-            setSubmitting(false);
-        }
-    };
-
-    // ── Edit DRAFT plan inline ────────────────────────────────────────────────
-
-    const startEditing = (plan) => {
-        setExpandedPlanId(plan.id);
-        setResubmittingPlanId(null);
-        setEditingPlanId(plan.id);
-        setEditKras(plan.kras && plan.kras.length > 0 ? plan.kras : DEFAULT_KRA());
-    };
-
-    const handleEditPlan = async (e, asDraft = false) => {
-        e.preventDefault();
-        if (!asDraft) {
-            const err = validateKras(editKras);
-            if (err) { toast.error(err); return; }
-        }
-        setSubmitting(true);
-        try {
-            await api.put(`/employee/yearly-plan/${editingPlanId}`, {
-                kras: editKras,
-                status: asDraft ? 'DRAFT' : 'PENDING',
-            });
-            toast.success(asDraft ? 'Draft updated.' : 'Plan submitted for review.');
-            setEditingPlanId(null);
-            setEditKras(DEFAULT_KRA());
-            await fetchData();
-        } catch (err) {
-            toast.error(err.response?.data?.message || 'Update failed');
         } finally {
             setSubmitting(false);
         }
@@ -1079,72 +1142,59 @@ const YearlyPlanPage = () => {
     // ── Render expanded plan row ──────────────────────────────────────────────
 
     const renderPlanExpanded = (plan) => {
-        const isEditing    = editingPlanId === plan.id;
-        const canEdit      = plan.status === 'DRAFT' || plan.status === 'REJECTED';
+        const canEdit      = plan.status === 'DRAFT';
         const isRejected   = plan.status === 'REJECTED';
         const isApproved   = plan.status === 'APPROVED';
         const hasRevisions = Array.isArray(plan.revisionLog) && plan.revisionLog.length > 0;
 
-        return (
-            <div className="yp-detail-panel">
-                <div className="yp-detail-grid">
-                    {/* Left — KRA Table */}
-                    <div className="yp-detail-card yp-detail-card--main">
-                        <div className="yp-detail-card-header">
-                            <div>
-                                <h4>Key Result Areas (KRAs)</h4>
-                                <p>Structured KRA plan submitted for MD review.</p>
-                            </div>
-                            {canEdit && !isEditing && !isRejected && (
-                                <button type="button" className="btn btn-secondary btn-sm" onClick={() => startEditing(plan)}>
-                                    <FiEdit3 /> Edit / Submit Draft
-                                </button>
-                            )}
-                        </div>
-
-                        {isEditing ? (
-                            <div className="yp-form" style={{ padding: '16px 18px' }}>
-                                <KRATable rows={editKras} onChange={setEditKras} />
-                                <div className="yp-form-actions">
-                                    <button type="button" className="btn btn-primary" disabled={submitting} onClick={(e) => handleEditPlan(e, false)}>
-                                        {submitting ? 'Submitting...' : <><FiSend /> Submit Plan</>}
-                                    </button>
-                                    <button type="button" className="btn btn-secondary" disabled={submitting} onClick={(e) => handleEditPlan(e, true)}>
-                                        {submitting ? 'Saving...' : <><FiSave /> Save Draft</>}
-                                    </button>
-                                    <button type="button" className="btn btn-ghost" onClick={() => { setEditingPlanId(null); setEditKras(DEFAULT_KRA()); }}>
-                                        Cancel
-                                    </button>
-                                </div>
-                            </div>
-                        ) : (
-                            <KRATable rows={plan.kras || []} readOnly />
-                        )}
+        const leftPanel = (
+            <div className="yp-detail-card yp-detail-card--main">
+                <div className="yp-detail-card-header">
+                    <div>
+                        <h4>Key Result Areas (KRAs)</h4>
+                        <p>Structured KRA plan submitted for MD review.</p>
                     </div>
+                    {canEdit && (
+                        <button
+                            type="button"
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => openEditPlanModal(plan)}
+                        >
+                            <FiEdit3 /> Edit / Submit Draft
+                        </button>
+                    )}
+                </div>
+                <KRATable rows={plan.kras || []} readOnly />
+            </div>
+        );
 
-                    {/* Right — Submission Summary */}
-                    <div className="yp-detail-card yp-detail-card--side">
-                        <div className="yp-detail-card-header">
-                            <div>
-                                <h4>Submission Summary</h4>
-                                <p>Versioning and approval metadata.</p>
-                            </div>
-                        </div>
-                        <div className="yp-meta-list">
-                            <div className="yp-meta-row"><span>Financial Year</span><strong>{`FY ${plan.financialYear}`}</strong></div>
-                            <div className="yp-meta-row"><span>Version</span><strong>{`v${plan.version || 1}`}</strong></div>
-                            <div className="yp-meta-row"><span>Status</span><StatusBadge status={plan.status} type="plan" /></div>
-                            <div className="yp-meta-row"><span>Submitted</span><strong>{formatDate(plan.submittedAt)}</strong></div>
-                            <div className="yp-meta-row"><span>Last Updated</span><strong>{formatDate(getPlanLastUpdated(plan))}</strong></div>
-                            <div className="yp-meta-row">
-                                <span>MD Remarks</span>
-                                <span className={`yp-remarks-inline${plan.mdRemarks ? '' : ' yp-remarks-inline--awaiting'}`}>
-                                    {plan.mdRemarks || 'Awaiting review.'}
-                                </span>
-                            </div>
-                        </div>
+        const rightPanel = (
+            <div className="yp-detail-card yp-detail-card--side">
+                <div className="yp-detail-card-header">
+                    <div>
+                        <h4>Submission Summary</h4>
+                        <p>Versioning and approval metadata.</p>
                     </div>
                 </div>
+                <div className="yp-meta-list">
+                    <div className="yp-meta-row"><span>Financial Year</span><strong>{`FY ${plan.financialYear}`}</strong></div>
+                    <div className="yp-meta-row"><span>Version</span><strong>{`v${plan.version || 1}`}</strong></div>
+                    <div className="yp-meta-row"><span>Status</span><StatusBadge status={plan.status} type="plan" /></div>
+                    <div className="yp-meta-row"><span>Submitted</span><strong>{formatDate(plan.submittedAt)}</strong></div>
+                    <div className="yp-meta-row"><span>Last Updated</span><strong>{formatDate(getPlanLastUpdated(plan))}</strong></div>
+                    <div className="yp-meta-row">
+                        <span>MD Remarks</span>
+                        <span className={`yp-remarks-inline${plan.mdRemarks ? '' : ' yp-remarks-inline--awaiting'}`}>
+                            {plan.mdRemarks || 'Awaiting review.'}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        );
+
+        return (
+            <div className="yp-detail-panel">
+                <ResizablePanel left={leftPanel} right={rightPanel} defaultSplit={62} />
 
                 {isApproved && (
                     <div className="yp-note-banner is-approved">
@@ -1158,16 +1208,17 @@ const YearlyPlanPage = () => {
                         <div className="yp-detail-card-header">
                             <div>
                                 <h4>Revision History</h4>
-                                <p>{plan.revisionLog.length} revision{plan.revisionLog.length !== 1 ? 's' : ''} recorded.</p>
+                                <p>All revisions submitted for this plan.</p>
                             </div>
                         </div>
-                        <div className="yp-revision-timeline">
-                            {plan.revisionLog.map((entry, idx) => (
-                                <div key={idx} className="yp-revision-entry">
-                                    <div className="yp-revision-version">v{entry.version}</div>
-                                    <div className="yp-revision-body">
-                                        <strong>{formatDateTime(entry.revisedAt)}</strong>
-                                        <p>{entry.reason}</p>
+                        <div className="yp-history-list">
+                            {plan.revisionLog.map((rev, idx) => (
+                                <div key={idx} className="yp-history-item">
+                                    <span className="yp-history-index">{idx + 1}</span>
+                                    <div>
+                                        <strong>Revision {idx + 1}</strong>
+                                        <p>{rev.reason || '—'}</p>
+                                        <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '4px' }}>{formatDateTime(rev.revisedAt)}</p>
                                     </div>
                                 </div>
                             ))}
@@ -1180,17 +1231,16 @@ const YearlyPlanPage = () => {
                         <div className="yp-alert-header">
                             <FiAlertCircle className="yp-alert-icon" />
                             <div>
-                                <h4>Plan Rejected by Managing Director</h4>
-                                <p>Revise your KRAs against the MD feedback and resubmit for review. A revision reason is required.</p>
+                                <h4>Plan Rejected</h4>
+                                <p>{plan.mdRemarks || 'Your plan was rejected. Please revise and resubmit.'}</p>
                             </div>
                         </div>
                         {resubmittingPlanId === plan.id ? (
-                            <form className="yp-form" onSubmit={handleResubmitPlan}>
-                                <div className="yp-form-group">
+                            <form onSubmit={handleResubmitPlan}>
+                                <div className="yp-form-group" style={{ marginBottom: '16px' }}>
                                     <label>Reason for Revision <span className="required">*</span></label>
-                                    <input
-                                        type="text"
-                                        placeholder="Briefly describe what you changed and why"
+                                    <textarea
+                                        placeholder="Briefly explain what changes you made and why..."
                                         value={revisionReason}
                                         onChange={e => setRevisionReason(e.target.value)}
                                         required
@@ -1240,70 +1290,60 @@ const YearlyPlanPage = () => {
     // ── Render expanded report row ────────────────────────────────────────────
 
     const renderReportExpanded = (report) => {
-        const kraAssessments   = Array.isArray(report.kraAssessments) ? report.kraAssessments : [];
+        const kraAssessments    = Array.isArray(report.kraAssessments) ? report.kraAssessments : [];
         const hasKraAssessments = kraAssessments.length > 0;
 
-        // Convert kraAssessments to props for KRAAssessmentCards (read-only mode)
-        // kras prop: array of { description, target, timeline }
-        // values prop: { [index]: achievementText }
-        const krasForDisplay = kraAssessments.map(k => ({
-            description: k.description,
-            target:      k.target,
-            timeline:    k.timeline,
-        }));
+        const krasForDisplay   = kraAssessments.map(k => ({ description: k.description, target: k.target, timeline: k.timeline }));
         const valuesForDisplay = Object.fromEntries(kraAssessments.map((k, i) => [i, k.achievement]));
+
+        const leftPanel = (
+            <div className="yp-detail-card yp-detail-card--main">
+                <div className="yp-detail-card-header">
+                    <div>
+                        <h4>KRA Self-Assessment</h4>
+                        <p>Employee's achievement against each Key Result Area from the approved yearly plan.</p>
+                    </div>
+                    {report.status === 'DRAFT' && (
+                        <button type="button" className="btn btn-secondary btn-sm" onClick={() => editDraftReport(report)}>
+                            <FiEdit3 /> Edit / Submit Draft
+                        </button>
+                    )}
+                </div>
+                <div style={{ padding: '16px 18px' }}>
+                    {hasKraAssessments ? (
+                        <KRAAssessmentCards kras={krasForDisplay} values={valuesForDisplay} readOnly />
+                    ) : (
+                        report.workKRA ? (
+                            <div className="yp-prose-block">{report.workKRA}</div>
+                        ) : (
+                            <p className="kra-ac-no-kras">No KRA assessments recorded.</p>
+                        )
+                    )}
+                </div>
+            </div>
+        );
+
+        const rightPanel = (
+            <div className="yp-detail-card yp-detail-card--side">
+                <div className="yp-detail-card-header">
+                    <div>
+                        <h4>Report Summary</h4>
+                        <p>Current evaluation status across workflow stages.</p>
+                    </div>
+                </div>
+                <div className="yp-meta-list">
+                    <div className="yp-meta-row"><span>Financial Year</span><strong>{`FY ${report.financialYear}`}</strong></div>
+                    <div className="yp-meta-row"><span>Status</span><StatusBadge status={report.status} type="report" /></div>
+                    <div className="yp-meta-row"><span>RA Status</span><RAStatusBadge report={report} /></div>
+                    <div className="yp-meta-row"><span>Submitted</span><strong>{formatDate(report.submittedAt)}</strong></div>
+                    <div className="yp-meta-row"><span>Last Updated</span><strong>{formatDate(report.updatedAt || report.submittedAt)}</strong></div>
+                </div>
+            </div>
+        );
 
         return (
             <div className="yp-detail-panel">
-                <div className="yp-detail-grid">
-                    {/* Left — KRA Achievement Cards (read-only) */}
-                    <div className="yp-detail-card yp-detail-card--main">
-                        <div className="yp-detail-card-header">
-                            <div>
-                                <h4>KRA Self-Assessment</h4>
-                                <p>Employee's achievement against each Key Result Area from the approved yearly plan.</p>
-                            </div>
-                            {report.status === 'DRAFT' && (
-                                <button type="button" className="btn btn-secondary btn-sm" onClick={() => editDraftReport(report)}>
-                                    <FiEdit3 /> Edit / Submit Draft
-                                </button>
-                            )}
-                        </div>
-                        <div style={{ padding: '16px 18px' }}>
-                            {hasKraAssessments ? (
-                                <KRAAssessmentCards
-                                    kras={krasForDisplay}
-                                    values={valuesForDisplay}
-                                    readOnly
-                                />
-                            ) : (
-                                /* Graceful fallback for legacy reports with workKRA */
-                                report.workKRA ? (
-                                    <div className="yp-prose-block">{report.workKRA}</div>
-                                ) : (
-                                    <p className="kra-ac-no-kras">No KRA assessments recorded.</p>
-                                )
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Right — Report Summary */}
-                    <div className="yp-detail-card yp-detail-card--side">
-                        <div className="yp-detail-card-header">
-                            <div>
-                                <h4>Report Summary</h4>
-                                <p>Current evaluation status across workflow stages.</p>
-                            </div>
-                        </div>
-                        <div className="yp-meta-list">
-                            <div className="yp-meta-row"><span>Financial Year</span><strong>{`FY ${report.financialYear}`}</strong></div>
-                            <div className="yp-meta-row"><span>Status</span><StatusBadge status={report.status} type="report" /></div>
-                            <div className="yp-meta-row"><span>RA Status</span><RAStatusBadge report={report} /></div>
-                            <div className="yp-meta-row"><span>Submitted</span><strong>{formatDate(report.submittedAt)}</strong></div>
-                            <div className="yp-meta-row"><span>Last Updated</span><strong>{formatDate(report.updatedAt || report.submittedAt)}</strong></div>
-                        </div>
-                    </div>
-                </div>
+                <ResizablePanel left={leftPanel} right={rightPanel} defaultSplit={62} />
 
                 {/* Additional Assignments */}
                 {report.additionalAssignments && (
@@ -1447,7 +1487,6 @@ const YearlyPlanPage = () => {
                         onToggle={(nextId) => {
                             setExpandedPlanId(nextId);
                             if (!nextId) {
-                                setEditingPlanId(null);
                                 setResubmittingPlanId(null);
                                 setRevisionReason('');
                             }
@@ -1514,8 +1553,10 @@ const YearlyPlanPage = () => {
             ══════════════════════════════════════════════════════════════════ */}
             {showPlanForm && (
                 <ModalShell
-                    title="Submit Yearly Plan"
-                    subtitle="Define your KRA-based yearly targets, measurable outcomes, and timelines."
+                    title={editPlanModalId ? 'Edit Draft Plan' : 'Submit Yearly Plan'}
+                    subtitle={editPlanModalId
+                        ? 'Update your KRA-based targets and submit for MD review, or save as draft.'
+                        : 'Define your KRA-based yearly targets, measurable outcomes, and timelines.'}
                     icon={<FiTarget />}
                     onClose={closePlanModal}
                 >
@@ -1528,12 +1569,21 @@ const YearlyPlanPage = () => {
                                 </div>
                                 <div className="yp-form-group">
                                     <label>Financial Year <span className="required">*</span></label>
-                                    <select value={financialYear} onChange={(e) => setFinancialYear(e.target.value)} required>
-                                        <option value="">Select Financial Year</option>
-                                        {yearOptions.map((year) => (
-                                            <option key={year} value={year}>{year}</option>
-                                        ))}
-                                    </select>
+                                    {editPlanModalId ? (
+                                        <div className="yp-form-year-display">
+                                            <strong>{`FY ${financialYear}`}</strong>
+                                            <span className="yp-form-year-lock">
+                                                <FiSave style={{ width: 12, height: 12 }} /> Locked — editing existing draft
+                                            </span>
+                                        </div>
+                                    ) : (
+                                        <select value={financialYear} onChange={(e) => setFinancialYear(e.target.value)} required>
+                                            <option value="">Select Financial Year</option>
+                                            {yearOptions.map((year) => (
+                                                <option key={year} value={year}>{year}</option>
+                                            ))}
+                                        </select>
+                                    )}
                                 </div>
                             </div>
 
