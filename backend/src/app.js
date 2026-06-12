@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const authRoutes = require("./routes/authRoutes");
 const app = express();
 const employeeRoutes = require("./routes/employeeRoutes");
@@ -29,9 +30,7 @@ app.use(cors(
 app.use(express.json());
 
 
-app.get('/', (req, res) => {
-    res.send('PAS Backend Running');
-});
+
 app.get("/test-db", async (req, res) => {
     const { sequelize } = require("./models");
     try {
@@ -48,5 +47,14 @@ app.use("/api/ra", raRoutes);
 app.use("/api/hrd", hrdRoutes);
 app.use("/api/md", mdRoutes);
 app.use("/api/notifications", notificationRoutes);
+
+// ── Serve React frontend (must come AFTER all /api routes) ────────────────────
+app.use(express.static(path.join(__dirname, '../dist')));
+
+// Catch-all: for any non-API route, send back index.html so React Router works
+
+app.get('/{*path}', (req, res) => {
+    res.sendFile(path.join(__dirname, '../dist', 'index.html'));
+});
 
 module.exports = app;
