@@ -1,0 +1,5 @@
+# Root IDE files
+.vscode/
+.idea/
+.vs/
+.DS_Store

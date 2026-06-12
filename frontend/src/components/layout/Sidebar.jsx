@@ -60,7 +60,7 @@ const Sidebar = ({ isOpen, onClose }) => {
                 <div className="sidebar-header">
                     <div className="sidebar-logo">
                         <img src="/logo.png" alt="Company Logo" className="sidebar-logo-img" />
-                        <span className="sidebar-brand">PES</span>
+                        <span className="sidebar-brand">PAS</span>
                     </div>
                     <button className="sidebar-close" onClick={onClose}>
                         <FiX />

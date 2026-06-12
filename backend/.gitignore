@@ -1,5 +1,6 @@
 # Dependencies
 node_modules/
+package-lock.json
 
 # Environment variables (Sensitive passwords/keys)
 .env
@@ -19,3 +20,6 @@ logs/
 # OS Files
 .DS_Store
 Thumbs.db
+
+# Editor directories and files
+.vs/
