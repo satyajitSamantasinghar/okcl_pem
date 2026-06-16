@@ -1784,7 +1784,12 @@ body.yp-resizing {
     letter-spacing: 0.05em;
 }
 
-Used in: • Submit Appraisal modal — editable textareas+progress bar • Accordion expanded view — read-only display ═══════════════════════════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════════════════════
+   KRA ASSESSMENT CARDS
+   Used in:
+     • Submit Appraisal modal — editable textareas + progress bar
+     • Accordion expanded view — read-only display
+═══════════════════════════════════════════════════════════════════════════════ */
 
 /* ── Outer wrapper ────────────────────────────────────────────────────────── */
 .kra-ac-wrap {

@@ -45,6 +45,27 @@ export const AuthProvider = ({ children }) => {
         return userData;
     };
 
+    // ── HRMS SSO Login ────────────────────────────────────────────────────────
+    // Called with the raw Base64 token extracted from the HRMS redirect URL.
+    // Delegates all validation and provisioning to the backend /auth/hrms-sso.
+    const hrmsLogin = async (token) => {
+        const { data } = await api.post('/auth/hrms-sso', { token });
+
+        localStorage.setItem('accessToken', data.accessToken);
+        localStorage.setItem('refreshToken', data.refreshToken);
+        localStorage.setItem('role', data.role);
+        localStorage.setItem('name', data.name);
+
+        const userData = {
+            name: data.name,
+            role: data.role,
+            accessToken: data.accessToken,
+        };
+
+        setUser(userData);
+        return userData;
+    };
+
     const logout = async () => {
         try {
             await api.post('/auth/logout');
@@ -74,6 +95,7 @@ export const AuthProvider = ({ children }) => {
                 loading,
                 isAuthenticated,
                 login,
+                hrmsLogin,
                 logout,
                 getRoleDashboardPath,
             }}

@@ -7,25 +7,10 @@ const employeeRoutes = require("./routes/employeeRoutes");
 const raRoutes = require("./routes/raRoutes");
 const hrdRoutes = require("./routes/hrdRoutes");
 const mdRoutes = require("./routes/mdRoutes");
-app.use(cors(
-    {
-        origin: [
-            "https://64wjr92x-5000.inc1.devtunnels.ms/ ",
-            "http://localhost:5173"
-
-        ]
-    }
-));
-
-// app.use(cors({
-//   origin: true,        // allow ALL origins (needed for devtunnels)
-//   credentials: true,
-//   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-//   allowedHeaders: ["Content-Type", "Authorization"]
-// }));
-
-
-
+// Since the React frontend is now served by this same Express server,
+// all browser requests are same-origin and CORS headers are not needed.
+// We keep cors() open for tools like Postman, mobile apps, or future integrations.
+app.use(cors());
 
 app.use(express.json());
 
@@ -52,7 +37,7 @@ app.use("/api/notifications", notificationRoutes);
 app.use(express.static(path.join(__dirname, '../dist')));
 
 // Catch-all: for any non-API route, send back index.html so React Router works
-
+// Note: Express 5 requires '/{*path}' syntax instead of '*'
 app.get('/{*path}', (req, res) => {
     res.sendFile(path.join(__dirname, '../dist', 'index.html'));
 });

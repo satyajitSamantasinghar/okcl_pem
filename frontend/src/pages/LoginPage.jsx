@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 // import logo from "../assets/logo.png";
@@ -10,8 +10,37 @@ const LoginPage = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const { login, getRoleDashboardPath } = useAuth();
+    const [isSSOLoading, setIsSSOLoading] = useState(false);
+    const { login, hrmsLogin, getRoleDashboardPath } = useAuth();
     const navigate = useNavigate();
+
+    // ── HRMS SSO Auto-Login ───────────────────────────────────────────────────
+    // When HRMS redirects the employee here with ?token=<BASE64>, we
+    // automatically extract it, exchange it for a local JWT, and navigate
+    // to the dashboard — the employee never sees the login form.
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const ssoToken = params.get('token');
+
+        if (!ssoToken) return; // No SSO token → show normal login form
+
+        setIsSSOLoading(true);
+
+        // Remove token from URL bar immediately (security hygiene)
+        window.history.replaceState({}, document.title, window.location.pathname);
+
+        hrmsLogin(ssoToken)
+            .then((userData) => {
+                toast.success(`Welcome, ${userData.name}!`);
+                navigate(getRoleDashboardPath(userData.role), { replace: true });
+            })
+            .catch((error) => {
+                const msg = error.response?.data?.message || 'HRMS login failed. Please contact IT support.';
+                toast.error(msg);
+                setIsSSOLoading(false); // Fall back to showing the manual login form
+            });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -33,6 +62,29 @@ const LoginPage = () => {
             setIsLoading(false);
         }
     };
+
+    // ── Full-screen SSO loading overlay ──────────────────────────────────────
+    if (isSSOLoading) {
+        return (
+            <div className="login-page">
+                <div className="login-circle login-circle--large" />
+                <div className="login-circle login-circle--medium" />
+                <div className="login-circle login-circle--corner" />
+                <div className="login-card" style={{ textAlign: 'center', padding: '3rem 2rem' }}>
+                    <div className="login-logo">
+                        <img src="/logo.png" alt="Company Logo" className="login-logo-img" />
+                    </div>
+                    <h1 className="login-title">
+                        Performance <span className="login-title-accent">Appraisal</span> Report System
+                    </h1>
+                    <span className="login-spinner" style={{ display: 'inline-block', margin: '2rem auto' }} />
+                    <p style={{ color: '#888', marginTop: '1rem', fontSize: '0.95rem' }}>
+                        Signing you in via HRMS&hellip;
+                    </p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="login-page">
