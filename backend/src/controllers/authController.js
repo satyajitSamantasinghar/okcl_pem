@@ -135,7 +135,7 @@ exports.logout = async (req, res) => {
  *    nm        → name
  *    desg      → department
  *    ra_id  → reportingAuthorityId  (looked up by employeeCode in local DB)
- *    ishodid   → role derivation:
+ *    ishod     → role derivation:
  *                  ""  / null  → "EMPLOYEE" (regular employee)
  *                  "1"         → "RA"       (person is a Reporting Authority)
  *                  existing HRD / MD roles in DB are never overwritten by SSO

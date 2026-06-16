@@ -23,8 +23,8 @@ const runMigrations = async () => {
     // Migration 1: Add auth_provider column (needed for HRMS SSO integration)
     if (!tableDesc.auth_provider) {
         await qi.addColumn("users", "auth_provider", {
-            type:         DataTypes.STRING,
-            allowNull:    false,
+            type: DataTypes.STRING,
+            allowNull: false,
             defaultValue: "local",  // existing rows get "local" (password-based)
         });
         console.log("✅ Migration: added auth_provider column to users table");
@@ -33,7 +33,7 @@ const runMigrations = async () => {
     // Migration 2: Allow password_hash to be NULL (HRMS SSO users have no local password)
     if (tableDesc.password_hash && tableDesc.password_hash.allowNull === false) {
         await qi.changeColumn("users", "password_hash", {
-            type:      DataTypes.STRING,
+            type: DataTypes.STRING,
             allowNull: true,
         });
         console.log("✅ Migration: password_hash column set to nullable");
