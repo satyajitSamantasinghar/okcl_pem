@@ -38,7 +38,16 @@ module.exports = (sequelize) => {
         allowNull: false,
       },
       department: {
-        type: DataTypes.STRING,
+        type:      DataTypes.STRING,
+        allowNull: true,  // mapped from token field: department
+      },
+      designation: {
+        type:      DataTypes.STRING,
+        allowNull: true,  // job title — mapped from token field: designation
+      },
+      phone: {
+        type:      DataTypes.STRING,
+        allowNull: true,  // mobile number — mapped from token field: phone
       },
       // Self-referencing FK — set in models/index.js associations
       reportingAuthorityId: {

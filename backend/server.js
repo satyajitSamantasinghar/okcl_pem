@@ -38,6 +38,33 @@ const runMigrations = async () => {
         });
         console.log("✅ Migration: password_hash column set to nullable");
     }
+
+    // Migration 3: Add designation column (job title from HRMS token)
+    if (!tableDesc.designation) {
+        await qi.addColumn("users", "designation", {
+            type:      DataTypes.STRING,
+            allowNull: true,
+        });
+        console.log("✅ Migration: added designation column to users table");
+    }
+
+    // Migration 4: Add phone column (mobile number from HRMS token)
+    if (!tableDesc.phone) {
+        await qi.addColumn("users", "phone", {
+            type:      DataTypes.STRING,
+            allowNull: true,
+        });
+        console.log("✅ Migration: added phone column to users table");
+    }
+
+    // ── One-time DB cleanup ────────────────────────────────────────────────────
+    //  Set DB_TRUNCATE_ON_STARTUP=true in .env to wipe all user data (CASCADE).
+    //  USE ONLY ONCE to fix data mismatches. Remove the env var after restart.
+    //  CASCADE will clear users + all dependent tables (plans, evaluations, etc.)
+    if (process.env.DB_TRUNCATE_ON_STARTUP === "true") {
+        await sequelize.query("TRUNCATE TABLE users CASCADE");
+        console.log("⚠️  DB Cleanup: all user data wiped (TRUNCATE users CASCADE). Remove DB_TRUNCATE_ON_STARTUP from .env now.");
+    }
 };
 
 

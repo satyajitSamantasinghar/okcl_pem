@@ -174,19 +174,19 @@ exports.hrmsSSO = async (req, res) => {
       return res.status(401).json({ message: "SSO token has expired. Please log in again from HRMS." });
     }
 
-    // ── 4. Derive role from ishod ────────────────────────────────────────────
-    //  ishod = ""  or null → regular employee               → role "EMPLOYEE"
-    //  ishod = "1"         → person is a Reporting Authority → role "RA"
-    //  HRD / MD roles are never auto-assigned from the token; they remain
-    //  whatever was manually set in the local DB.
-    const ishod = decoded.ishod ?? "";
+    // ── 4. Derive role from emp_code and ishod ──────────────────────────────
+    //  emp_code === "HRD"     → role "HRD"      (HR Director — special emp_code)
+    //  emp_code === "1686011" → role "MD"       (Managing Director)
+    //  ishod === "-1"         → role "EMPLOYEE" (regular employee)
+    //  ishod = any other val  → role "RA"       (Reporting Authority, e.g. "1267")
     let derivedRole;
-    if (ishod === "" || ishod === null) {
-      derivedRole = "EMPLOYEE";
-    } else if (String(ishod) === "1") {
-      derivedRole = "RA";
+    if (decoded.emp_code === "HRD") {
+      derivedRole = "HRD";
+    } else if (decoded.emp_code === "1686011") {
+      derivedRole = "MD";
     } else {
-      derivedRole = "EMPLOYEE"; // safe fallback for any future unknown values
+      const ishod = String(decoded.ishod ?? "");
+      derivedRole = ishod === "-1" ? "EMPLOYEE" : "RA";
     }
 
     // ── 5. Resolve Reporting Authority UUID from ra_id ─────────────────────
@@ -209,10 +209,12 @@ exports.hrmsSSO = async (req, res) => {
     const [user, created] = await User.findOrCreate({
       where: { employeeCode: decoded.emp_code },
       defaults: {
-        name: (decoded.nm || "").trim(),
-        email: decoded.ismail || null,
-        role: derivedRole,
-        department: decoded.desg || null,
+        name:                 (decoded.nm || "").trim(),
+        email:                decoded.ismail     || null,
+        role:                 derivedRole,
+        department:           decoded.department || null,  // token field: department
+        designation:          decoded.designation || null, // token field: designation
+        phone:                decoded.phone      || null,  // token field: phone
         reportingAuthorityId,
         isActive,
         authProvider: "hrms",
@@ -222,14 +224,18 @@ exports.hrmsSSO = async (req, res) => {
     if (!created) {
       // ── 7. Sync latest HRMS data on every login ───────────────────────────────
       //  Always refresh these fields from the token so our DB mirrors HRMS.
-      //  Exception: HRD and MD roles are managed manually — never overwrite them.
+      //  Exception: HRD and MD roles are now derived from emp_code itself,
+      //  but the guard still protects any manually-set HRD/MD in the DB from
+      //  being overwritten when derivedRole is EMPLOYEE or RA.
       const isPrivilegedRole = user.role === "HRD" || user.role === "MD";
 
-      user.name = (decoded.nm || "").trim();
-      user.email = decoded.ismail || user.email; // keep existing if HRMS omits it
-      user.department = decoded.desg || user.department;
+      user.name        = (decoded.nm || "").trim();
+      user.email       = decoded.ismail      || user.email;       // keep existing if omitted
+      user.department  = decoded.department  || user.department;  // token field: department
+      user.designation = decoded.designation || user.designation; // token field: designation
+      user.phone       = decoded.phone       || user.phone;       // token field: phone
       user.reportingAuthorityId = reportingAuthorityId ?? user.reportingAuthorityId;
-      user.isActive = isActive;
+      user.isActive    = isActive;
 
       // Only update role if the user is NOT a manually-assigned HRD or MD
       if (!isPrivilegedRole) {
