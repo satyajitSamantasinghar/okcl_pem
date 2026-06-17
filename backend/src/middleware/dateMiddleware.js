@@ -68,11 +68,11 @@ exports.allowMonthlyPlanSubmission = async (req, res, next) => {
     // ─────────────────────────────────────────────────────────────────────────
 
     // ── Normal deadline enforcement for fresh first submissions ───────────────
-    // if (submittedMonth !== currentMonth) {
-    //   return res.status(403).json({
-    //     message: `You can only submit a monthly plan for the current month (${currentMonth}). Received: ${submittedMonth}`
-    //   });
-    // }
+    if (submittedMonth !== currentMonth) {
+      return res.status(403).json({
+        message: `You can only submit a monthly plan for the current month (${currentMonth}). Received: ${submittedMonth}`
+      });
+    }
 
     // if (day < 1 || day > 7) {
     //   return res.status(403).json({
@@ -124,11 +124,11 @@ exports.allowMonthlyAchievementSubmission = async (req, res, next) => {
     // ─────────────────────────────────────────────────────────────────────────
 
     // ── Normal deadline enforcement for fresh first-time achievements ─────────
-    // if (plan.month !== currentMonth) {
-    //   return res.status(403).json({
-    //     message: `You can only submit a monthly achievement for the current month (${currentMonth}). The linked plan is for: ${plan.month}`
-    //   });
-    // }
+    if (plan.month !== currentMonth) {
+      return res.status(403).json({
+        message: `You can only submit a monthly achievement for the current month (${currentMonth}). The linked plan is for: ${plan.month}`
+      });
+    }
 
     // if (day < 25) {
     //   return res.status(403).json({
@@ -165,11 +165,11 @@ exports.allowYearlyPlanSubmission = (req, res, next) => {
   }
 
   // ── 2. Must be the current financial year ────────────────────────────────
-  // if (submittedFY !== currentFY) {
-  //   return res.status(403).json({
-  //     message: `You can only submit a yearly plan for the current financial year (${currentFY}). Received: ${submittedFY}.`
-  //   });
-  // }
+  if (submittedFY !== currentFY) {
+    return res.status(403).json({
+      message: `You can only submit a yearly plan for the current financial year (${currentFY}). Received: ${submittedFY}.`
+    });
+  }
 
   // ── 3. Parse the FY to determine the deadline month ─────────────────────
   const parsed = parseFinancialYear(submittedFY);
@@ -215,11 +215,11 @@ exports.allowYearlyAppraisalSubmission = (req, res, next) => {
   }
 
   // ── 2. Must be the current financial year ────────────────────────────────
-  // if (submittedFY !== currentFY) {
-  //   return res.status(403).json({
-  //     message: `You can only submit a yearly appraisal for the current financial year (${currentFY}). Received: ${submittedFY}.`
-  //   });
-  // }
+  if (submittedFY !== currentFY) {
+    return res.status(403).json({
+      message: `You can only submit a yearly appraisal for the current financial year (${currentFY}). Received: ${submittedFY}.`
+    });
+  }
 
   // ── 3. Parse the FY ─────────────────────────────────────────────────────
   const parsed = parseFinancialYear(submittedFY);
@@ -232,7 +232,7 @@ exports.allowYearlyAppraisalSubmission = (req, res, next) => {
   // ── 4. Window check ─────────────────────────────────────────────────────
   // Open:  1 March of the end year  (month index 2, day 1)
   // Close: 30 April of the end year (month index 3, day 30)
-  const windowOpen  = new Date(parsed.endYear, 2, 1,  0,  0,  0,   0); // 1 Mar
+  const windowOpen = new Date(parsed.endYear, 2, 1, 0, 0, 0, 0); // 1 Mar
   const windowClose = new Date(parsed.endYear, 3, 30, 23, 59, 59, 999); // 30 Apr
 
   // if (today < windowOpen) {
@@ -260,9 +260,9 @@ exports.allowYearlyAppraisalSubmission = (req, res, next) => {
 ════════════════════════════════════════════════════════════════════ */
 exports.allowYearlyPlanEdit = async (req, res, next) => {
   try {
-    const today     = new Date();
+    const today = new Date();
     const currentFY = getCurrentFinancialYear();
-    const planId    = req.params.id;
+    const planId = req.params.id;
 
     if (!planId) {
       return res.status(400).json({ message: "Plan ID is required." });
