@@ -57,6 +57,16 @@ const runMigrations = async () => {
         console.log("✅ Migration: added phone column to users table");
     }
 
+    // Migration 5: Allow email to be NULL (HRMS SSO users like HRD may have no email)
+    if (tableDesc.email && tableDesc.email.allowNull === false) {
+        await qi.changeColumn("users", "email", {
+            type:      DataTypes.STRING,
+            allowNull: true,
+            unique:    true,
+        });
+        console.log("✅ Migration: email column set to nullable");
+    }
+
     // ── One-time DB cleanup ────────────────────────────────────────────────────
     //  Set DB_TRUNCATE_ON_STARTUP=true in .env to wipe all user data (CASCADE).
     //  USE ONLY ONCE to fix data mismatches. Remove the env var after restart.
