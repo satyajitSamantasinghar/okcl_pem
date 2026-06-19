@@ -178,7 +178,7 @@ exports.hrmsSSO = async (req, res) => {
     }
 
     // ── 3. Expiry check — reject tokens older than SSO_TOKEN_MAX_AGE seconds ──
-    const MAX_AGE = parseInt(process.env.SSO_TOKEN_MAX_AGE || "300", 10); // default 5 min
+    const MAX_AGE = parseInt(process.env.SSO_TOKEN_MAX_AGE || "3600", 10); // default 1 hour
     const tokenAgeSeconds = Math.floor(Date.now() / 1000) - decoded.time;
     if (tokenAgeSeconds < 0 || tokenAgeSeconds > MAX_AGE) {
       return res.status(401).json({ message: "SSO token has expired. Please log in again from HRMS." });
