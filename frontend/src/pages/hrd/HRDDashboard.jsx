@@ -36,6 +36,14 @@ function getCurrentMonth() {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
+// ── Go-live: no data exists before this month ──
+const GO_LIVE_MONTH = '2026-06'; // June 2026 — set once, never changes
+
+// ── Current month ceiling — prevents selecting future months ──
+function getCurrentMonthStr() {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
 
 function getPrevMonth(monthStr) {
     const [y, m] = monthStr.split('-').map(Number);
@@ -136,7 +144,10 @@ const DonutTooltip = ({ active, payload, deptTotal }) => {
 const HRDDashboard = () => {
     const navigate = useNavigate();
 
-    const [month, setMonth] = useState(getCurrentMonth());
+    const [month, setMonth] = useState(() => {
+    const current = getCurrentMonth();
+    return current < GO_LIVE_MONTH ? GO_LIVE_MONTH : current;
+});
     const [stats, setStats] = useState(null);
     const [prevStats, setPrevStats] = useState(null);
     const [raList, setRaList] = useState([]);
@@ -346,7 +357,13 @@ const HRDDashboard = () => {
                 <div className="hrd-month-filter">
                     <FiCalendar style={{ fontSize: 15, color: 'var(--text-muted)' }} />
                     <label>Viewing month</label>
-                    <input type="month" value={month} onChange={e => setMonth(e.target.value)} />
+                    <input
+    type="month"
+    value={month}
+    min={GO_LIVE_MONTH}
+    max={getCurrentMonthStr()}
+    onChange={e => setMonth(e.target.value)}
+/>
                 </div>
             </div>
 

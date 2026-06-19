@@ -235,14 +235,19 @@ exports.hrmsSSO = async (req, res) => {
     //  The server.js backfill handles pre-existing users, but new users
     //  provisioned via SSO after the history table exists need their first row
     //  created inline here so the dashboard is immediately accurate.
+    //  Wrapped in try/catch so a missing history table never blocks login.
     if (created && reportingAuthorityId && ["EMPLOYEE", "RA"].includes(derivedRole)) {
-      await EmployeeRAHistory.create({
-        employeeId:    user.id,
-        raId:          reportingAuthorityId,
-        effectiveFrom: user.createdAt,
-        effectiveTo:   null,
-        assignedBy:    null,   // HRMS-driven — no admin actor
-      });
+      try {
+        await EmployeeRAHistory.create({
+          employeeId:    user.id,
+          raId:          reportingAuthorityId,
+          effectiveFrom: user.createdAt,
+          effectiveTo:   null,
+          assignedBy:    null,   // HRMS-driven — no admin actor
+        });
+      } catch (histErr) {
+        console.error("[HRMS SSO] Failed to seed RA history for new user:", histErr.message);
+      }
     }
 
     if (!created) {
@@ -262,6 +267,7 @@ exports.hrmsSSO = async (req, res) => {
       // ── Track RA changes in history ──────────────────────────────────────────
       //  If the HRMS token carries a different RA than what we have on record,
       //  close the current history row and open a new one.
+      //  Wrapped in try/catch so a missing history table never blocks login.
       const prevRAId = user.reportingAuthorityId;
       const newRAId  = reportingAuthorityId ?? prevRAId;
       if (
@@ -269,18 +275,22 @@ exports.hrmsSSO = async (req, res) => {
         String(prevRAId || "") !== String(newRAId) &&
         ["EMPLOYEE", "RA"].includes(user.role)
       ) {
-        const now = new Date();
-        await EmployeeRAHistory.update(
-          { effectiveTo: now },
-          { where: { employeeId: user.id, effectiveTo: null } }
-        );
-        await EmployeeRAHistory.create({
-          employeeId:    user.id,
-          raId:          newRAId,
-          effectiveFrom: now,
-          effectiveTo:   null,
-          assignedBy:    null,   // HRMS-driven change — no admin actor
-        });
+        try {
+          const now = new Date();
+          await EmployeeRAHistory.update(
+            { effectiveTo: now },
+            { where: { employeeId: user.id, effectiveTo: null } }
+          );
+          await EmployeeRAHistory.create({
+            employeeId:    user.id,
+            raId:          newRAId,
+            effectiveFrom: now,
+            effectiveTo:   null,
+            assignedBy:    null,   // HRMS-driven change — no admin actor
+          });
+        } catch (histErr) {
+          console.error("[HRMS SSO] Failed to track RA change in history:", histErr.message);
+        }
       }
 
       user.reportingAuthorityId = reportingAuthorityId ?? user.reportingAuthorityId;

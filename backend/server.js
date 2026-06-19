@@ -144,6 +144,12 @@ const startServer = async () => {
         await sequelize.sync();   // no alter — schema is already correct
         console.log("✅ All tables synced");
 
+        // Explicitly ensure the employee_ra_histories table exists.
+        // sequelize.sync() above should handle it, but this is a safety net
+        // in case the model wasn't picked up during the general sync.
+        await EmployeeRAHistory.sync();
+        console.log("✅ employee_ra_histories table verified/created");
+
         // Backfill EmployeeRAHistory for pre-existing employees (runs after sync
         // so the table is guaranteed to exist).
         await backfillRAHistory();

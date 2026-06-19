@@ -15,19 +15,20 @@ const mdRoutes = require("./routes/mdRoutes");
 //               in your local .env so credentialed requests are accepted.
 //               Example:  ALLOWED_ORIGINS=http://localhost:5173
 // ─────────────────────────────────────────────────────────────────────────────
-const allowedOrigins = process.env.ALLOWED_ORIGINS
-    ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
-    : [];
+// const allowedOrigins = process.env.ALLOWED_ORIGINS
+//     ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
+//     : [];
 
-app.use(cors({
-    origin: (origin, callback) => {
-        // Allow server-to-server / Postman calls (no Origin header)
-        if (!origin) return callback(null, true);
-        if (allowedOrigins.includes(origin)) return callback(null, true);
-        callback(new Error(`CORS: origin '${origin}' not allowed`));
-    },
-    credentials: true,   // lets the browser send cookies / Authorization headers
-}));
+// app.use(cors({
+//     origin: (origin, callback) => {
+//         // Allow server-to-server / Postman calls (no Origin header)
+//         if (!origin) return callback(null, true);
+//         if (allowedOrigins.includes(origin)) return callback(null, true);
+//         callback(new Error(`CORS: origin '${origin}' not allowed`));
+//     },
+//     credentials: true,   // lets the browser send cookies / Authorization headers
+// }));
+app.use(cors());
 
 app.use(express.json());
 
