@@ -3,6 +3,44 @@ import api from '../../services/api';
 import toast from 'react-hot-toast';
 import { FiFilter, FiMessageSquare } from 'react-icons/fi';
 
+// ── Go-live: first fiscal quarter the app was in production ──
+// FY 2026-27 starts April 2026 → first valid quarter is Q1-2026
+const GO_LIVE_FY_START  = 2026;
+const GO_LIVE_QUARTER   = 1; // Q1 (April-June 2026)
+
+// Fiscal year quarter → month mapping (April-based FY)
+const QUARTER_MONTH_MAP = { 1: 4, 2: 7, 3: 10, 4: 1 };
+
+const buildQuarterOptions = () => {
+    const now            = new Date();
+    const currentMonth   = now.getMonth() + 1;
+    const currentYear    = now.getFullYear();
+    // Current FY start year
+    const currentFYStart = currentMonth >= 4 ? currentYear : currentYear - 1;
+    // Current fiscal quarter (April-based)
+    const currentQ = currentMonth >= 4
+        ? Math.ceil((currentMonth - 3) / 3)   // Apr-Dec: Q1, Q2, Q3
+        : 4;                                   // Jan-Mar: Q4
+
+    const opts = [];
+    for (let fy = GO_LIVE_FY_START; fy <= currentFYStart; fy++) {
+        for (let q = 1; q <= 4; q++) {
+            // Skip quarters before go-live
+            if (fy === GO_LIVE_FY_START && q < GO_LIVE_QUARTER) continue;
+
+            // Skip future quarters — check if this quarter's start month has passed
+            const qStartMonth = QUARTER_MONTH_MAP[q];
+            const qCalYear    = q === 4 ? fy + 1 : fy; // Q4 (Jan-Mar) is in next calendar year
+            if (new Date(qCalYear, qStartMonth - 1, 1) > now) break;
+
+            opts.push(`Q${q}-${fy}`);
+        }
+    }
+    return opts.reverse(); // most recent first
+};
+
+const quarters = buildQuarterOptions();
+
 const QuarterlyEvaluationPage = () => {
     const [evaluations, setEvaluations] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -24,7 +62,7 @@ const QuarterlyEvaluationPage = () => {
         fetchEvaluations();
     }, [filterQuarter]);
 
-    const quarters = ['Q1-2025', 'Q2-2025', 'Q3-2025', 'Q4-2025', 'Q1-2026', 'Q2-2026', 'Q3-2026', 'Q4-2026'];
+    
 
     if (loading) {
         return (

@@ -2,8 +2,8 @@
 const dotenv = require('dotenv');
 dotenv.config();
 const app = require("./src/app");
-const { sequelize } = require("./src/models");
-const { DataTypes } = require("sequelize");
+const { sequelize, EmployeeRAHistory, User } = require("./src/models");
+const { DataTypes, Op } = require("sequelize");
 
 
 const PORT = process.env.PORT || 5000;
@@ -67,6 +67,54 @@ const runMigrations = async () => {
     }
 };
 
+// ─── Backfill EmployeeRAHistory ───────────────────────────────────────────────
+//  Runs ONCE after sequelize.sync() creates the employee_ra_histories table.
+//  For every employee who already has a reportingAuthorityId but has no history
+//  row yet, we seed a single "initial assignment" row:
+//    effectiveFrom = employee's createdAt  (best approximation of assignment date)
+//    effectiveTo   = NULL                  (still active as of this backfill run)
+//    assignedBy    = NULL                  (unknown — pre-history system)
+//
+//  This is idempotent: the WHERE employeeId NOT IN (existing history) guard
+//  means re-running on subsequent restarts is a safe no-op.
+// ─────────────────────────────────────────────────────────────────────────────
+const backfillRAHistory = async () => {
+    // Find all employees / RAs with a reportingAuthorityId set
+    const usersWithRA = await User.findAll({
+        where: {
+            reportingAuthorityId: { [Op.ne]: null },
+            role: { [Op.in]: ["EMPLOYEE", "RA"] },
+        },
+        attributes: ["id", "reportingAuthorityId", "createdAt"],
+    });
+
+    if (usersWithRA.length === 0) return;
+
+    // Find which ones already have at least one history row (idempotency guard)
+    const alreadySeeded = await EmployeeRAHistory.findAll({
+        where: { employeeId: { [Op.in]: usersWithRA.map(u => u.id) } },
+        attributes: ["employeeId"],
+    });
+    const seededIds = new Set(alreadySeeded.map(h => String(h.employeeId)));
+
+    const toInsert = usersWithRA
+        .filter(u => !seededIds.has(String(u.id)))
+        .map(u => ({
+            employeeId:    u.id,
+            raId:          u.reportingAuthorityId,
+            effectiveFrom: u.createdAt,   // use account creation date as best proxy
+            effectiveTo:   null,          // still active
+            assignedBy:    null,          // unknown — pre-dates the history system
+        }));
+
+    if (toInsert.length > 0) {
+        await EmployeeRAHistory.bulkCreate(toInsert);
+        console.log(`✅ Backfill: seeded ${toInsert.length} initial EmployeeRAHistory row(s)`);
+    } else {
+        console.log("✅ Backfill: EmployeeRAHistory already up to date — nothing to seed");
+    }
+};
+
 
 // ─── STEP 3: async startup — connect DB first, then start server ──────────
 const startServer = async () => {
@@ -85,6 +133,10 @@ const startServer = async () => {
         // sync()       → ✅ safe: creates missing tables, never touches existing ones.
         await sequelize.sync();   // no alter — schema is already correct
         console.log("✅ All tables synced");
+
+        // Backfill EmployeeRAHistory for pre-existing employees (runs after sync
+        // so the table is guaranteed to exist).
+        await backfillRAHistory();
 
         // Start server only after DB is ready
         app.listen(PORT, () => {

@@ -428,7 +428,7 @@ import {
 } from 'react-icons/fi';
 import './RAQuarterlyEvaluationPage.css';
 // FISCAL YEAR FIX — import shared fiscal utilities
-import { getCurrentQuarterLabel, buildQuarterOptions } from '../../utils/fiscalUtils';
+import { getCurrentQuarterLabel, buildQuarterOptionsFromGoLive } from '../../utils/fiscalUtils';
 
 // FISCAL YEAR FIX — removed local getCurrentQuarter() which used calendar-based
 // Math.ceil((month+1)/3). Now using getCurrentQuarterLabel() from fiscalUtils.
@@ -454,7 +454,7 @@ function getScoreBg(score) {
     if (score >= 4) return '#FFF0EB';
     return '#FCEBEB';
 }
-
+const GO_LIVE_FY_START = 2026;
 /* =====================================================
    MAIN COMPONENT
 ===================================================== */
@@ -466,7 +466,7 @@ const RAQuarterlyEvaluationPage = () => {
     const [loading, setLoading] = useState(true);
 
     // FISCAL YEAR FIX — uses fiscal buildQuarterOptions() from fiscalUtils (2 years back)
-    const quarterOptions = buildQuarterOptions(2);
+    const quarterOptions = buildQuarterOptionsFromGoLive(GO_LIVE_FY_START);
 
     const fetchEvaluations = useCallback(async () => {
         setLoading(true);

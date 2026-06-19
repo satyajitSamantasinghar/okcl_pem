@@ -7,10 +7,27 @@ const employeeRoutes = require("./routes/employeeRoutes");
 const raRoutes = require("./routes/raRoutes");
 const hrdRoutes = require("./routes/hrdRoutes");
 const mdRoutes = require("./routes/mdRoutes");
-// Since the React frontend is now served by this same Express server,
-// all browser requests are same-origin and CORS headers are not needed.
-// We keep cors() open for tools like Postman, mobile apps, or future integrations.
-app.use(cors());
+
+// ── CORS ─────────────────────────────────────────────────────────────────────
+// Production  → frontend is served by this same Express server (same origin),
+//               so ALLOWED_ORIGINS is left empty and CORS is effectively a no-op.
+// Development → Vite dev server runs on a different port; set ALLOWED_ORIGINS
+//               in your local .env so credentialed requests are accepted.
+//               Example:  ALLOWED_ORIGINS=http://localhost:5173
+// ─────────────────────────────────────────────────────────────────────────────
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
+    : [];
+
+app.use(cors({
+    origin: (origin, callback) => {
+        // Allow server-to-server / Postman calls (no Origin header)
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.includes(origin)) return callback(null, true);
+        callback(new Error(`CORS: origin '${origin}' not allowed`));
+    },
+    credentials: true,   // lets the browser send cookies / Authorization headers
+}));
 
 app.use(express.json());
 

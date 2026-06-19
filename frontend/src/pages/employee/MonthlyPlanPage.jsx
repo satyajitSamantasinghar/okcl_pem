@@ -412,7 +412,7 @@ const MonthlyPlanPage = () => {
                 toast.error(`You can only submit a monthly plan for the current month (${currentMonthStr}).`);
                 return;
             }
-            if (today.getDate() < 1 || today.getDate() > 7) {
+            if (today.getDate() < 1 || today.getDate() > 20) {
                 toast.error('Monthly plan submission allowed only from 1st to 7th.');
                 return;
             }
@@ -1121,7 +1121,7 @@ const MonthlyPlanPage = () => {
                 const now = new Date();
                 const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
                 const todayDay = now.getDate();
-                const planDeadlinePassed = ENFORCE_DEADLINES && todayDay > 7;
+                const planDeadlinePassed = ENFORCE_DEADLINES && todayDay > 20;
 
                 return (
                     <div className="mp-form-card">
@@ -1142,7 +1142,7 @@ const MonthlyPlanPage = () => {
                                 <div className="mp-deadline-locked-content">
                                     <strong>Submission Window Closed</strong>
                                     <p>
-                                        The monthly plan for <strong>{new Date(now.getFullYear(), now.getMonth()).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</strong> can only be submitted between the <strong>1st–7th</strong> of each month.
+                                        The monthly plan for <strong>{new Date(now.getFullYear(), now.getMonth()).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</strong> can only be submitted between the <strong>1st–18th</strong> of each month.
                                         The deadline has passed.
                                     </p>
                                 </div>

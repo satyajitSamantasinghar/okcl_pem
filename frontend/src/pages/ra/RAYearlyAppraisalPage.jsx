@@ -13,13 +13,32 @@ import './RAYearlyAppraisalPage.css';
 /* ─────────────────────────────────────────────────────────
    CONSTANTS & HELPERS
 ───────────────────────────────────────────────────────── */
+
+// ── Go-live FY: the first fiscal year the app was in production ──
+const GO_LIVE_FY_START = 2026; // FY 2026-27 = April 2026 → March 2027
+
 const getCurrentFinancialYear = () => {
     const now = new Date();
     const year = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
-    return `${year}-${String((year + 1) % 100).padStart(2, '0')}`;
+    const fy = `${year}-${String((year + 1) % 100).padStart(2, '0')}`;
+    // Never default to a pre-go-live FY
+    const goLiveFY = `${GO_LIVE_FY_START}-${String((GO_LIVE_FY_START + 1) % 100).padStart(2, '0')}`;
+    return fy < goLiveFY ? goLiveFY : fy;
 };
 
-const yearOptions = ['2024-25', '2025-26', '2026-27', '2027-28'];
+// Dynamically build FY options from go-live up to current FY only.
+// Grows automatically every April 1 — never needs manual updating.
+const buildYearOptions = () => {
+    const now = new Date();
+    const currentFYStart = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+    const opts = [];
+    for (let fy = GO_LIVE_FY_START; fy <= currentFYStart; fy++) {
+        opts.push(`${fy}-${String((fy + 1) % 100).padStart(2, '0')}`);
+    }
+    return opts.reverse(); // most recent at top, matching screenshot UI
+};
+
+const yearOptions = buildYearOptions();
 
 const getInitials = (name) => {
     if (!name) return '?';

@@ -32,6 +32,7 @@ const {
   YearlyAppraisalReport,
   YearlyAppraisalKraAssessment,
   AuditLog,
+  EmployeeRAHistory,
 } = require("../models");
 
 const { Op } = require("sequelize");
@@ -45,8 +46,14 @@ exports.getHRDDashboard = async (req, res) => {
     }
 
     // CHANGE 1: countDocuments → Model.count({ where })
-    const totalEmployees = await User.count({ where: { role: "EMPLOYEE", isActive: true } });
-    const totalRAs = await User.count({ where: { role: "RA", isActive: true } });
+      const [selYear, selMonthNum] = month.split("-").map(Number);
+    // Last millisecond of the selected month (month is 1-based → pass it
+    // directly as the month arg to get the 0th day of the *next* month = last
+    // day of the selected month, then set time to 23:59:59.999)
+    const endOfSelectedMonth = new Date(selYear, selMonthNum, 0, 23, 59, 59, 999);
+
+    const totalEmployees = await User.count({ where: { role: "EMPLOYEE", isActive: true , createdAt: { [Op.lte]: endOfSelectedMonth } } });
+    const totalRAs = await User.count({ where: { role: "RA", isActive: true , createdAt: { [Op.lte]: endOfSelectedMonth } } });
 
     let plansThisMonth = 0, evaluationsThisMonth = 0, pendingEvaluations = 0;
 
@@ -505,11 +512,39 @@ exports.assignEmployeesToRA = async (req, res) => {
     const ra = await User.findByPk(id);
     if (!ra || ra.role !== "RA") return res.status(404).json({ message: "Reporting Authority not found" });
 
-    // CHANGE 8: updateMany({$in}, {$set}) → Model.update(data, { where: { id: Op.in } })
-    await User.update(
-      { reportingAuthorityId: id },
-      { where: { id: { [Op.in]: employeeIds }, role: "EMPLOYEE" } }
-    );
+    const now = new Date();
+
+    // Process each employee individually so we can maintain the RA assignment
+    // history log. Sequential loop (not Promise.all) keeps writes atomic per
+    // employee — if one fails the error is surfaced clearly.
+    for (const empId of employeeIds) {
+      const employee = await User.findByPk(empId, { attributes: ["id", "role", "reportingAuthorityId"] });
+      if (!employee || employee.role !== "EMPLOYEE") continue;
+
+      // Skip if already assigned to this exact RA (idempotent — no duplicate rows)
+      if (String(employee.reportingAuthorityId) === String(id)) continue;
+
+      // 1. Close the currently-open history record for this employee (if any)
+      //    effectiveTo = NOW marks the end of the previous RA assignment.
+      await EmployeeRAHistory.update(
+        { effectiveTo: now },
+        { where: { employeeId: empId, effectiveTo: null } }
+      );
+
+      // 2. Open a new history record for the new RA assignment
+      await EmployeeRAHistory.create({
+        employeeId:    empId,
+        raId:          id,
+        effectiveFrom: now,
+        effectiveTo:   null,          // null = currently active
+        assignedBy:    req.user.userId,
+      });
+
+      // 3. Update the denormalized current-RA column on the user record.
+      //    This column is still used for non-dashboard queries (e.g. auth,
+      //    employee detail pages) that do not need historical accuracy.
+      await employee.update({ reportingAuthorityId: id });
+    }
 
     await AuditLog.create({ userId: req.user.userId, action: "ASSIGN_EMPLOYEES_TO_RA", entityType: "USER", entityId: String(id), ipAddress: req.ip });
     res.json({ message: "Employees successfully assigned to Reporting Authority" });
@@ -517,4 +552,5 @@ exports.assignEmployeesToRA = async (req, res) => {
     res.status(500).json({ message: "Failed to assign employees", error: error.message });
   }
 };
+
 

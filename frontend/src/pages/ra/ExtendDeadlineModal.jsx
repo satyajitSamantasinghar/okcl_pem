@@ -61,26 +61,45 @@ const ExtendDeadlineModal = ({
     /* ── Handle confirm ── */
     const handleConfirm = async () => {
         if (!canConfirm) return;
-        setApiError('');
-        setLoading(true);
-        try {
-            await api.patch('/ra/extend-deadline', {
-                employeeId: employee.id,
-                month: monthYear?.month,
-                year: monthYear?.year,
-                type: missingType,
-                newDeadline: new Date(newDeadline).toISOString(),
-                reason: reason.trim(),
-                notifyEmployee: notify,
-            });
-            toast.success(`Deadline extended for ${employee.name}. They have been notified.`);
-            if (onConfirm) onConfirm(new Date(newDeadline), reason.trim(), notify, employee.name);
-            onClose();
-        } catch (err) {
-            setApiError(err.response?.data?.message || 'Failed to extend deadline. Please try again.');
-        } finally {
-            setLoading(false);
-        }
+
+        // ╔══════════════════════════════════════════════════════════════════════╗
+        // ║  🚧  COMING SOON — Deadline Extension Feature (Temporary Stub)      ║
+        // ║                                                                      ║
+        // ║  The full API integration below is commented out for the current     ║
+        // ║  production release. The feature UI is complete and preserved.       ║
+        // ║                                                                      ║
+        // ║  TO RE-ENABLE LATER:                                                 ║
+        // ║  1. Delete the two lines below (toast.info + return).                ║
+        // ║  2. Uncomment the entire try/catch block below them.                 ║
+        // ║  3. Rebuild the frontend dist (npm run build) and redeploy.          ║
+        // ╚══════════════════════════════════════════════════════════════════════╝
+        toast('🚧 Coming Soon — Deadline Extension will be available in the next update.', {
+            icon: '🔔',
+            duration: 4000,
+        });
+        return;
+
+        // ── REAL IMPLEMENTATION (uncomment when feature is ready) ─────────────
+        // setApiError('');
+        // setLoading(true);
+        // try {
+        //     await api.patch('/ra/extend-deadline', {
+        //         employeeId: employee.id,
+        //         month: monthYear?.month,
+        //         year: monthYear?.year,
+        //         type: missingType,
+        //         newDeadline: new Date(newDeadline).toISOString(),
+        //         reason: reason.trim(),
+        //         notifyEmployee: notify,
+        //     });
+        //     toast.success(`Deadline extended for ${employee.name}. They have been notified.`);
+        //     if (onConfirm) onConfirm(new Date(newDeadline), reason.trim(), notify, employee.name);
+        //     onClose();
+        // } catch (err) {
+        //     setApiError(err.response?.data?.message || 'Failed to extend deadline. Please try again.');
+        // } finally {
+        //     setLoading(false);
+        // }
     };
 
     /* ── Stop scroll on body ── */

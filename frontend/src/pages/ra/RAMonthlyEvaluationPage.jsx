@@ -902,6 +902,9 @@ const RejectModal = ({ item, planStatus, planRemarks, onClose, onSubmit, submitt
 ───────────────────────────────────────── */
 const ROWS_PER_PAGE = 10;
 
+// ── App go-live date — set once, never changes ──
+const GO_LIVE = { year: 2026, month: 5 }; // June 2026
+
 const RAMonthlyEvaluationPage = () => {
     const location = useLocation();
     const [evaluations, setEvaluations] = useState([]);
@@ -912,6 +915,10 @@ const RAMonthlyEvaluationPage = () => {
         return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
     });
+    const currentYM = useMemo(() => {
+        const now = new Date();
+        return { year: now.getFullYear(), month: now.getMonth() + 1 };
+    }, []);
     const [search, setSearch] = useState('');
     const [sortField, setSortField] = useState('name');
     const [sortDir, setSortDir] = useState('asc');
@@ -971,7 +978,7 @@ const RAMonthlyEvaluationPage = () => {
         if (!selYear || !selMonth) return [];
 
         const planDeadline = new Date(selYear, selMonth - 1, 10, 23, 59, 59);
-        const achDeadline = new Date(selYear, selMonth - 1, 25, 23, 59, 59);
+        const achDeadline = new Date(selYear, selMonth - 1, 30, 23, 59, 59);
 
         const q = search.trim().toLowerCase();
 
@@ -1184,34 +1191,49 @@ const RAMonthlyEvaluationPage = () => {
                     <FiFilter size={13} className="meval-filter-icon" />
                     <label className="meval-filter-label">Period</label>
                     <div className="meval-period-selectors">
-                        <select
-                            value={filterMonth.split('-')[1]}
-                            onChange={e => setFilterMonth(`${filterMonth.split('-')[0]}-${e.target.value}`)}
-                            className="meval-month-select"
-                        >
-                            <option value="01">January</option>
-                            <option value="02">February</option>
-                            <option value="03">March</option>
-                            <option value="04">April</option>
-                            <option value="05">May</option>
-                            <option value="06">June</option>
-                            <option value="07">July</option>
-                            <option value="08">August</option>
-                            <option value="09">September</option>
-                            <option value="10">October</option>
-                            <option value="11">November</option>
-                            <option value="12">December</option>
-                        </select>
-                        <select
-                            value={filterMonth.split('-')[0]}
-                            onChange={e => setFilterMonth(`${e.target.value}-${filterMonth.split('-')[1]}`)}
-                            className="meval-year-select"
-                        >
-                            {Array.from({ length: 11 }, (_, i) => new Date().getFullYear() - 5 + i).map(year => (
-                                <option key={year} value={year}>{year}</option>
-                            ))}
-                        </select>
-                    </div>
+        {/* ── Month dropdown — only valid months for selected year ── */}
+    <select
+        value={filterMonth.split('-')[1]}
+        onChange={e => setFilterMonth(`${filterMonth.split('-')[0]}-${e.target.value}`)}
+        className="meval-month-select"
+    >
+        {Array.from({ length: 12 }, (_, i) => i + 1).map(m => {
+            const selectedYear = Number(filterMonth.split('-')[0]);
+            const isBeforeGoLive = selectedYear === GO_LIVE.year && m < GO_LIVE.month;
+            const isAfterToday  = selectedYear === currentYM.year && m > currentYM.month;
+            if (isBeforeGoLive || isAfterToday) return null;
+            return (
+                <option key={m} value={String(m).padStart(2, '0')}>
+                    {new Date(2000, m - 1).toLocaleString('en-US', { month: 'long' })}
+                </option>
+            );
+        })}
+    </select>
+
+    {/* ── Year dropdown — only years from go-live to current year ── */}
+    <select
+        value={filterMonth.split('-')[0]}
+        onChange={e => {
+            const newYear = Number(e.target.value);
+            let currentMon = Number(filterMonth.split('-')[1]);
+            // Clamp month: if switching to go-live year, don't go below go-live month
+            if (newYear === GO_LIVE.year && currentMon < GO_LIVE.month)
+                currentMon = GO_LIVE.month;
+            // Clamp month: if switching to current year, don't go above today's month
+            if (newYear === currentYM.year && currentMon > currentYM.month)
+                currentMon = currentYM.month;
+            setFilterMonth(`${newYear}-${String(currentMon).padStart(2, '0')}`);
+        }}
+        className="meval-year-select"
+    >
+        {Array.from(
+            { length: currentYM.year - GO_LIVE.year + 1 },
+            (_, i) => GO_LIVE.year + i
+        ).map(year => (
+            <option key={year} value={year}>{year}</option>
+        ))}
+    </select>
+</div>
                 </div>
                 <div className="meval-toolbar-divider" />
                 <div className="meval-search-wrap">

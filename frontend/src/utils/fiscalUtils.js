@@ -34,10 +34,10 @@ export const MONTH_TO_QUARTER_MAP = {
  */
 export function getFiscalYear(date = new Date()) {
   const d = new Date(date);
-  const year  = d.getFullYear();
+  const year = d.getFullYear();
   const month = d.getMonth() + 1; // 1-based
   const startYear = month >= 4 ? year : year - 1;
-  const endYear   = (startYear + 1).toString().slice(-2);
+  const endYear = (startYear + 1).toString().slice(-2);
   return `FY ${startYear}-${endYear}`;
 }
 
@@ -47,10 +47,10 @@ export function getFiscalYear(date = new Date()) {
  */
 export function getFiscalYearShort(date = new Date()) {
   const d = new Date(date);
-  const year  = d.getFullYear();
+  const year = d.getFullYear();
   const month = d.getMonth() + 1;
   const startYear = month >= 4 ? year : year - 1;
-  const endYear   = (startYear + 1).toString().slice(-2);
+  const endYear = (startYear + 1).toString().slice(-2);
   return `${startYear}-${endYear}`;
 }
 
@@ -89,7 +89,7 @@ export function getCurrentQuarter() {
  */
 export function getQuarterLabel(date = new Date()) {
   const d = new Date(date);
-  const year  = d.getFullYear();
+  const year = d.getFullYear();
   const month = d.getMonth() + 1;
   const q = MONTH_TO_QUARTER_MAP[month];
   // Q4 months (Jan-Mar) belong to the FY that started the previous April
@@ -125,18 +125,18 @@ export function getMonthsInQuarter(quarter) {
  */
 export function getFiscalMonthOrder() {
   return [
-    { value: '04', label: 'April',     num: 4  },
-    { value: '05', label: 'May',       num: 5  },
-    { value: '06', label: 'June',      num: 6  },
-    { value: '07', label: 'July',      num: 7  },
-    { value: '08', label: 'August',    num: 8  },
-    { value: '09', label: 'September', num: 9  },
-    { value: '10', label: 'October',   num: 10 },
-    { value: '11', label: 'November',  num: 11 },
-    { value: '12', label: 'December',  num: 12 },
-    { value: '01', label: 'January',   num: 1  },
-    { value: '02', label: 'February',  num: 2  },
-    { value: '03', label: 'March',     num: 3  },
+    { value: '04', label: 'April', num: 4 },
+    { value: '05', label: 'May', num: 5 },
+    { value: '06', label: 'June', num: 6 },
+    { value: '07', label: 'July', num: 7 },
+    { value: '08', label: 'August', num: 8 },
+    { value: '09', label: 'September', num: 9 },
+    { value: '10', label: 'October', num: 10 },
+    { value: '11', label: 'November', num: 11 },
+    { value: '12', label: 'December', num: 12 },
+    { value: '01', label: 'January', num: 1 },
+    { value: '02', label: 'February', num: 2 },
+    { value: '03', label: 'March', num: 3 },
   ];
 }
 
@@ -162,11 +162,11 @@ export function buildQuarterOptions(yearsBack = 2) {
  */
 export function getFiscalYearRange(date = new Date()) {
   const d = new Date(date);
-  const year  = d.getFullYear();
+  const year = d.getFullYear();
   const month = d.getMonth() + 1;
   const startYear = month >= 4 ? year : year - 1;
-  const start = new Date(startYear,     3, 1,  0,  0,  0,   0); // April 1
-  const end   = new Date(startYear + 1, 2, 31, 23, 59, 59, 999); // March 31
+  const start = new Date(startYear, 3, 1, 0, 0, 0, 0); // April 1
+  const end = new Date(startYear + 1, 2, 31, 23, 59, 59, 999); // March 31
   return { start, end };
 }
 
@@ -176,13 +176,13 @@ export function getFiscalYearRange(date = new Date()) {
  */
 export function getQuarterRange(date = new Date()) {
   const d = new Date(date);
-  const year  = d.getFullYear();
+  const year = d.getFullYear();
   const month = d.getMonth() + 1;
   const q = MONTH_TO_QUARTER_MAP[month];
   const months = QUARTER_MONTH_MAP[q];
 
   const startMonthNum = months[0];
-  const endMonthNum   = months[months.length - 1];
+  const endMonthNum = months[months.length - 1];
 
   // Determine the calendar year for the start month
   let startCalYear;
@@ -193,8 +193,8 @@ export function getQuarterRange(date = new Date()) {
     startCalYear = year;
   }
 
-  const start = new Date(startCalYear, startMonthNum - 1, 1,  0,  0,  0,   0);
-  const end   = new Date(startCalYear, endMonthNum,       0, 23, 59, 59, 999); // last day
+  const start = new Date(startCalYear, startMonthNum - 1, 1, 0, 0, 0, 0);
+  const end = new Date(startCalYear, endMonthNum, 0, 23, 59, 59, 999); // last day
   return { start, end };
 }
 
@@ -209,7 +209,7 @@ export function getQuarterMonthStrings(quarterLabel) {
   const match = quarterLabel.match(/^Q(\d)[-–](\d{4})$/);
   if (!match) return [];
 
-  const q    = parseInt(match[1], 10);
+  const q = parseInt(match[1], 10);
   const year = parseInt(match[2], 10);
   const monthNums = QUARTER_MONTH_MAP[q];
   if (!monthNums) return [];
@@ -239,8 +239,56 @@ export function formatQuarterLabel(quarterLabel) {
   if (!quarterLabel) return '';
   const match = quarterLabel.match(/^Q(\d)[-–](\d{4})$/);
   if (!match) return quarterLabel;
-  const q    = match[1];
+  const q = match[1];
   const year = parseInt(match[2], 10);
   const endYear = (year + 1).toString().slice(-2);
   return `Q${q} · FY ${year}-${endYear}`;
+}
+
+
+/**
+ * buildQuarterOptionsFromGoLive(goLiveFYStart)
+ * Returns only quarters from the go-live FY up to the CURRENT quarter.
+ * Replaces buildQuarterOptions() for production use.
+ *
+ * goLiveFYStart: the calendar year the first FY starts, e.g. 2026 for FY 2026-27
+ *
+ * "Q1-2026" · FY 2026-27 starts April 2026.
+ * Current quarter is the ceiling — no future quarters shown.
+ */
+export function buildQuarterOptionsFromGoLive(goLiveFYStart) {
+  const now = new Date();
+  const currentMonth = now.getMonth() + 1; // 1-based
+  const currentYear = now.getFullYear();
+
+  // Current FY start year (April = new FY)
+  const currentFYStart = currentMonth >= 4 ? currentYear : currentYear - 1;
+
+  // Current quarter label year (Q4's label year is one less than calendar year)
+  const currentQ = MONTH_TO_QUARTER_MAP[currentMonth];
+  const currentQLabelYear = currentQ === 4 ? currentYear - 1 : currentYear;
+
+  const opts = [];
+
+  for (let fy = goLiveFYStart; fy <= currentFYStart; fy++) {
+    for (let q = 1; q <= 4; q++) {
+      const labelYear = fy; // Q1-Q4 all use FY start year as label year
+
+      // Determine the actual calendar months this quarter covers
+      // to check if it has started yet
+      const monthsInQ = QUARTER_MONTH_MAP[q]; // e.g. [4,5,6] for Q1
+      // For Q4, months [1,2,3] are in fy+1 calendar year
+      const calYear = q === 4 ? fy + 1 : fy;
+      const qStartMonth = monthsInQ[0];
+
+      // Skip if this quarter starts after today
+      const qStartDate = new Date(calYear, qStartMonth - 1, 1);
+      if (qStartDate > now) break;
+
+      opts.push(`Q${q}-${labelYear}`);
+    }
+  }
+
+  // Return in reverse order so most recent is at top (matches screenshot UI)
+  return opts.reverse();
 }

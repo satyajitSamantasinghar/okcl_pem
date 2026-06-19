@@ -10,7 +10,7 @@
 //  6. user.save()                       works the same on Sequelize instances
 // ─────────────────────────────────────────────────────────────────────────────
 
-const { User } = require("../models");
+const { User, EmployeeRAHistory } = require("../models");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 
@@ -24,8 +24,7 @@ exports.register = async (req, res) => {
 
     const passwordHash = await bcrypt.hash(password, 10);
 
-    // CHANGE: User.create() works the same; field names match Sequelize model
-    await User.create({
+    const newUser = await User.create({
       employeeCode,
       name,
       email,
@@ -34,6 +33,17 @@ exports.register = async (req, res) => {
       department,
       reportingAuthorityId: reportingAuthorityId || null,
     });
+
+    // Seed the initial RA assignment history row when an RA is set at creation
+    if (reportingAuthorityId) {
+      await EmployeeRAHistory.create({
+        employeeId:    newUser.id,
+        raId:          reportingAuthorityId,
+        effectiveFrom: newUser.createdAt,
+        effectiveTo:   null,
+        assignedBy:    null,  // system/admin — no req.user in this context
+      });
+    }
 
     res.status(201).json({ message: "User created successfully" });
   } catch (error) {
@@ -221,6 +231,20 @@ exports.hrmsSSO = async (req, res) => {
       },
     });
 
+    // ── 6b. Seed first RA history row for brand-new SSO users ────────────────
+    //  The server.js backfill handles pre-existing users, but new users
+    //  provisioned via SSO after the history table exists need their first row
+    //  created inline here so the dashboard is immediately accurate.
+    if (created && reportingAuthorityId && ["EMPLOYEE", "RA"].includes(derivedRole)) {
+      await EmployeeRAHistory.create({
+        employeeId:    user.id,
+        raId:          reportingAuthorityId,
+        effectiveFrom: user.createdAt,
+        effectiveTo:   null,
+        assignedBy:    null,   // HRMS-driven — no admin actor
+      });
+    }
+
     if (!created) {
       // ── 7. Sync latest HRMS data on every login ───────────────────────────────
       //  Always refresh these fields from the token so our DB mirrors HRMS.
@@ -234,6 +258,31 @@ exports.hrmsSSO = async (req, res) => {
       user.department = decoded.is_dep || user.department;  // token field: department
       user.designation = decoded.desg || user.designation; // token field: designation
       user.phone = decoded.phone_number || user.phone;       // token field: phone
+
+      // ── Track RA changes in history ──────────────────────────────────────────
+      //  If the HRMS token carries a different RA than what we have on record,
+      //  close the current history row and open a new one.
+      const prevRAId = user.reportingAuthorityId;
+      const newRAId  = reportingAuthorityId ?? prevRAId;
+      if (
+        newRAId &&
+        String(prevRAId || "") !== String(newRAId) &&
+        ["EMPLOYEE", "RA"].includes(user.role)
+      ) {
+        const now = new Date();
+        await EmployeeRAHistory.update(
+          { effectiveTo: now },
+          { where: { employeeId: user.id, effectiveTo: null } }
+        );
+        await EmployeeRAHistory.create({
+          employeeId:    user.id,
+          raId:          newRAId,
+          effectiveFrom: now,
+          effectiveTo:   null,
+          assignedBy:    null,   // HRMS-driven change — no admin actor
+        });
+      }
+
       user.reportingAuthorityId = reportingAuthorityId ?? user.reportingAuthorityId;
       user.isActive = isActive;
 

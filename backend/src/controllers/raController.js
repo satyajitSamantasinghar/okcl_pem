@@ -33,6 +33,7 @@ const {
   YearlyAppraisalKraAssessment,
   AuditLog,
   Notification,
+  EmployeeRAHistory,
 } = require("../models");
 
 const { Op } = require("sequelize");
@@ -48,13 +49,40 @@ exports.getRADashboard = async (req, res) => {
   try {
     const raId   = req.user.userId;
     const { month } = req.query;
+    
 
     if (!month) return res.status(400).json({ message: "Month is required" });
 
-    // CHANGE 11: removed inline require; User is top-level import
-    // CHANGE 2: find → findAll; CHANGE 7: no $in needed here — direct where
-    const employees    = await User.findAll({ where: { reportingAuthorityId: raId }, attributes: ["id"] });
-    const employeeIds  = employees.map(e => e.id);
+    // ── Compute month boundaries for the overlap query ───────────────────────────
+    //  An employee is counted under this RA for the selected month if and only if
+    //  there exists a history record where:
+    //    effectiveFrom <= last moment of the month   (assignment started before month ended)
+    //    AND (effectiveTo IS NULL                    (still active)
+    //         OR effectiveTo >= first moment of month)  (was still active at some point in the month)
+    //
+    //  This is the standard date-range overlap check and correctly handles:
+    //   • Employees who joined this RA mid-month (effectiveFrom inside the month)
+    //   • Employees who left this RA mid-month  (effectiveTo inside the month)
+    //   • Employees who were only ever with this RA (effectiveTo IS NULL)
+    const [selYear, selMonthNum] = month.split("-").map(Number);
+    const startOfMonth   = new Date(selYear, selMonthNum - 1, 1, 0, 0, 0, 0);       // e.g. 2026-05-01 00:00:00
+    const endOfMonth     = new Date(selYear, selMonthNum,     0, 23, 59, 59, 999);  // e.g. 2026-05-31 23:59:59
+
+    // FIX: query EmployeeRAHistory instead of User.reportingAuthorityId + createdAt.
+    // This correctly handles RA reassignments: if an employee moved from RA A → RA B
+    // in June, they appear under RA A for May and under RA B for June.
+    const historyRows = await EmployeeRAHistory.findAll({
+      where: {
+        raId:          raId,
+        effectiveFrom: { [Op.lte]: endOfMonth },           // assignment started by end of month
+        [Op.or]: [
+          { effectiveTo: null },                           // still active with this RA
+          { effectiveTo: { [Op.gte]: startOfMonth } },     // or was active at some point this month
+        ],
+      },
+      attributes: ["employeeId"],
+    });
+    const employeeIds    = [...new Set(historyRows.map(h => h.employeeId))];
     const totalEmployees = employeeIds.length;
 
     // CHANGE 7: { $in: employeeIds } → Op.in

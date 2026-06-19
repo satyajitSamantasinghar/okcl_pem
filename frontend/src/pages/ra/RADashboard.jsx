@@ -354,7 +354,7 @@ const RADashboard = () => {
 
         // Deadlines: plan = 10th, achievement = 25th of the selected month
         const planDeadline = new Date(selYear, selMonth - 1, 10, 23, 59, 59);
-        const achDeadline = new Date(selYear, selMonth - 1, 25, 23, 59, 59);
+        const achDeadline = new Date(selYear, selMonth - 1, 30, 23, 59, 59);
 
         const submittedSet = new Set((stats.lists?.submitted || []).map(id => id?.toString()));
         const achievementsSet = new Set((stats.lists?.achievements || []).map(id => id?.toString()));
@@ -527,6 +527,10 @@ const RADashboard = () => {
                             id="ra-month-filter"
                             type="month"
                             value={selectedMonth}
+                            min="2026-05"
+                             max={selectedMonth > `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}` 
+                            ? selectedMonth 
+                           :`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`}
                             onChange={(e) => setSelectedMonth(e.target.value)}
                         />
                     </div>

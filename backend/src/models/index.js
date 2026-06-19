@@ -19,6 +19,7 @@ const YearlyPlanEditHistory         = require("./YearlyPlanEditHistory")(sequeli
 const YearlyAppraisalReport         = require("./YearlyAppraisalReport")(sequelize);
 const YearlyAppraisalKraAssessment  = require("./YearlyAppraisalKraAssessment")(sequelize);
 const AppraisalQuarterlyEvaluation  = require("./AppraisalQuarterlyEvaluation")(sequelize);
+const EmployeeRAHistory             = require("./EmployeeRAHistory")(sequelize);
 
 // ─────────────────────────────────────────────────────────────
 //  ASSOCIATIONS
@@ -160,6 +161,13 @@ QuarterlyEvaluation.belongsToMany(YearlyAppraisalReport, {
   otherKey:   "yearlyAppraisalReportId",
 });
 
+/* ── EmployeeRAHistory ↔ User (employee, ra, assignedByUser) ── */
+EmployeeRAHistory.belongsTo(User, { as: "employee",       foreignKey: "employeeId" });
+EmployeeRAHistory.belongsTo(User, { as: "ra",             foreignKey: "raId" });
+EmployeeRAHistory.belongsTo(User, { as: "assignedByUser", foreignKey: "assignedBy" });
+User.hasMany(EmployeeRAHistory, { as: "raHistoryAsEmployee", foreignKey: "employeeId" });
+User.hasMany(EmployeeRAHistory, { as: "raHistoryAsRA",       foreignKey: "raId" });
+
 // ─────────────────────────────────────────────────────────────
 //  Export everything so controllers can do:
 //  const { User, MonthlyPlan, ... } = require('../models');
@@ -182,4 +190,5 @@ module.exports = {
   YearlyAppraisalReport,
   YearlyAppraisalKraAssessment,
   AppraisalQuarterlyEvaluation,
+  EmployeeRAHistory,
 };

@@ -223,7 +223,8 @@ function CustomTooltip({ active, payload, label }) {
         </div>
     );
 }
-
+const GO_LIVE_FY = '2026-27';
+const GO_LIVE_FY_START = 2026;
 /* ════════════════════════════════════════════════════
    MAIN COMPONENT
 ════════════════════════════════════════════════════ */
@@ -313,23 +314,34 @@ const RAEmployeeDetailPage = () => {
         return `${startYear}-${String(startYear + 1).slice(-2)}`;
     }
 
-    const fySet = new Set();
-    // Add a window of recent FYs so the dropdown is never empty
-    const nowFY = getCurrentFiscalYear();
-    const nowStart = parseInt(nowFY.split('-')[0], 10);
-    for (let i = 0; i <= 3; i++) {
-        const s = nowStart - i;
-        fySet.add(`${s}-${String(s + 1).slice(-2)}`);
-    }
-    // Add FYs from actual data
-    monthlyPlans.forEach(p => { const fy = monthToFY(p.month); if (fy) fySet.add(fy); });
-    quarterlyEvaluations.forEach(q => { const fy = quarterToFY(q.quarter); if (fy) fySet.add(fy); });
-    yearlyPlans.forEach(y => { if (y.financialYear) fySet.add(y.financialYear); });
-    yearlyReports.forEach(y => { if (y.financialYear) fySet.add(y.financialYear); });
+    // ── Build FY dropdown: go-live FY → current FY only ──
+const nowFY      = getCurrentFiscalYear();                    // e.g. "2026-27"
+const nowFYStart = parseInt(nowFY.split('-')[0], 10);         // e.g. 2026
 
-    const availableYears = Array.from(fySet).sort((a, b) =>
-        parseInt(b.split('-')[0]) - parseInt(a.split('-')[0])
-    );
+const fySet = new Set();
+
+// Generate every FY from go-live up to current — no past, no future
+for (let s = GO_LIVE_FY_START; s <= nowFYStart; s++) {
+    fySet.add(`${s}-${String(s + 1).slice(-2)}`);
+}
+
+// Also include FYs from actual employee data,
+// but only if they fall within the allowed window
+const isAllowedFY = (fy) => {
+    if (!fy) return false;
+    const start = parseInt(fy.split('-')[0], 10);
+    return start >= GO_LIVE_FY_START && start <= nowFYStart;
+};
+
+monthlyPlans.forEach(p => { const fy = monthToFY(p.month); if (isAllowedFY(fy)) fySet.add(fy); });
+quarterlyEvaluations.forEach(q => { const fy = quarterToFY(q.quarter); if (isAllowedFY(fy)) fySet.add(fy); });
+yearlyPlans.forEach(y => { if (isAllowedFY(y.financialYear)) fySet.add(y.financialYear); });
+yearlyReports.forEach(y => { if (isAllowedFY(y.financialYear)) fySet.add(y.financialYear); });
+
+// Sort descending so current FY is always at the top
+const availableYears = Array.from(fySet).sort((a, b) =>
+    parseInt(b.split('-')[0]) - parseInt(a.split('-')[0])
+);
 
     /* ── FISCAL YEAR FIX — filter months by FY range (Apr startYear – Mar startYear+1)
        A month "YYYY-MM" is in FY "YYYY-YY" when:
