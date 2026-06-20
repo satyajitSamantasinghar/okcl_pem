@@ -216,11 +216,39 @@ exports.hrmsSSO = async (req, res) => {
     // ── 6. JIT Provisioning — find or create user by employeeCode ─────────────
     const isActive = decoded.yractv === "1" || decoded.yractv === 1;
 
+    // Pre-check: if the HRMS token carries an email that already belongs to a
+    // DIFFERENT employee code in our DB, this is a data conflict — most likely
+    // the HRMS accidentally changed the employee's emp_code.
+    // Industry-standard approach: reject the login with a clear 409 Conflict
+    // so the HRD/admin knows exactly what to fix, rather than silently
+    // corrupting data or logging the user in with the wrong account.
+    const incomingEmail = decoded.ismail || null;
+    if (incomingEmail) {
+      const emailConflict = await User.findOne({
+        where: { email: incomingEmail },
+        attributes: ["id", "employeeCode"],
+      });
+      if (emailConflict && String(emailConflict.employeeCode) !== String(decoded.emp_code)) {
+        console.warn(
+          `[HRMS SSO] 409 Conflict: email "${incomingEmail}" is already registered ` +
+          `under emp_code "${emailConflict.employeeCode}" but HRMS token carries ` +
+          `emp_code "${decoded.emp_code}". Login blocked.`
+        );
+        return res.status(409).json({
+          message:
+            `Login failed: the email "${incomingEmail}" is already registered ` +
+            `under employee code "${emailConflict.employeeCode}". ` +
+            `The HRMS may have assigned a different employee code to this account. ` +
+            `Please contact HRD to resolve the data conflict before logging in.`,
+        });
+      }
+    }
+
     const [user, created] = await User.findOrCreate({
       where: { employeeCode: decoded.emp_code },
       defaults: {
         name: (decoded.nm || "").trim(),
-        email: decoded.ismail || null,
+        email: incomingEmail,
         role: derivedRole,
         department: decoded.is_dep || null,  // token field: department
         designation: decoded.desg || null, // token field: designation
@@ -259,7 +287,31 @@ exports.hrmsSSO = async (req, res) => {
       const isPrivilegedRole = user.role === "HRD" || user.role === "MD";
 
       user.name = (decoded.nm || "").trim();
-      user.email = decoded.ismail || user.email;       // keep existing if omitted
+
+      // Update email from HRMS token if it has changed.
+      // If the incoming email is already owned by a DIFFERENT user, it means
+      // there is a real data conflict (e.g., HRMS changed this user's emp_code)
+      // → block the login with a clear 409 Conflict instead of silently skipping.
+      if (incomingEmail && incomingEmail !== user.email) {
+        const emailOwner = await User.findOne({
+          where: { email: incomingEmail },
+          attributes: ["id", "employeeCode"],
+        });
+        if (emailOwner && emailOwner.id !== user.id) {
+          console.warn(
+            `[HRMS SSO] 409 Conflict: email "${incomingEmail}" already belongs to ` +
+            `emp_code "${emailOwner.employeeCode}" — cannot update emp "${user.employeeCode}".`
+          );
+          return res.status(409).json({
+            message:
+              `Login failed: the email "${incomingEmail}" is already registered ` +
+              `under employee code "${emailOwner.employeeCode}". ` +
+              `The HRMS may have assigned a different employee code to this account. ` +
+              `Please contact HRD to resolve the data conflict before logging in.`,
+          });
+        }
+        user.email = incomingEmail;
+      }
       user.department = decoded.is_dep || user.department;  // token field: department
       user.designation = decoded.desg || user.designation; // token field: designation
       user.phone = decoded.phone_number || user.phone;       // token field: phone
