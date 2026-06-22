@@ -193,10 +193,42 @@ exports.getMyEmployees = async (req, res) => {
     const now  = new Date();
     const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
-    const employees = await User.findAll({
-      where: { reportingAuthorityId: raId, isActive: true },
-      attributes: ["id", "name", "employeeCode", "department", "email", "createdAt"],
-    });
+    // ── Resolve employee IDs for the requested month ─────────────────────────
+    //  If a ?month=YYYY-MM is provided, use EmployeeRAHistory (same date-overlap
+    //  logic as getRADashboard) so the list reflects who was actually under this
+    //  RA in that month.  Without a month param, fall back to the current
+    //  reportingAuthorityId snapshot (backwards-compatible).
+    let employeeIds = null;
+
+    if (req.query.month) {
+      const [selYear, selMonthNum] = req.query.month.split("-").map(Number);
+      const startOfMonth = new Date(selYear, selMonthNum - 1, 1, 0, 0, 0, 0);
+      const endOfMonth   = new Date(selYear, selMonthNum,     0, 23, 59, 59, 999);
+
+      const historyRows = await EmployeeRAHistory.findAll({
+        where: {
+          raId,
+          effectiveFrom: { [Op.lte]: endOfMonth },
+          [Op.or]: [
+            { effectiveTo: null },
+            { effectiveTo: { [Op.gte]: startOfMonth } },
+          ],
+        },
+        attributes: ["employeeId"],
+      });
+      employeeIds = [...new Set(historyRows.map(h => h.employeeId))];
+    }
+
+    // Fetch full employee records — either the history-derived set or all current
+    const employees = employeeIds !== null
+      ? await User.findAll({
+          where: { id: { [Op.in]: employeeIds }, isActive: true },
+          attributes: ["id", "name", "employeeCode", "department", "email", "createdAt"],
+        })
+      : await User.findAll({
+          where: { reportingAuthorityId: raId, isActive: true },
+          attributes: ["id", "name", "employeeCode", "department", "email", "createdAt"],
+        });
 
     const result = await Promise.all(
       employees.map(async (emp) => {
@@ -226,6 +258,7 @@ exports.getMyEmployees = async (req, res) => {
     res.status(500).json({ message: "Failed to fetch employees", error: error.message });
   }
 };
+
 
 /* ─── EMPLOYEE DETAIL (RA VIEW) ──────────────────────────────────────────────── */
 exports.getEmployeeDetail = async (req, res) => {

@@ -173,7 +173,9 @@ const RADashboard = () => {
             try {
                 const [dashRes, empRes] = await Promise.all([
                     api.get('/ra/dashboard', { params: { month: selectedMonth } }),
-                    api.get('/ra/my-employees'),
+                    // Pass the selected month so the backend uses EmployeeRAHistory
+                    // to return only employees who were under this RA in that month.
+                    api.get('/ra/my-employees', { params: { month: selectedMonth } }),
                 ]);
                 setStats(dashRes.data);
                 setEmployeesList(Array.isArray(empRes.data) ? empRes.data : []);

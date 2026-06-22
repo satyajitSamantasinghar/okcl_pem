@@ -946,7 +946,9 @@ const RAMonthlyEvaluationPage = () => {
         try {
             const [evalRes, empRes] = await Promise.all([
                 api.get('/ra/monthly-evaluations', { params: { month: filterMonth } }),
-                api.get('/ra/my-employees')
+                // Pass filterMonth so the backend uses EmployeeRAHistory and returns
+                // only employees who were under this RA in the selected month.
+                api.get('/ra/my-employees', { params: { month: filterMonth } })
             ]);
             setEvaluations(evalRes.data?.data || []);
             setEmployeesList(Array.isArray(empRes.data) ? empRes.data : []);
