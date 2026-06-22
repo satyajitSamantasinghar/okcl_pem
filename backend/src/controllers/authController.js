@@ -13,6 +13,7 @@
 const { User, EmployeeRAHistory } = require("../models");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
 
 /* ─── REGISTER ─────────────────────────────────────────────────────────────── */
 exports.register = async (req, res) => {
@@ -136,25 +137,70 @@ exports.logout = async (req, res) => {
   }
 };
 
+/* ─── Decrypt HRMS KRA Token ─────────────────────────────────────────────────
+ *  Token format (set by HRMS PHP backend):
+ *    Base64( IV[16 bytes] + HMAC-SHA256[32 bytes] + AES-256-CBC-encrypted-JSON )
+ *
+ *  Key derivation:  SHA-256( KRA_SECRET_KEY )   (raw binary, 32 bytes)
+ *  HMAC is computed over the encrypted payload only (not IV).
+ *  Decrypted payload is a JSON string with the user's HRMS profile.
+ * ──────────────────────────────────────────────────────────────────────────── */
+function decryptKraToken(token) {
+  // 1. URL-decode (handles double-encoding: %2F → /, %2B → +)
+  const cleanToken = decodeURIComponent(token);
+
+  // 2. Derive key: SHA-256 of the secret (raw binary — matches PHP hash('sha256', key, true))
+  const secretKey = process.env.KRA_SECRET_KEY;
+  if (!secretKey) throw new Error("KRA_SECRET_KEY is not set in environment");
+  const key = crypto.createHash("sha256").update(secretKey).digest();
+
+  // 3. Base64-decode into raw bytes
+  const data = Buffer.from(cleanToken, "base64");
+  if (data.length < 49) throw new Error("Token too short");
+
+  // 4. Split: IV (16 bytes) | HMAC (32 bytes) | encrypted payload (rest)
+  const iv        = data.subarray(0, 16);
+  const hmacHash  = data.subarray(16, 48);
+  const encrypted = data.subarray(48);
+
+  // 5. Verify HMAC-SHA256 (matches PHP hash_hmac('sha256', $encrypted, $key, true))
+  const check = crypto.createHmac("sha256", key).update(encrypted).digest();
+  if (!crypto.timingSafeEqual(hmacHash, check)) {
+    throw new Error("Invalid Token — HMAC verification failed");
+  }
+
+  // 6. AES-256-CBC decrypt (matches PHP openssl_decrypt with OPENSSL_RAW_DATA)
+  const decipher = crypto.createDecipheriv("aes-256-cbc", key, iv);
+  let decrypted = decipher.update(encrypted);
+  decrypted = Buffer.concat([decrypted, decipher.final()]);
+
+  // 7. Parse JSON
+  return JSON.parse(decrypted.toString("utf-8"));
+}
+
 /* ─── HRMS SSO ──────────────────────────────────────────────────────────────────
- *  Called when an employee is redirected from the HRMS portal with a Base64
- *  token in the URL: /login?token=<BASE64>
+ *  Called when an employee is redirected from the HRMS portal with an encrypted
+ *  token in the URL: /login?token=<AES-256-CBC-ENCRYPTED-BASE64>
  *
- *  Token fields used (others like py, emcd, fycd, pycd are ignored):
- *    emp_code  → employeeCode       (primary link key)
- *    nm        → name
- *    desg      → department
- *    ra_id  → reportingAuthorityId  (looked up by employeeCode in local DB)
- *    ishod     → role derivation:
- *                  ""  / null  → "EMPLOYEE" (regular employee)
- *                  "1"         → "RA"       (person is a Reporting Authority)
- *                  existing HRD / MD roles in DB are never overwritten by SSO
- *    yractv    → isActive  ("1" = active)
- *    time      → token-issue Unix timestamp (used for expiry check)
+ *  Token fields used (others like branch, fycd, pycd are ignored):
+ *    emp_code      → employeeCode       (primary link key)
+ *    nm            → name
+ *    is_dep        → department
+ *    desg          → designation
+ *    phone_number  → phone
+ *    ismail        → email
+ *    ra_id         → reportingAuthorityId  (looked up by employeeCode in local DB)
+ *    ishod         → role derivation:
+ *                      "" / null / "-1"  → "EMPLOYEE"
+ *                      any other value    → "RA"
+ *    emp_code "HRD"     → role "HRD"
+ *    emp_code "1686011" → role "MD"
+ *    yractv        → isActive  ("1" = active)
+ *    time          → token-issue Unix timestamp (used for expiry check)
  *
- *  Security (Phase 1 — expiry-only):
- *    Rejects tokens older than SSO_TOKEN_MAX_AGE seconds (default: 300 = 5 min).
- *    Phase 2 will add HRMS server-side verification or HMAC signature check.
+ *  Security:
+ *    1. AES-256-CBC decryption with HMAC-SHA256 integrity verification
+ *    2. Token expiry check (SSO_TOKEN_MAX_AGE seconds, default 1 hour)
  * ────────────────────────────────────────────────────────────────────────────── */
 exports.hrmsSSO = async (req, res) => {
   try {
@@ -164,12 +210,13 @@ exports.hrmsSSO = async (req, res) => {
       return res.status(400).json({ message: "SSO token is required" });
     }
 
-    // ── 1. Decode the Base64 token ────────────────────────────────────────────
+    // ── 1. Decrypt the AES-256-CBC encrypted token ──────────────────────────
     let decoded;
     try {
-      decoded = JSON.parse(Buffer.from(token, "base64").toString("utf-8"));
-    } catch {
-      return res.status(400).json({ message: "Malformed SSO token" });
+      decoded = decryptKraToken(token);
+    } catch (err) {
+      console.error("[HRMS SSO] Token decryption failed:", err.message);
+      return res.status(400).json({ message: "Invalid or tampered SSO token" });
     }
 
     // ── 2. Validate required fields ───────────────────────────────────────────
