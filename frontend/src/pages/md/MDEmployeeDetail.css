@@ -211,6 +211,105 @@
 .med-yearly-total strong { color: var(--med-primary); font-size: 1rem; }
 .med-empty-center { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 64px 20px; text-align: center; color: var(--text-muted); font-size: 0.875rem; }
 
+/* ─── PERN Yearly Tab — KRA Table ─── */
+.med-yearly-kra-table-wrap { overflow-x: auto; padding: 0; }
+.med-yearly-kra-table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; }
+.med-yearly-kra-table thead th { padding: 10px 14px; text-align: left; font-size: 0.675rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.045em; color: var(--text-muted); background: var(--bg-muted); border-bottom: 1px solid var(--border-default); }
+.med-yearly-kra-table tbody td { padding: 11px 14px; color: var(--text-secondary); border-bottom: 1px solid var(--border-default); vertical-align: top; line-height: 1.55; }
+.med-yearly-kra-table tbody tr:last-child td { border-bottom: none; }
+.med-kra-row--even { background: var(--bg-card); }
+.med-kra-row--odd  { background: var(--bg-muted); }
+.med-kra-num-badge { width: 24px; height: 24px; border-radius: 50%; background: rgba(249,115,22,0.12); color: var(--med-primary); display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; flex-shrink: 0; }
+.med-kra-timeline-badge { display: inline-flex; padding: 2px 8px; border-radius: 100px; background: rgba(59,130,246,0.1); color: #2563EB; font-size: 0.7rem; font-weight: 600; white-space: nowrap; }
+
+/* ─── PERN Yearly Tab — Workflow Stepper ─── */
+.med-yearly-stepper {
+    display: flex;
+    align-items: flex-start;
+    padding: 20px 16px 16px;
+    background: var(--bg-muted);
+    border-top: 1px solid var(--border-default);
+    gap: 0;
+}
+.med-yearly-step {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    position: relative;
+}
+.med-yearly-step-line {
+    position: absolute;
+    top: 13px;
+    left: -50%;
+    right: 50%;
+    height: 2px;
+    background: var(--border-default);
+    margin: 0;
+    transition: background 0.3s ease;
+}
+.med-yearly-step-line--done { background: #22C55E; }
+.med-yearly-step-dot {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--bg-card);
+    border: 2px solid var(--border-default);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    position: relative;
+    z-index: 1;
+    flex-shrink: 0;
+    transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
+}
+.med-yearly-step-dot--done { background: #22C55E; border-color: #22C55E; color: #fff; box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.15); }
+.med-yearly-step-dot--active { background: #F97316; border-color: #F97316; color: #fff; box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.18); }
+.med-yearly-step-label {
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-align: center;
+    line-height: 1.3;
+    white-space: nowrap;
+}
+.med-yearly-step-label--active { color: var(--red-primary); font-weight: 700; }
+
+/* ─── PERN Yearly Tab — Score Chips ─── */
+.med-yearly-scores { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; padding: 14px 16px; border-top: 1px solid var(--border-default); }
+.med-yearly-score-chip { background: var(--bg-muted); border: 1px solid var(--border-default); border-radius: 10px; padding: 12px 14px; }
+.med-yearly-score-label { font-size: 0.625rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 4px; }
+.med-yearly-score-val { font-size: 1.25rem; font-weight: 800; color: var(--text-primary); line-height: 1; margin-bottom: 6px; }
+.med-yearly-score-val span { font-size: 0.75rem; font-weight: 500; color: var(--text-muted); }
+.med-yearly-score-bar { height: 4px; background: var(--border-default); border-radius: 100px; overflow: hidden; }
+.med-yearly-score-bar div { height: 100%; border-radius: 100px; transition: width 0.6s ease; }
+.med-yearly-score-chip--ra    { border-left: 3px solid #f97316; }
+.med-yearly-score-chip--hrd   { border-left: 3px solid #0ea5e9; }
+.med-yearly-score-chip--md    { border-left: 3px solid #8b5cf6; }
+.med-yearly-score-chip--total { border-left: 3px solid #22c55e; }
+
+/* ─── PERN Yearly Tab — KRA Assessment Cards ─── */
+.med-yearly-kra-cards { padding: 14px 16px; border-top: 1px solid var(--border-default); display: flex; flex-direction: column; gap: 10px; }
+.med-yearly-kra-cards-title { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.045em; margin-bottom: 4px; }
+.med-yearly-kra-card { background: var(--bg-muted); border: 1px solid var(--border-default); border-radius: 10px; overflow: hidden; }
+.med-yearly-kra-card-hdr { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--border-default); background: var(--bg-card); }
+.med-yearly-kra-card-info { flex: 1; min-width: 0; }
+.med-yearly-kra-card-desc { font-size: 0.875rem; font-weight: 600; color: var(--text-primary); line-height: 1.4; margin-bottom: 6px; }
+.med-yearly-kra-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.med-kra-pill { display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 100px; background: rgba(249,115,22,0.08); color: var(--text-secondary); font-size: 0.7rem; }
+.med-kra-pill--timeline { background: rgba(59,130,246,0.08); color: #2563EB; }
+.med-yearly-kra-card-body { padding: 12px 14px; }
+.med-yearly-kra-ach-label { font-size: 0.675rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 6px; }
+.med-yearly-kra-ach-text { font-size: 0.875rem; color: var(--text-secondary); line-height: 1.65; margin: 0; }
+
+/* ─── PERN Yearly Tab — Remarks ─── */
+.med-yearly-remarks { padding: 12px 16px; border-top: 1px solid var(--border-default); background: var(--bg-muted); }
+.med-yearly-remarks span { display: flex; align-items: center; gap: 5px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 6px; }
+.med-yearly-remarks p { font-size: 0.875rem; color: var(--text-secondary); line-height: 1.6; margin: 0; font-style: italic; }
+
 
 /* ══════════════════════════════════════════════════════
    MONTHLY REVIEW MODAL

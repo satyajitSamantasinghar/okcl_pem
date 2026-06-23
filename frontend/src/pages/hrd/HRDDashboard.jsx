@@ -37,7 +37,7 @@ function getCurrentMonth() {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
 // ── Go-live: no data exists before this month ──
-const GO_LIVE_MONTH = '2026-06'; // June 2026 — set once, never changes
+const GO_LIVE_MONTH = '2026-05'; // June 2026 — set once, never changes
 
 // ── Current month ceiling — prevents selecting future months ──
 function getCurrentMonthStr() {

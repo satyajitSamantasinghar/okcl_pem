@@ -13,6 +13,7 @@ import {
     FiShield,
     FiList,
     FiX,
+    FiUser, 
 } from 'react-icons/fi';
 import './Sidebar.css';
 
@@ -22,6 +23,7 @@ const navItemsByRole = {
         { path: '/employee/monthly-plan', label: 'Monthly Plan', icon: <FiCalendar /> },
         { path: '/employee/quarterly-evaluation', label: 'Quarterly Evaluation', icon: <FiBarChart2 /> },
         { path: '/employee/yearly-plan', label: 'Yearly Plan', icon: <FiTarget /> },
+        { path: '/employee/profile',            label: 'My Profile',          icon: <FiUser /> },
     ],
     RA: [
         { path: '/ra', label: 'Dashboard', icon: <FiHome /> },
@@ -29,12 +31,14 @@ const navItemsByRole = {
         { path: '/ra/monthly-evaluation', label: 'Monthly Evaluation', icon: <FiClipboard /> },
         { path: '/ra/quarterly-evaluation', label: 'Quarterly Evaluation', icon: <FiBarChart2 /> },
         { path: '/ra/yearly-appraisal', label: 'Yearly Appraisal', icon: <FiAward /> },
+        { path: '/ra/profile',            label: 'My Profile',          icon: <FiUser /> },
     ],
     HRD: [
         { path: '/hrd', label: 'Dashboard', icon: <FiHome /> },
         { path: '/hrd/employees', label: 'Employee Overview', icon: <FiUsers /> },
         { path: '/hrd/monthly-overview', label: 'Monthly Overview', icon: <FiList /> },
         { path: '/hrd/yearly-appraisal', label: 'Yearly Appraisal', icon: <FiAward /> },
+        { path: '/hrd/profile',           label: 'My Profile',          icon: <FiUser /> },
     ],
     MD: [
         { path: '/md', label: 'Dashboard', icon: <FiHome /> },
@@ -42,6 +46,7 @@ const navItemsByRole = {
         { path: '/md/monthly-overview', label: 'Monthly Overview', icon: <FiList /> },
         { path: '/md/approvals', label: 'Yearly Appraisal', icon: <FiCheckCircle /> },
         { path: '/md/audit', label: 'Audit Trail', icon: <FiShield /> },
+        { path: '/md/profile',            label: 'My Profile',          icon: <FiUser /> },
     ],
 };
 

@@ -55,37 +55,37 @@ const DashboardLayout = () => {
                         <NotificationBell />
                         
                         {/* Profile Dropdown */}
-                        <div className="profile-dropdown-container" ref={dropdownRef}>
+                        <div className="topbar-dropdown-container" ref={dropdownRef}>
                             <button 
-                                className={`profile-trigger ${dropdownOpen ? 'active' : ''}`}
+                                className={`topbar-trigger ${dropdownOpen ? 'active' : ''}`}
                                 onClick={() => setDropdownOpen(!dropdownOpen)}
                             >
-                                <div className="profile-avatar">
+                                <div className="topbar-avatar">
                                     {getInitials(user?.name)}
                                 </div>
-                                <div className="profile-info-compact">
-                                    <span className="profile-name">{user?.name}</span>
-                                    <span className="profile-role">{user?.role}</span>
+                                <div className="topbar-info-compact">
+                                    <span className="topbar-user-name">{user?.name}</span>
+                                    <span className="topbar-user-role">{user?.role}</span>
                                 </div>
-                                <FiChevronDown className="profile-chevron" />
+                                <FiChevronDown className="topbar-chevron" />
                             </button>
 
                             {dropdownOpen && (
-                                <div className="profile-dropdown-menu">
+                                <div className="topbar-dropdown-menu">
                                     <div className="dropdown-header">
                                         <strong>{user?.name}</strong>
                                         <span>{user?.email}</span>
                                     </div>
                                     <div className="dropdown-divider"></div>
                                     
-                                    <button className="dropdown-item" onClick={() => { setDropdownOpen(false); /* maybe navigate('/profile') */ }}>
+                                    <button className="dropdown-item" onClick={() => { setDropdownOpen(false); navigate(`/${user.role.toLowerCase()}/profile`); }}>
                                         <FiUser />
                                         <span>My Profile</span>
                                     </button>
-                                    <button className="dropdown-item" onClick={() => { setDropdownOpen(false); /* settings */ }}>
+                                    {/* <button className="dropdown-item" onClick={() => { setDropdownOpen(false); }}>
                                         <FiSettings />
                                         <span>Settings</span>
-                                    </button>
+                                    </button> */}
                                     
                                     <div className="dropdown-divider"></div>
                                     

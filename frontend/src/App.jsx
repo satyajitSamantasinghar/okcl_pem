@@ -8,6 +8,9 @@ import DashboardLayout from './components/layout/DashboardLayout';
 import LoginPage from './pages/LoginPage';
 import UnauthorizedPage from './pages/UnauthorizedPage';
 
+// Shared
+import ProfilePage from './pages/shared/ProfilePage/ProfilePage';
+
 // Employee
 import EmployeeDashboard from './pages/employee/EmployeeDashboard';
 import MonthlyPlanPage from './pages/employee/MonthlyPlanPage';
@@ -101,6 +104,8 @@ function App() {
             <Route path="monthly-plan" element={<MonthlyPlanPage />} />
             <Route path="quarterly-evaluation" element={<QuarterlyEvaluationPage />} />
             <Route path="yearly-plan" element={<YearlyPlanPage />} />
+            <Route path="profile" element={<ProfilePage />} />
+
           </Route>
 
           {/* RA Routes */}
@@ -124,6 +129,7 @@ function App() {
             <Route path="my-monthly-plan" element={<MonthlyPlanPage />} />
             <Route path="my-yearly-plan" element={<YearlyPlanPage />} />
             <Route path="my-quarterly-evaluation" element={<QuarterlyEvaluationPage />} />
+            <Route path="profile" element={<ProfilePage />} />
           </Route>
 
           {/* HRD Routes */}
@@ -140,6 +146,7 @@ function App() {
             <Route path="monthly-overview" element={<HRDMonthlyOverviewPage />} />
             <Route path="employee/:id" element={<HRDEmployeeDetailPage />} />
             <Route path="yearly-appraisal" element={<HRDYearlyAppraisalPage />} />
+            <Route path="profile" element={<ProfilePage />} />
           </Route>
 
           {/* MD Routes */}
@@ -157,6 +164,7 @@ function App() {
             <Route path="monthly-overview" element={<MDMonthlyOverviewPage />} />
             <Route path="employees" element={<MDEmployeeListPage />} />
             <Route path="employee/:id" element={<MDEmployeeDetailPage />} />
+            <Route path="profile" element={<ProfilePage />} />
           </Route>
 
           {/* Catch all */}

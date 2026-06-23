@@ -7,6 +7,9 @@ const employeeRoutes = require("./routes/employeeRoutes");
 const raRoutes = require("./routes/raRoutes");
 const hrdRoutes = require("./routes/hrdRoutes");
 const mdRoutes = require("./routes/mdRoutes");
+const profileRoutes = require("./routes/profileRoutes");
+const notificationRoutes = require("./routes/notificationRoutes");
+
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 // Production  → frontend is served by this same Express server (same origin),
@@ -43,13 +46,13 @@ app.get("/test-db", async (req, res) => {
         res.status(500).json({ message: "PostgreSQL connection failed", error: err.message });
     }
 });
-const notificationRoutes = require("./routes/notificationRoutes");
 app.use("/api/auth", authRoutes);
 app.use("/api/employee", employeeRoutes);
 app.use("/api/ra", raRoutes);
 app.use("/api/hrd", hrdRoutes);
 app.use("/api/md", mdRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/profile", profileRoutes);
 
 // ── Serve React frontend (must come AFTER all /api routes) ────────────────────
 app.use(express.static(path.join(__dirname, '../dist')));

@@ -754,7 +754,11 @@ const HRDEmployeeDetailPage = () => {
                             <span><FiBriefcase /> {employee.department || 'No dept'}</span>
                             <span>#{employee.employeeCode}</span>
                             <span className="hed-role-tag">{employee.role}</span>
-                            {employee.reportingAuthorityId && <span><FiUser /> RA: You</span>}
+                            {employee.reportingAuthority ? (
+                                <span><FiUser /> RA: {employee.reportingAuthority.name}</span>
+                            ) : employee.reportingAuthorityId ? (
+                                <span><FiUser /> RA Assigned</span>
+                            ) : null}
                         </div>
                         <div className="hed-header-ctx">
                             <span className={`hed-header-status hed-header-status--${headerStatus.cls}`}>
@@ -1033,43 +1037,180 @@ const HRDEmployeeDetailPage = () => {
                     {filteredYearlyPlans.length === 0 && filteredYearlyReports.length === 0 ? (
                         <div className="hed-empty-center">
                             <FiAward style={{ fontSize: '2.5rem', opacity: 0.2 }} />
-                            <p>No yearly data found for this period</p>
+                            <p>No yearly data found for FY {filterYear}</p>
                         </div>
                     ) : (
                         <>
+                            {/* ── Yearly Plans ── */}
                             {filteredYearlyPlans.length > 0 && (
                                 <div className="hed-yearly-section">
                                     <h3 className="hed-yearly-section-title"><FiFileText /> Yearly Plans</h3>
-                                    {filteredYearlyPlans.map(yp => (
-                                        <div key={yp.id} className="hed-yearly-card">
-                                            <div className="hed-yearly-card-header">
-                                                <span className="hed-yearly-fy">FY {yp.financialYear}</span>
-                                                <span className={`hed-badge hed-badge--${yp.status?.toLowerCase()}`}>{yp.status}</span>
+                                    {filteredYearlyPlans.map(yp => {
+                                        const statusCls = {
+                                            APPROVED: 'evaluated', REJECTED: 'rejected',
+                                            PENDING: 'submitted', SUBMITTED: 'submitted', EDITED: 'achievement',
+                                        }[yp.status] || 'submitted';
+                                        const kras = Array.isArray(yp.kras) ? [...yp.kras].sort((a,b) => (a.kraIndex ?? 0) - (b.kraIndex ?? 0)) : [];
+                                        return (
+                                            <div key={yp.id} className="hed-yearly-card">
+                                                <div className="hed-yearly-card-header">
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                        <span className="hed-yearly-fy">FY {yp.financialYear}</span>
+                                                        {yp.version && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>v{yp.version}</span>}
+                                                    </div>
+                                                    <span className={`hed-badge hed-badge--${statusCls}`}>
+                                                        {yp.status?.replace(/_/g, ' ')}
+                                                    </span>
+                                                </div>
+                                                {kras.length > 0 ? (
+                                                    <div className="hed-yearly-kra-table-wrap">
+                                                        <table className="hed-yearly-kra-table">
+                                                            <thead>
+                                                                <tr>
+                                                                    <th>#</th>
+                                                                    <th>KRA Description</th>
+                                                                    <th>Target / Measurable Outcome</th>
+                                                                    <th>Timeline</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                {kras.map((kra, idx) => (
+                                                                    <tr key={kra.id || idx} className={idx % 2 === 0 ? 'hed-kra-row--even' : 'hed-kra-row--odd'}>
+                                                                        <td><div className="hed-kra-num-badge">{(kra.kraIndex ?? idx) + 1}</div></td>
+                                                                        <td>{kra.description}</td>
+                                                                        <td>{kra.target}</td>
+                                                                        <td><span className="hed-kra-timeline-badge">{kra.timeline}</span></td>
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                ) : (
+                                                    <div className="hed-yearly-content" style={{ fontStyle: 'italic', color: 'var(--text-muted)' }}>
+                                                        No KRA data available for this plan.
+                                                    </div>
+                                                )}
                                             </div>
-                                            <div className="hed-yearly-content">{yp.planAndObjectives}</div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             )}
+
+                            {/* ── Appraisal Reports ── */}
                             {filteredYearlyReports.length > 0 && (
                                 <div className="hed-yearly-section">
                                     <h3 className="hed-yearly-section-title"><FiAward /> Appraisal Reports</h3>
-                                    {filteredYearlyReports.map(yr => (
-                                        <div key={yr.id} className="hed-yearly-card">
-                                            <div className="hed-yearly-card-header">
-                                                <span className="hed-yearly-fy">FY {yr.financialYear}</span>
-                                                <span className={`hed-badge hed-badge--${yr.status?.toLowerCase()?.replace(/_/g, '-')}`}>
-                                                    {yr.status?.replace(/_/g, ' ')}
-                                                </span>
-                                            </div>
-                                            <div className="hed-yearly-content">{yr.workKRA}</div>
-                                            {yr.grandTotal != null && (
-                                                <div className="hed-yearly-total">
-                                                    Grand Total: <strong>{yr.grandTotal}/100</strong>
+                                    {filteredYearlyReports.map(yr => {
+                                        const statusCls = {
+                                            RA_EVALUATED: 'evaluated', HRD_EVALUATED: 'evaluated',
+                                            MD_EVALUATED: 'evaluated', COMPLETED: 'evaluated',
+                                            SUBMITTED: 'submitted', REJECTED: 'rejected',
+                                        }[yr.status] || 'submitted';
+                                        const kraAssessments = Array.isArray(yr.kraAssessments)
+                                            ? [...yr.kraAssessments].sort((a,b) => (a.kraIndex ?? 0) - (b.kraIndex ?? 0))
+                                            : [];
+                                        const wfStep = { SUBMITTED: 1, RA_EVALUATED: 2, HRD_EVALUATED: 3, MD_EVALUATED: 4, COMPLETED: 5 }[yr.status] ?? 1;
+                                        const wfSteps = ['Report Submitted', 'RA Evaluation', 'HRD Evaluation', 'MD Final', 'Completed'];
+                                        return (
+                                            <div key={yr.id} className="hed-yearly-card">
+                                                <div className="hed-yearly-card-header">
+                                                    <span className="hed-yearly-fy">FY {yr.financialYear}</span>
+                                                    <span className={`hed-badge hed-badge--${statusCls}`}>
+                                                        {yr.status?.replace(/_/g, ' ')}
+                                                    </span>
                                                 </div>
-                                            )}
-                                        </div>
-                                    ))}
+
+                                                {/* Workflow Stepper */}
+                                                <div className="hed-yearly-stepper">
+                                                    {wfSteps.map((label, i) => {
+                                                        const done = wfStep > i;
+                                                        const active = wfStep === i;
+                                                        return (
+                                                            <div key={i} className="hed-yearly-step">
+                                                                {i > 0 && <div className={`hed-yearly-step-line${done || active ? ' hed-yearly-step-line--done' : ''}`} />}
+                                                                <div className={`hed-yearly-step-dot${done ? ' hed-yearly-step-dot--done' : active ? ' hed-yearly-step-dot--active' : ''}`}>
+                                                                    {done ? <FiCheckCircle size={11} /> : <FiClock size={11} />}
+                                                                </div>
+                                                                <span className={`hed-yearly-step-label${active ? ' hed-yearly-step-label--active' : ''}`}>{label}</span>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+
+                                                {/* Score breakdown */}
+                                                {(yr.raTotalScore != null || yr.hrdTotalScore != null || yr.mdFinalScore != null || yr.grandTotal != null) && (
+                                                    <div className="hed-yearly-scores">
+                                                        {yr.raTotalScore != null && (
+                                                            <div className="hed-yearly-score-chip hed-yearly-score-chip--ra">
+                                                                <div className="hed-yearly-score-label">RA Score</div>
+                                                                <div className="hed-yearly-score-val">{yr.raTotalScore}<span>/80</span></div>
+                                                                <div className="hed-yearly-score-bar"><div style={{ width: `${Math.min(100,(yr.raTotalScore/80)*100)}%`, background: '#f97316' }} /></div>
+                                                            </div>
+                                                        )}
+                                                        {yr.hrdTotalScore != null && (
+                                                            <div className="hed-yearly-score-chip hed-yearly-score-chip--hrd">
+                                                                <div className="hed-yearly-score-label">HRD Score</div>
+                                                                <div className="hed-yearly-score-val">{yr.hrdTotalScore}<span>/5</span></div>
+                                                                <div className="hed-yearly-score-bar"><div style={{ width: `${Math.min(100,(yr.hrdTotalScore/5)*100)}%`, background: '#0ea5e9' }} /></div>
+                                                            </div>
+                                                        )}
+                                                        {yr.mdFinalScore != null && (
+                                                            <div className="hed-yearly-score-chip hed-yearly-score-chip--md">
+                                                                <div className="hed-yearly-score-label">MD Score</div>
+                                                                <div className="hed-yearly-score-val">{yr.mdFinalScore}<span>/15</span></div>
+                                                                <div className="hed-yearly-score-bar"><div style={{ width: `${Math.min(100,(yr.mdFinalScore/15)*100)}%`, background: '#8b5cf6' }} /></div>
+                                                            </div>
+                                                        )}
+                                                        {yr.grandTotal != null && (
+                                                            <div className="hed-yearly-score-chip hed-yearly-score-chip--total">
+                                                                <div className="hed-yearly-score-label">Grand Total</div>
+                                                                <div className="hed-yearly-score-val">{yr.grandTotal}<span>/100</span></div>
+                                                                <div className="hed-yearly-score-bar"><div style={{ width: `${Math.min(100,yr.grandTotal)}%`, background: '#22c55e' }} /></div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
+
+                                                {/* KRA Assessment Cards */}
+                                                {kraAssessments.length > 0 && (
+                                                    <div className="hed-yearly-kra-cards">
+                                                        <div className="hed-yearly-kra-cards-title"><FiTarget size={13} /> KRA Self-Assessment</div>
+                                                        {kraAssessments.map((kra, idx) => (
+                                                            <div key={kra.id || idx} className="hed-yearly-kra-card">
+                                                                <div className="hed-yearly-kra-card-hdr">
+                                                                    <div className="hed-kra-num-badge">{(kra.kraIndex ?? idx) + 1}</div>
+                                                                    <div className="hed-yearly-kra-card-info">
+                                                                        <div className="hed-yearly-kra-card-desc">{kra.description}</div>
+                                                                        <div className="hed-yearly-kra-pills">
+                                                                            {kra.target && <span className="hed-kra-pill"><strong>Target:</strong> {kra.target}</span>}
+                                                                            {kra.timeline && <span className="hed-kra-pill hed-kra-pill--timeline">{kra.timeline}</span>}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="hed-yearly-kra-card-body">
+                                                                    <div className="hed-yearly-kra-ach-label">Employee Achievement</div>
+                                                                    <p className="hed-yearly-kra-ach-text">
+                                                                        {kra.achievement && kra.achievement.trim()
+                                                                            ? kra.achievement
+                                                                            : <em style={{ color: 'var(--text-muted)' }}>No achievement text submitted for this KRA.</em>
+                                                                        }
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+
+                                                {/* HRD Remarks */}
+                                                {yr.hrdRemarks && (
+                                                    <div className="hed-yearly-remarks">
+                                                        <span><FiMessageSquare size={12} /> HRD Remarks:</span>
+                                                        <p>{yr.hrdRemarks}</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             )}
                         </>

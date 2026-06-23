@@ -52,11 +52,11 @@
 }
 
 /* ===== Profile Dropdown Component ===== */
-.profile-dropdown-container {
+.topbar-dropdown-container {
     position: relative;
 }
 
-.profile-trigger {
+.topbar-trigger {
     display: flex;
     align-items: center;
     gap: 12px;
@@ -68,12 +68,12 @@
     transition: all 0.2s ease;
 }
 
-.profile-trigger:hover, .profile-trigger.active {
+.topbar-trigger:hover, .topbar-trigger.active {
     background: var(--bg-muted);
     border-color: var(--border-default);
 }
 
-.profile-avatar {
+.topbar-avatar {
     width: 36px;
     height: 36px;
     border-radius: 50%;
@@ -86,35 +86,35 @@
     font-weight: 700;
 }
 
-.profile-info-compact {
+.topbar-info-compact {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
     text-align: left;
 }
 
-.profile-name {
+.topbar-user-name {
     font-size: 0.875rem;
     font-weight: 600;
     color: var(--text-primary);
     line-height: 1.2;
 }
 
-.profile-role {
+.topbar-user-role {
     font-size: 0.7rem;
     color: var(--text-secondary);
     font-weight: 500;
 }
 
-.profile-chevron {
+.topbar-chevron {
     color: var(--text-muted);
     transition: transform 0.2s ease;
 }
-.profile-trigger.active .profile-chevron {
+.topbar-trigger.active .topbar-chevron {
     transform: rotate(180deg);
 }
 
-.profile-dropdown-menu {
+.topbar-dropdown-menu {
     position: absolute;
     top: calc(100% + 8px);
     right: 0;
@@ -217,11 +217,11 @@
         padding: 20px 16px;
     }
 
-    .profile-info-compact, .profile-chevron {
+    .topbar-info-compact, .topbar-chevron {
         display: none;
     }
     
-    .profile-trigger {
+    .topbar-trigger {
         padding: 0;
         border-radius: 50%;
     }
