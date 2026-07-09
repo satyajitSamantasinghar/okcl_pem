@@ -84,11 +84,11 @@ exports.allowMonthlyPlanSubmission = async (req, res, next) => {
     // ─────────────────────────────────────────────────────────────────────────
 
     // ── Normal deadline enforcement for fresh first submissions ───────────────
-    // if (submittedMonth !== currentMonth) {
-    //   return res.status(403).json({
-    //     message: `You can only submit a monthly plan for the current month (${currentMonth}). Received: ${submittedMonth}`
-    //   });
-    // }
+    if (submittedMonth !== currentMonth) {
+      return res.status(403).json({
+        message: `You can only submit a monthly plan for the current month (${currentMonth}). Received: ${submittedMonth}`
+      });
+    }
 
     // ── CENTRALIZED DEADLINE: read plan deadline day from .env ────────────────
     const { planDay } = parseDeadlineConfig();
@@ -139,11 +139,11 @@ exports.allowMonthlyAchievementSubmission = async (req, res, next) => {
     // ─────────────────────────────────────────────────────────────────────────
 
     // ── Normal deadline enforcement for fresh first-time achievements ─────────
-    // if (plan.month !== currentMonth) {
-    //   return res.status(403).json({
-    //     message: `You can only submit a monthly achievement for the current month (${currentMonth}). The linked plan is for: ${plan.month}`
-    //   });
-    // }
+    if (plan.month !== currentMonth) {
+      return res.status(403).json({
+        message: `You can only submit a monthly achievement for the current month (${currentMonth}). The linked plan is for: ${plan.month}`
+      });
+    }
 
     // ── CENTRALIZED DEADLINE: read achievement deadline day from .env ──────────
     const { achievementDay } = parseDeadlineConfig();
@@ -186,11 +186,11 @@ exports.allowYearlyPlanSubmission = (req, res, next) => {
   }
 
   // ── 2. Must be the current financial year ────────────────────────────────
-  // if (submittedFY !== currentFY) {
-  //   return res.status(403).json({
-  //     message: `You can only submit a yearly plan for the current financial year (${currentFY}). Received: ${submittedFY}.`
-  //   });
-  // }
+  if (submittedFY !== currentFY) {
+    return res.status(403).json({
+      message: `You can only submit a yearly plan for the current financial year (${currentFY}). Received: ${submittedFY}.`
+    });
+  }
 
   // ── 3. Parse the FY to determine the deadline month ─────────────────────
   const parsed = parseFinancialYear(submittedFY);
@@ -301,11 +301,11 @@ exports.allowYearlyPlanEdit = async (req, res, next) => {
     const planFY = plan.financialYear;
 
     // ── 1. Must match the current financial year ──────────────────────────
-    // if (planFY !== currentFY) {
-    //   return res.status(403).json({
-    //     message: `You can only edit/resubmit a yearly plan for the current financial year (${currentFY}). This plan belongs to FY ${planFY}.`
-    //   });
-    // }
+    if (planFY !== currentFY) {
+      return res.status(403).json({
+        message: `You can only edit/resubmit a yearly plan for the current financial year (${currentFY}). This plan belongs to FY ${planFY}.`
+      });
+    }
 
     // ── 2. Parse and check deadline ───────────────────────────────────────
     const parsed = parseFinancialYear(planFY);
