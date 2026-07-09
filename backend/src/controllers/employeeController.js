@@ -594,6 +594,7 @@ exports.getMonthlyAchievements = async (req, res) => {
   try {
     const where = {};
     if (req.user.role === "EMPLOYEE") where.employeeId = req.user.userId;
+    if (req.user.role === "RA" && !req.query.employeeId) where.employeeId = req.user.userId;
     if (req.query.monthlyPlanId) where.monthlyPlanId = req.query.monthlyPlanId;
     if (req.query.employeeId && req.user.role !== "EMPLOYEE") where.employeeId = req.query.employeeId;
 
@@ -620,6 +621,7 @@ exports.getYearlyPlans = async (req, res) => {
   try {
     const where = {};
     if (req.user.role === "EMPLOYEE") where.employeeId = req.user.userId;
+    if (req.user.role === "RA" && !req.query.employeeId) where.employeeId = req.user.userId;
     if (req.query.financialYear) where.financialYear = req.query.financialYear;
     if (req.query.employeeId && req.user.role !== "EMPLOYEE") where.employeeId = req.query.employeeId;
 
@@ -814,6 +816,7 @@ exports.getYearlyAppraisalReports = async (req, res) => {
   try {
     const where = {};
     if (req.user.role === "EMPLOYEE") where.employeeId = req.user.userId;
+    if (req.user.role === "RA" && !req.query.employeeId) where.employeeId = req.user.userId;
     if (req.query.financialYear) where.financialYear = req.query.financialYear;
     if (req.query.employeeId && req.user.role !== "EMPLOYEE") where.employeeId = req.query.employeeId;
 

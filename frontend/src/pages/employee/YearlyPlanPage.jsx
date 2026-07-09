@@ -27,6 +27,16 @@ import KRAAssessmentCards from './KRAAssessmentCards';
 
 const yearOptions = ['2024-25', '2025-26', '2026-27', '2027-28'];
 const PAGE_SIZE = 5;
+
+// Returns the current Indian Financial Year string, e.g. "2026-27"
+// Indian FY runs April → March, so months 1–3 belong to the previous FY start.
+function getCurrentFinancialYear() {
+    const now   = new Date();
+    const month = now.getMonth() + 1; // 1-indexed
+    const year  = now.getFullYear();
+    const fyStart = month >= 4 ? year : year - 1;
+    return `${fyStart}-${String(fyStart + 1).slice(-2)}`;
+}
 const DEFAULT_KRA = () => [{ description: '', target: '', timeline: '' }];
 
 const PLAN_STATUS_OPTIONS = [
@@ -364,62 +374,131 @@ const LoadingSkeleton = () => (
 );
 
 // ─── Resizable split panel (VS Code–style drag divider) ───────────────────────
+//
+// Drag perf notes:
+//   • While dragging, the left pane's flex-basis is mutated directly via DOM
+//     ref (bypassing React) so heavy children (tables, cards) never re-render
+//     mid-drag — only on mousedown/mouseup do we touch React state.
+//   • Movement is throttled to one update per animation frame.
+//   • Pointer capture keeps the drag locked to the handle even if the cursor
+//     leaves the page bounds mid-swipe (fast mouse movement).
+//   • A transparent overlay covers the panel while dragging so iframes,
+//     scrollbars, and text selection inside the panes can't steal the drag.
 
-const ResizablePanel = ({ left, right, defaultSplit = 62 }) => {
+const ResizablePanel = ({ left, right, defaultSplit = 62, minLeftPx = 320, minRightPx = 280 }) => {
     const [split, setSplit] = useState(defaultSplit);
+    const [isDragging, setIsDragging] = useState(false);
     const containerRef = useRef(null);
-    const isDragging = useRef(false);
+    const leftPaneRef = useRef(null);
+    const draggingRef = useRef(false);
+    const rafRef = useRef(null);
 
-    const handleMouseDown = useCallback((e) => {
-        e.preventDefault();
-        isDragging.current = true;
+    const clampPct = useCallback((pct, containerWidth) => {
+        if (!containerWidth) return Math.max(20, Math.min(80, pct));
+        const minLeftPct  = (minLeftPx  / containerWidth) * 100;
+        const minRightPct = 100 - (minRightPx / containerWidth) * 100;
+        const lo = Math.max(20, minLeftPct);
+        const hi = Math.min(80, minRightPct);
+        if (lo > hi) return (lo + hi) / 2; // container too small — split evenly
+        return Math.max(lo, Math.min(hi, pct));
+    }, [minLeftPx, minRightPx]);
+
+    const beginDrag = useCallback(() => {
+        draggingRef.current = true;
+        setIsDragging(true);
         document.body.classList.add('yp-resizing');
     }, []);
 
+    const handleMouseDown = useCallback((e) => {
+        e.preventDefault();
+        beginDrag();
+    }, [beginDrag]);
+
+    const handleTouchStart = useCallback(() => {
+        beginDrag();
+    }, [beginDrag]);
+
     const handleDoubleClick = useCallback(() => {
         setSplit(defaultSplit);
+        if (leftPaneRef.current) leftPaneRef.current.style.flexBasis = `${defaultSplit}%`;
     }, [defaultSplit]);
 
+    const handleKeyDown = useCallback((e) => {
+        const STEP = 3;
+        if (e.key === 'ArrowLeft')  { setSplit(s => clampPct(s - STEP, containerRef.current?.getBoundingClientRect().width)); }
+        if (e.key === 'ArrowRight') { setSplit(s => clampPct(s + STEP, containerRef.current?.getBoundingClientRect().width)); }
+        if (e.key === 'Home')       { setSplit(defaultSplit); }
+    }, [clampPct, defaultSplit]);
+
     useEffect(() => {
-        const onMove = (e) => {
-            if (!isDragging.current || !containerRef.current) return;
+        const updateAt = (clientX) => {
+            if (!containerRef.current || !leftPaneRef.current) return;
             const rect = containerRef.current.getBoundingClientRect();
-            const pct = ((e.clientX - rect.left) / rect.width) * 100;
-            setSplit(Math.max(20, Math.min(80, pct)));
+            const rawPct = ((clientX - rect.left) / rect.width) * 100;
+            const pct = clampPct(rawPct, rect.width);
+            leftPaneRef.current.style.flexBasis = `${pct}%`;
         };
+
+        const onMove = (e) => {
+            if (!draggingRef.current) return;
+            const clientX = e.touches ? e.touches[0]?.clientX : e.clientX;
+            if (clientX == null) return;
+            if (rafRef.current) cancelAnimationFrame(rafRef.current);
+            rafRef.current = requestAnimationFrame(() => updateAt(clientX));
+        };
+
         const onUp = () => {
-            if (isDragging.current) {
-                isDragging.current = false;
-                document.body.classList.remove('yp-resizing');
+            if (!draggingRef.current) return;
+            draggingRef.current = false;
+            setIsDragging(false);
+            document.body.classList.remove('yp-resizing');
+            if (rafRef.current) cancelAnimationFrame(rafRef.current);
+            if (leftPaneRef.current) {
+                const finalPct = parseFloat(leftPaneRef.current.style.flexBasis);
+                if (!Number.isNaN(finalPct)) setSplit(finalPct);
             }
         };
+
         document.addEventListener('mousemove', onMove);
+        document.addEventListener('touchmove', onMove, { passive: true });
         document.addEventListener('mouseup', onUp);
+        document.addEventListener('touchend', onUp);
         return () => {
             document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('touchmove', onMove);
             document.removeEventListener('mouseup', onUp);
+            document.removeEventListener('touchend', onUp);
+            if (rafRef.current) cancelAnimationFrame(rafRef.current);
         };
-    }, []);
+    }, [clampPct]);
 
     return (
-        <div ref={containerRef} className="yp-resizable-container">
-            <div className="yp-resizable-pane" style={{ flex: `0 0 ${split}%` }}>
+        <div ref={containerRef} className={`yp-resizable-container${isDragging ? ' is-dragging' : ''}`}>
+            <div ref={leftPaneRef} className="yp-resizable-pane" style={{ flex: `0 0 ${split}%` }}>
                 {left}
             </div>
             <div
-                className="yp-resizer"
+                className={`yp-resizer${isDragging ? ' is-active' : ''}`}
                 onMouseDown={handleMouseDown}
+                onTouchStart={handleTouchStart}
                 onDoubleClick={handleDoubleClick}
-                title="Drag to resize · Double-click to reset"
+                onKeyDown={handleKeyDown}
                 role="separator"
+                tabIndex={0}
                 aria-orientation="vertical"
                 aria-label="Resize panels"
+                aria-valuenow={Math.round(split)}
+                aria-valuemin={20}
+                aria-valuemax={80}
             >
                 <div className="yp-resizer-grip" />
+                <span className="yp-resizer-tooltip">Drag to resize · Double-click to reset</span>
             </div>
             <div className="yp-resizable-pane" style={{ flex: '1 1 0' }}>
                 {right}
             </div>
+            {/* Drag-capture overlay — blocks text-select / iframe focus theft mid-drag */}
+            {isDragging && <div className="yp-resize-overlay" />}
         </div>
     );
 };
@@ -514,10 +593,12 @@ const YearlyPlanPage = () => {
     // null = creating new plan, plan.id = editing an existing draft via modal
     const [editPlanModalId, setEditPlanModalId] = useState(null);
 
-    // ── Resubmit state (REJECTED plans) ──────────────────────────────────────
-    const [resubmittingPlanId, setResubmittingPlanId] = useState(null);
+    // -- Resubmit modal state (REJECTED plans) --
+    const [resubmitModalOpen, setResubmitModalOpen] = useState(false);
+    const [resubmitPlan, setResubmitPlan] = useState(null);   // full plan object
     const [resubmitKras, setResubmitKras] = useState(DEFAULT_KRA());
-    const [revisionReason, setRevisionReason] = useState('');
+    const [resubmitDraftSaved, setResubmitDraftSaved] = useState(false);
+    const [resubmitRefOpen, setResubmitRefOpen] = useState(false); // reference panel toggle
 
     // ── Report modal state ────────────────────────────────────────────────────
     const [showReportForm, setShowReportForm] = useState(false);
@@ -579,11 +660,11 @@ const YearlyPlanPage = () => {
 
     // Body scroll lock when modals are open
     useEffect(() => {
-        const isOpen = showPlanForm || showReportForm;
+        const isOpen = showPlanForm || showReportForm || resubmitModalOpen;
         const prev = document.body.style.overflow;
         document.body.style.overflow = isOpen ? 'hidden' : prev;
         return () => { document.body.style.overflow = prev; };
-    }, [showPlanForm, showReportForm]);
+    }, [showPlanForm, showReportForm, resubmitModalOpen]);
 
     // Reset pagination on filter change
     useEffect(() => { setPlanPage(1); }, [planYearFilter, planStatusFilter, planSearch, planSort]);
@@ -662,6 +743,20 @@ const YearlyPlanPage = () => {
     const pagedPlans   = useMemo(() => paginate(filteredPlans,   planPage),   [filteredPlans,   planPage]);
     const pagedReports = useMemo(() => paginate(filteredReports, reportPage), [filteredReports, reportPage]);
 
+    // FYs where (a) an approved plan exists AND (b) no non-draft appraisal has been filed.
+    // This powers the constrained dropdown in the Submit Appraisal modal.
+    const eligibleReportYears = useMemo(() => {
+        const approvedFYs = new Set(
+            plans.filter(p => p.status === 'APPROVED').map(p => p.financialYear)
+        );
+        const submittedReportFYs = new Set(
+            reports.filter(r => r.status !== 'DRAFT').map(r => r.financialYear)
+        );
+        return [...approvedFYs]
+            .filter(fy => !submittedReportFYs.has(fy))
+            .sort((a, b) => b.localeCompare(a));
+    }, [plans, reports]);
+
     useEffect(() => {
         const total = Math.max(1, Math.ceil(filteredPlans.length / PAGE_SIZE));
         if (planPage > total) setPlanPage(total);
@@ -681,14 +776,19 @@ const YearlyPlanPage = () => {
 
     const openPlanModal = () => {
         setKras(DEFAULT_KRA());
-        setFinancialYear('');
+        // Smart default: pre-select the current Indian financial year so the
+        // employee doesn't have to pick it manually (they can still change it).
+        setFinancialYear(getCurrentFinancialYear());
         setEditPlanModalId(null);
         setShowPlanForm(true);
         setShowReportForm(false);
     };
 
     const openReportModal = () => {
-        setReportYear('');
+        // If exactly one FY is eligible for a new appraisal, auto-select it so
+        // the employee skips the picker entirely (Constrained Auto-Selection pattern).
+        const autoYear = eligibleReportYears.length === 1 ? eligibleReportYears[0] : '';
+        setReportYear(autoYear);
         setAdditionalAssignments('');
         setSelectedPlanId('');
         setLinkedKras([]);
@@ -731,6 +831,26 @@ const YearlyPlanPage = () => {
     };
 
     const closePlanModal   = () => { setShowPlanForm(false); setEditPlanModalId(null); };
+
+    const openResubmitModal = (plan) => {
+        setResubmitPlan(plan);
+        // Deep-clone so edits don't mutate the plan object in state
+        setResubmitKras(plan.kras && plan.kras.length > 0
+            ? plan.kras.map(k => ({ description: k.description, target: k.target, timeline: k.timeline }))
+            : DEFAULT_KRA()
+        );
+        setResubmitDraftSaved(false);
+        setResubmitRefOpen(false);
+        setResubmitModalOpen(true);
+        setShowPlanForm(false);
+        setShowReportForm(false);
+    };
+
+    const closeResubmitModal = () => {
+        setResubmitModalOpen(false);
+        setResubmitPlan(null);
+        setResubmitKras(DEFAULT_KRA());
+    };
     const closeReportModal = () => setShowReportForm(false);
 
     // ── Open plan modal in edit mode (DRAFT) ──────────────────────────────────
@@ -753,6 +873,20 @@ const YearlyPlanPage = () => {
             }
         }
         return null;
+    };
+
+    // ── KRA identity check — returns true when new KRAs are unchanged from original ─
+    const krasAreIdentical = (original, revised) => {
+        if (!Array.isArray(original) || !Array.isArray(revised)) return false;
+        if (original.length !== revised.length) return false;
+        return original.every((orig, i) => {
+            const rev = revised[i];
+            return (
+                (orig.description || '').trim() === (rev.description || '').trim() &&
+                (orig.target || '').trim()      === (rev.target || '').trim()      &&
+                (orig.timeline || '').trim()    === (rev.timeline || '').trim()
+            );
+        });
     };
 
     // ── Build kraAssessments array from state ─────────────────────────────────
@@ -822,24 +956,43 @@ const YearlyPlanPage = () => {
 
     // ── Resubmit REJECTED plan ────────────────────────────────────────────────
 
-    const handleResubmitPlan = async (e) => {
-        e.preventDefault();
+    const handleResubmitPlan = async (asDraft = false) => {
         const kraErr = validateKras(resubmitKras);
         if (kraErr) { toast.error(kraErr); return; }
-        if (!revisionReason.trim()) { toast.error('Reason for revision is required.'); return; }
+
+        // Enforce modification constraint — must not be identical to rejected plan
+        if (!asDraft && krasAreIdentical(resubmitPlan?.kras, resubmitKras)) {
+            toast.error('You must modify at least one KRA before resubmitting. The plan cannot be identical to the rejected version.');
+            return;
+        }
+
+        // Auto-generate a system revision reason so backend validation passes
+        const autoRevisionReason = `Revised by employee after MD rejection (v${resubmitPlan?.version || 1} → resubmission). MD had remarked: ${resubmitPlan?.mdRemarks || 'No remarks provided.'}`;
+
         setSubmitting(true);
         try {
-            await api.post(`/employee/yearly-plan/${resubmittingPlanId}/resubmit`, {
-                kras: resubmitKras,
-                revisionReason: revisionReason.trim(),
-            });
-            toast.success('Yearly plan resubmitted successfully.');
-            setResubmittingPlanId(null);
-            setResubmitKras(DEFAULT_KRA());
-            setRevisionReason('');
-            await fetchData();
+            if (asDraft) {
+                // Save locally — just update the plan's KRAs without changing status yet
+                // We use the edit endpoint (PUT) to persist draft KRAs
+                await api.put(`/employee/yearly-plan/${resubmitPlan.id}`, {
+                    kras: resubmitKras,
+                    status: 'REJECTED', // keep REJECTED status for draft
+                });
+                setResubmitDraftSaved(true);
+                setTimeout(() => setResubmitDraftSaved(false), 2500);
+                toast.success('Draft saved — you can come back to edit and submit later.');
+                await fetchData();
+            } else {
+                await api.post(`/employee/yearly-plan/${resubmitPlan.id}/resubmit`, {
+                    kras: resubmitKras,
+                    revisionReason: autoRevisionReason,
+                });
+                toast.success('Yearly plan resubmitted successfully. Awaiting MD review.');
+                closeResubmitModal();
+                await fetchData();
+            }
         } catch (err) {
-            toast.error(err.response?.data?.message || 'Resubmission failed');
+            toast.error(err.response?.data?.message || (asDraft ? 'Draft save failed' : 'Resubmission failed'));
         } finally {
             setSubmitting(false);
         }
@@ -1199,7 +1352,7 @@ const YearlyPlanPage = () => {
                 {isApproved && (
                     <div className="yp-note-banner is-approved">
                         <strong>Plan Approved by Managing Director</strong>
-                        <p>{plan.mdRemarks || 'Your yearly plan has been approved. Proceed to submit your appraisal report.'}</p>
+                        <p>{plan.mdRemarks || 'Your yearly plan has been approved.'}</p>
                     </div>
                 )}
 
@@ -1231,56 +1384,22 @@ const YearlyPlanPage = () => {
                         <div className="yp-alert-header">
                             <FiAlertCircle className="yp-alert-icon" />
                             <div>
-                                <h4>Plan Rejected</h4>
+                                <h4>Plan Rejected by Managing Director</h4>
                                 <p>{plan.mdRemarks || 'Your plan was rejected. Please revise and resubmit.'}</p>
                             </div>
                         </div>
-                        {resubmittingPlanId === plan.id ? (
-                            <form onSubmit={handleResubmitPlan}>
-                                <div className="yp-form-group" style={{ marginBottom: '16px' }}>
-                                    <label>Reason for Revision <span className="required">*</span></label>
-                                    <textarea
-                                        placeholder="Briefly explain what changes you made and why..."
-                                        value={revisionReason}
-                                        onChange={e => setRevisionReason(e.target.value)}
-                                        required
-                                    />
-                                </div>
-                                <div className="yp-form-group">
-                                    <label>Revised KRAs <span className="required">*</span></label>
-                                    <KRATable rows={resubmitKras} onChange={setResubmitKras} />
-                                </div>
-                                <div className="yp-form-actions">
-                                    <button type="submit" className="btn btn-primary" disabled={submitting}>
-                                        <FiRefreshCw />
-                                        {submitting ? 'Resubmitting...' : 'Resubmit Plan'}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className="btn btn-secondary"
-                                        onClick={() => {
-                                            setResubmittingPlanId(null);
-                                            setResubmitKras(DEFAULT_KRA());
-                                            setRevisionReason('');
-                                        }}
-                                    >
-                                        Cancel
-                                    </button>
-                                </div>
-                            </form>
-                        ) : (
+                        <div className="yp-alert-actions">
                             <button
                                 type="button"
                                 className="btn btn-primary"
-                                onClick={() => {
-                                    setResubmittingPlanId(plan.id);
-                                    setResubmitKras(plan.kras && plan.kras.length > 0 ? plan.kras : DEFAULT_KRA());
-                                    setExpandedPlanId(plan.id);
-                                }}
+                                onClick={() => openResubmitModal(plan)}
                             >
-                                <FiRefreshCw /> Resubmit Plan
+                                <FiRefreshCw /> Revise &amp; Resubmit Plan
                             </button>
-                        )}
+                            <p className="yp-alert-hint">
+                                Opens a guided form pre-filled with your rejected KRAs. Modify at least one KRA to resubmit.
+                            </p>
+                        </div>
                     </div>
                 )}
             </div>
@@ -1484,13 +1603,7 @@ const YearlyPlanPage = () => {
                         columns={planColumns}
                         rows={pagedPlans}
                         expandedId={expandedPlanId}
-                        onToggle={(nextId) => {
-                            setExpandedPlanId(nextId);
-                            if (!nextId) {
-                                setResubmittingPlanId(null);
-                                setRevisionReason('');
-                            }
-                        }}
+                        onToggle={(nextId) => setExpandedPlanId(nextId)}
                         renderExpanded={renderPlanExpanded}
                         emptyState={(
                             <EmptyState
@@ -1577,12 +1690,19 @@ const YearlyPlanPage = () => {
                                             </span>
                                         </div>
                                     ) : (
-                                        <select value={financialYear} onChange={(e) => setFinancialYear(e.target.value)} required>
-                                            <option value="">Select Financial Year</option>
-                                            {yearOptions.map((year) => (
-                                                <option key={year} value={year}>{year}</option>
-                                            ))}
-                                        </select>
+                                        <>
+                                            <select value={financialYear} onChange={(e) => setFinancialYear(e.target.value)} required>
+                                                <option value="">Select Financial Year</option>
+                                                {yearOptions.map((year) => (
+                                                    <option key={year} value={year}>{year}</option>
+                                                ))}
+                                            </select>
+                                            {financialYear === getCurrentFinancialYear() && (
+                                                <p className="yp-field-hint">
+                                                    <FiCheckCircle style={{ width: 11, height: 11 }} /> Current financial year pre-selected
+                                                </p>
+                                            )}
+                                        </>
                                     )}
                                 </div>
                             </div>
@@ -1619,6 +1739,121 @@ const YearlyPlanPage = () => {
             )}
 
             {/* ══════════════════════════════════════════════════════════════════
+                Resubmit Rejected Yearly Plan Modal
+            ══════════════════════════════════════════════════════════════════ */}
+            {resubmitModalOpen && resubmitPlan && (() => {
+                const originalKras = resubmitPlan.kras || [];
+                const isUnchanged  = krasAreIdentical(originalKras, resubmitKras);
+
+                return (
+                    <ModalShell
+                        title="Revise & Resubmit Yearly Plan"
+                        subtitle={`FY ${resubmitPlan.financialYear} · v${resubmitPlan.version || 1} → Resubmission — Address the MD's feedback and update your KRAs.`}
+                        icon={<FiRefreshCw />}
+                        onClose={closeResubmitModal}
+                    >
+                        <div className="yp-modal-form">
+                            <div className="yp-modal-form-body">
+
+                                {/* ── MD Rejection Notice ─────────────────────── */}
+                                <div className="yp-resubmit-rejection-note">
+                                    <div className="yp-resubmit-rejection-header">
+                                        <FiAlertCircle className="yp-resubmit-rejection-icon" />
+                                        <div>
+                                            <strong>Rejected by Managing Director</strong>
+                                            <p>{resubmitPlan.mdRemarks || 'No specific remarks were provided. Please review and revise your KRAs.'}</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* ── Reference: Original Rejected KRAs ──────── */}
+                                <div className="yp-resubmit-reference">
+                                    <button
+                                        type="button"
+                                        className="yp-resubmit-reference-toggle"
+                                        onClick={() => setResubmitRefOpen(o => !o)}
+                                        aria-expanded={resubmitRefOpen}
+                                    >
+                                        <span className="yp-resubmit-reference-label">
+                                            <FiEye />
+                                            View Original Rejected Plan (v{resubmitPlan.version || 1})
+                                        </span>
+                                        {resubmitRefOpen ? <FiChevronUp /> : <FiChevronDown />}
+                                    </button>
+                                    <div className={`yp-resubmit-ref-body${resubmitRefOpen ? ' is-open' : ''}`}>
+                                        <div className="yp-resubmit-ref-inner">
+                                            <p className="yp-resubmit-ref-hint">
+                                                This is a read-only view of the plan that was rejected. Use it as reference while revising your KRAs below.
+                                            </p>
+                                            <KRATable rows={originalKras} readOnly />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* ── Editable Revised KRAs ───────────────────── */}
+                                <div className="yp-form-section" style={{ borderBottom: 'none', paddingBottom: 0 }}>
+                                    <div className="yp-form-section-header">
+                                        <h3>Revised Key Result Areas (KRAs)</h3>
+                                        <p>Update your KRA descriptions, targets, and timelines to address the MD's feedback. At least one change is required before you can resubmit.</p>
+                                    </div>
+                                    <KRATable rows={resubmitKras} onChange={setResubmitKras} />
+
+                                    {/* Modification constraint warning */}
+                                    {isUnchanged && (
+                                        <div className="yp-unchanged-warning" role="alert">
+                                            <FiAlertTriangle className="yp-unchanged-warning-icon" />
+                                            <div>
+                                                <strong>No changes detected</strong>
+                                                <p>Your KRAs are identical to the rejected version. Please modify at least one KRA (description, target, or timeline) before resubmitting.</p>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                            </div>
+
+                            {/* ── Sticky Footer ───────────────────────────────── */}
+                            <div className="yp-modal-form-footer">
+                                <div className="yp-form-actions">
+                                    <button
+                                        type="button"
+                                        className="btn btn-primary"
+                                        disabled={submitting || isUnchanged}
+                                        title={isUnchanged ? 'Modify at least one KRA to enable resubmission' : undefined}
+                                        onClick={() => handleResubmitPlan(false)}
+                                    >
+                                        {submitting ? 'Resubmitting…' : <><FiSend /> Resubmit Plan</>}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="btn btn-secondary"
+                                        disabled={submitting}
+                                        onClick={() => handleResubmitPlan(true)}
+                                    >
+                                        {resubmitDraftSaved ? <><FiCheckCircle /> Saved!</> : <><FiSave /> Save Draft</>}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="btn btn-ghost"
+                                        disabled={submitting}
+                                        onClick={closeResubmitModal}
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                                {isUnchanged && (
+                                    <p className="yp-unchanged-footer-hint">
+                                        <FiAlertCircle style={{ width: 13, height: 13 }} />
+                                        Resubmission is blocked until you modify at least one KRA.
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                    </ModalShell>
+                );
+            })()}
+
+            {/* ══════════════════════════════════════════════════════════════════
                 Submit Appraisal Report Modal — 3-step stepper
             ══════════════════════════════════════════════════════════════════ */}
             {showReportForm && (
@@ -1643,12 +1878,43 @@ const YearlyPlanPage = () => {
                                     <div className="yp-form-row">
                                         <div className="yp-form-group">
                                             <label>Financial Year <span className="required">*</span></label>
-                                            <select value={reportYear} onChange={(e) => setReportYear(e.target.value)} required>
-                                                <option value="">Select Financial Year</option>
-                                                {yearOptions.map((year) => (
-                                                    <option key={year} value={year}>{year}</option>
-                                                ))}
-                                            </select>
+
+                                            {/* Case 1: editing an existing draft — FY is locked */}
+                                            {reportDraftId ? (
+                                                <div className="yp-form-year-display">
+                                                    <strong>{`FY ${reportYear}`}</strong>
+                                                    <span className="yp-form-year-lock">
+                                                        <FiSave style={{ width: 12, height: 12 }} /> Locked — editing existing draft
+                                                    </span>
+                                                </div>
+
+                                            /* Case 2: exactly one eligible FY — auto-selected, no picker needed */
+                                            ) : eligibleReportYears.length === 1 ? (
+                                                <div className="yp-form-year-display yp-form-year-display--auto">
+                                                    <strong>{`FY ${reportYear}`}</strong>
+                                                    <span className="yp-form-year-auto">
+                                                        <FiCheckCircle style={{ width: 12, height: 12 }} /> Auto-selected
+                                                    </span>
+                                                </div>
+
+                                            /* Case 3: multiple or zero eligible FYs — show constrained dropdown */
+                                            ) : (
+                                                <select
+                                                    value={reportYear}
+                                                    onChange={(e) => setReportYear(e.target.value)}
+                                                    required
+                                                    disabled={eligibleReportYears.length === 0}
+                                                >
+                                                    <option value="">
+                                                        {eligibleReportYears.length === 0
+                                                            ? 'No eligible financial years'
+                                                            : 'Select Financial Year'}
+                                                    </option>
+                                                    {eligibleReportYears.map((year) => (
+                                                        <option key={year} value={year}>{year}</option>
+                                                    ))}
+                                                </select>
+                                            )}
                                         </div>
                                         <div className="yp-form-group">
                                             <label>Linked Yearly Plan</label>
@@ -1670,6 +1936,17 @@ const YearlyPlanPage = () => {
                                             </select>
                                         </div>
                                     </div>
+
+                                    {/* Zero-eligible state: explain why, don't leave the user guessing */}
+                                    {!reportDraftId && eligibleReportYears.length === 0 && (
+                                        <div className="yp-warning-banner">
+                                            <FiAlertTriangle className="yp-warning-icon" />
+                                            <div>
+                                                <strong>No appraisal submissions available</strong>
+                                                <p>All financial years with approved plans already have an appraisal on record, or no yearly plan has been approved yet. Please ensure your yearly plan is approved by the MD before filing an appraisal report.</p>
+                                            </div>
+                                        </div>
+                                    )}
 
                                     {noApprovedPlan && reportYear && (
                                         <div className="yp-warning-banner">
@@ -1789,7 +2066,7 @@ const YearlyPlanPage = () => {
                                         <button
                                             type="button"
                                             className="btn btn-primary"
-                                            disabled={!reportYear || noApprovedPlan}
+                                            disabled={!reportYear || noApprovedPlan || (!reportDraftId && eligibleReportYears.length === 0)}
                                             onClick={() => setReportStep(2)}
                                         >
                                             Next →

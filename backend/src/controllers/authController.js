@@ -25,6 +25,16 @@ exports.register = async (req, res) => {
 
     const passwordHash = await bcrypt.hash(password, 10);
 
+    // AUTO-ASSIGN MD: If registering an RA with no reportingAuthorityId supplied,
+    // automatically look up the MD and assign them. This ensures the RA's plan
+    // submission flow (evaluatorId = MD) and the MD's RA Plans tab both work
+    // correctly from day one without requiring a manual DB fix later.
+    let resolvedRAId = reportingAuthorityId || null;
+    if (role === "RA" && !resolvedRAId) {
+      const md = await User.findOne({ where: { role: "MD" }, attributes: ["id"] });
+      if (md) resolvedRAId = md.id;
+    }
+
     const newUser = await User.create({
       employeeCode,
       name,
@@ -32,17 +42,17 @@ exports.register = async (req, res) => {
       passwordHash,
       role,
       department,
-      reportingAuthorityId: reportingAuthorityId || null,
+      reportingAuthorityId: resolvedRAId,
     });
 
     // Seed the initial RA assignment history row when an RA is set at creation
-    if (reportingAuthorityId) {
+    if (resolvedRAId) {
       await EmployeeRAHistory.create({
-        employeeId:    newUser.id,
-        raId:          reportingAuthorityId,
+        employeeId: newUser.id,
+        raId: resolvedRAId,
         effectiveFrom: newUser.createdAt,
-        effectiveTo:   null,
-        assignedBy:    null,  // system/admin — no req.user in this context
+        effectiveTo: null,
+        assignedBy: null,  // system/admin — no req.user in this context
       });
     }
 
@@ -159,8 +169,8 @@ function decryptKraToken(token) {
   if (data.length < 49) throw new Error("Token too short");
 
   // 4. Split: IV (16 bytes) | HMAC (32 bytes) | encrypted payload (rest)
-  const iv        = data.subarray(0, 16);
-  const hmacHash  = data.subarray(16, 48);
+  const iv = data.subarray(0, 16);
+  const hmacHash = data.subarray(16, 48);
   const encrypted = data.subarray(48);
 
   // 5. Verify HMAC-SHA256 (matches PHP hash_hmac('sha256', $encrypted, $key, true))
@@ -240,7 +250,7 @@ exports.hrmsSSO = async (req, res) => {
     if (decoded.emp_code === "HRD") {
       derivedRole = "HRD";
     } else if (decoded.emp_code === "1686011") {
-      derivedRole = "MD";
+      derivedRole = "RA";
     } else {
       const ishod = String(decoded.ishod ?? "");
       derivedRole = (ishod === "" || ishod === "-1") ? "EMPLOYEE" : "RA";
@@ -258,6 +268,16 @@ exports.hrmsSSO = async (req, res) => {
         attributes: ["id"],
       });
       if (ra) reportingAuthorityId = ra.id;
+    }
+
+    // AUTO-ASSIGN MD FALLBACK: If the SSO token carries no ra_id (or the RA
+    // hasn't been provisioned yet), and the derived role is "RA", automatically
+    // fall back to the MD as the reporting authority. This ensures the RA's own
+    // plan submission creates the correct MonthlyEvaluation record (evaluatorId=MD)
+    // and the MD's "RA Plans" tab works without any manual data fixes.
+    if (derivedRole === "RA" && !reportingAuthorityId) {
+      const md = await User.findOne({ where: { role: "MD" }, attributes: ["id"] });
+      if (md) reportingAuthorityId = md.id;
     }
 
     // ── 6. JIT Provisioning — find or create user by employeeCode ─────────────
@@ -314,11 +334,11 @@ exports.hrmsSSO = async (req, res) => {
     if (created && reportingAuthorityId && ["EMPLOYEE", "RA"].includes(derivedRole)) {
       try {
         await EmployeeRAHistory.create({
-          employeeId:    user.id,
-          raId:          reportingAuthorityId,
+          employeeId: user.id,
+          raId: reportingAuthorityId,
           effectiveFrom: user.createdAt,
-          effectiveTo:   null,
-          assignedBy:    null,   // HRMS-driven — no admin actor
+          effectiveTo: null,
+          assignedBy: null,   // HRMS-driven — no admin actor
         });
       } catch (histErr) {
         console.error("[HRMS SSO] Failed to seed RA history for new user:", histErr.message);
@@ -368,7 +388,7 @@ exports.hrmsSSO = async (req, res) => {
       //  close the current history row and open a new one.
       //  Wrapped in try/catch so a missing history table never blocks login.
       const prevRAId = user.reportingAuthorityId;
-      const newRAId  = reportingAuthorityId ?? prevRAId;
+      const newRAId = reportingAuthorityId ?? prevRAId;
       if (
         newRAId &&
         String(prevRAId || "") !== String(newRAId) &&
@@ -381,11 +401,11 @@ exports.hrmsSSO = async (req, res) => {
             { where: { employeeId: user.id, effectiveTo: null } }
           );
           await EmployeeRAHistory.create({
-            employeeId:    user.id,
-            raId:          newRAId,
+            employeeId: user.id,
+            raId: newRAId,
             effectiveFrom: now,
-            effectiveTo:   null,
-            assignedBy:    null,   // HRMS-driven change — no admin actor
+            effectiveTo: null,
+            assignedBy: null,   // HRMS-driven change — no admin actor
           });
         } catch (histErr) {
           console.error("[HRMS SSO] Failed to track RA change in history:", histErr.message);

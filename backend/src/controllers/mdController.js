@@ -166,13 +166,15 @@ exports.getEmployeeDetail = async (req, res) => {
         include: [{ model: User, as: "ra", attributes: ["id", "name"] }],
         order: [["createdAt", "DESC"]],
       }),
+      // FIX: exclude DRAFT yearly plans from per-employee detail view (MD perspective).
       YearlyPlan.findAll({
-        where: { employeeId: id },
+        where: { employeeId: id, status: { [Op.ne]: "DRAFT" } },
         include: [{ model: YearlyPlanKra, as: "kras", order: [["kraIndex", "ASC"]] }],
         order: [["submittedAt", "DESC"]],
       }),
+      // FIX: exclude DRAFT appraisal reports from per-employee detail view.
       YearlyAppraisalReport.findAll({
-        where: { employeeId: id },
+        where: { employeeId: id, status: { [Op.ne]: "DRAFT" } },
         include: [{ model: YearlyAppraisalKraAssessment, as: "kraAssessments" }],
         order: [["submittedAt", "DESC"]],
       }),
@@ -274,7 +276,11 @@ exports.evaluateYearlyReport = async (req, res) => {
 exports.getMonthlyPlansList = async (req, res) => {
   try {
     const { month, year, status } = req.query;
-    const where = {};
+
+    // FIX: exclude DRAFT monthly plans by default — MD should only see plans
+    // the employee has actually submitted (PENDING / APPROVED / REJECTED).
+    // If the caller explicitly passes ?status=..., that overrides this default.
+    const where = { status: { [Op.ne]: "DRAFT" } };
 
     if (month) {
       where.month = month;
@@ -282,6 +288,7 @@ exports.getMonthlyPlansList = async (req, res) => {
       // CHANGE 7: { $regex: `^${year}` } → Op.like
       where.month = { [Op.like]: `${year}%` };
     }
+    // Only override the default DRAFT exclusion if a specific status is requested
     if (status) where.status = status;
 
     const plans = await MonthlyPlan.findAll({
@@ -379,10 +386,11 @@ exports.getQuarterlyEvalsList = async (req, res) => {
   }
 };
 
-/* ─── ALL YEARLY PLANS ───────────────────────────────────────────────────────── */
+/* ─── ALL YEARLY PLANS ────────────────────────────────────────────────────────────────── */
 exports.getYearlyPlans = async (req, res) => {
   try {
-    const where = {};
+    // FIX: exclude DRAFT plans — MD should only see plans the employee has submitted (PENDING/APPROVED/REJECTED).
+    const where = { status: { [Op.ne]: "DRAFT" } };
     if (req.query.financialYear) where.financialYear = req.query.financialYear;
 
     const plans = await YearlyPlan.findAll({
@@ -400,10 +408,11 @@ exports.getYearlyPlans = async (req, res) => {
   }
 };
 
-/* ─── ALL YEARLY REPORTS ─────────────────────────────────────────────────────── */
+/* ─── ALL YEARLY REPORTS ───────────────────────────────────────────────────────────────── */
 exports.getYearlyReports = async (req, res) => {
   try {
-    const where = {};
+    // FIX: exclude DRAFT appraisal reports from the MD view.
+    const where = { status: { [Op.ne]: "DRAFT" } };
     if (req.query.financialYear) where.financialYear = req.query.financialYear;
 
     const reports = await YearlyAppraisalReport.findAll({
@@ -504,8 +513,14 @@ exports.getRAMonthlyEvaluations = async (req, res) => {
     if (raIds.length === 0) return res.json([]);
 
     // Find all monthly plans submitted by these RAs for the requested month
+    // FIX: exclude DRAFT plans — MD should not auto-create evaluation records
+    // for plans the RA has saved as draft but not yet submitted.
     const plans = await MonthlyPlan.findAll({
-      where: { employeeId: { [Op.in]: raIds }, month },
+      where: {
+        employeeId: { [Op.in]: raIds },
+        month,
+        status: { [Op.ne]: "DRAFT" },   // ← exclude drafts
+      },
       attributes: ["id", "employeeId", "month"],
     });
 
@@ -550,12 +565,22 @@ exports.getRAMonthlyEvaluations = async (req, res) => {
         })
       : [];
 
+    // BUG FIX: achSet was referenced below but never defined, causing a
+    // ReferenceError at runtime which crashed the entire endpoint (500 error)
+    // and the frontend showed "No RA plans found".
+    const achSet = new Set(achievements.map(a => String(a.monthlyPlanId)));
+    // Build a lookup map so we can attach the full achievement object per plan
+    const achByPlanId = Object.fromEntries(achievements.map(a => [String(a.monthlyPlanId), a]));
+
     const response = evaluations.map(ev => ({
       id: ev.id, employee: ev.employee, month: ev.month,
       score: ev.score, remarks: ev.remarks || null,
       status: ev.status, evaluatedAt: ev.evaluatedAt,
       monthlyPlan: ev.monthlyPlan,
       hasAchievement: ev.monthlyPlanId ? achSet.has(String(ev.monthlyPlanId)) : false,
+      // BUG FIX 2: include full achievement object so the detail modal can render
+      // plan+achievement data in the RA tab (frontend reads plan.achievement)
+      achievement: ev.monthlyPlanId ? (achByPlanId[String(ev.monthlyPlanId)] || null) : null,
     }));
 
     res.json(response);

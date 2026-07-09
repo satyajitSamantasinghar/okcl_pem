@@ -1335,6 +1335,57 @@
     line-height: 1.55;
 }
 
+/* ── Fluid read-only table ───────────────────────────────────────────────
+   The read-only KRA table lives inside the drag-resizable left pane (see
+   ResizablePanel). A rigid min-width here would defeat the whole point of
+   resizing — the divider could move, but the table would just sit pinned
+   behind its own internal scrollbar, making the drag feel broken. Instead,
+   table-layout:fixed + proportional columns + word-wrap let it genuinely
+   reflow in real time as the pane is resized, all the way down to the
+   panel's 320px floor, with zero internal scrollbar in normal use. */
+.yp-kra-table--readonly {
+    table-layout: fixed;
+    min-width: 0;
+    width: 100%;
+}
+
+.yp-kra-table--readonly .yp-kra-th {
+    white-space: normal;
+    line-height: 1.4;
+}
+
+.yp-kra-table--readonly .yp-kra-th--num,
+.yp-kra-table--readonly .yp-kra-td--num {
+    width: 34px;
+}
+
+.yp-kra-table--readonly th:nth-child(2),
+.yp-kra-table--readonly td:nth-child(2) {
+    width: 30%;
+}
+
+.yp-kra-table--readonly th:nth-child(3),
+.yp-kra-table--readonly td:nth-child(3) {
+    width: 38%;
+}
+
+.yp-kra-table--readonly th:nth-child(4),
+.yp-kra-table--readonly td:nth-child(4) {
+    width: 22%;
+}
+
+.yp-kra-table--readonly .yp-kra-td {
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    white-space: normal;
+}
+
+/* Fallback only for pathological cases (e.g. one unbroken long token) —
+   the fixed layout above means this almost never engages in practice. */
+.yp-kra-table-wrap:has(.yp-kra-table--readonly) {
+    overflow-x: hidden;
+}
+
 .yp-kra-input {
     width: 100%;
     min-width: 120px;
@@ -1654,6 +1705,7 @@
     align-items: stretch;
     gap: 0;
     min-height: 0;
+    position: relative;
 }
 
 .yp-resizable-pane {
@@ -1661,75 +1713,152 @@
     overflow: hidden;
 }
 
+/* While actively dragging, kill transitions/selection inside panes so the
+   drag tracks the cursor with zero lag and nothing inside gets selected. */
+.yp-resizable-container.is-dragging .yp-resizable-pane {
+    user-select: none;
+    pointer-events: none;
+}
+
 /* ── Drag handle ──────────────────────────────────────────────────────────── */
 .yp-resizer {
-    flex: 0 0 12px;
+    flex: 0 0 17px;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: col-resize;
     position: relative;
     background: transparent;
-    border-radius: 4px;
-    transition: background 0.18s ease;
-    z-index: 1;
+    transition: background 0.15s ease;
+    z-index: 2;
+    touch-action: none;
+    outline: none;
     /* Expand clickable area slightly beyond visual width */
-    margin: 0 -2px;
-    padding: 0 2px;
+    margin: 0 -4px;
 }
 
-.yp-resizer:hover {
-    background: rgba(249, 115, 22, 0.06);
+/* Continuous full-height line, visible by default (not just on hover) so
+   the eye immediately registers "this is a draggable boundary" — this is
+   what VS Code / Figma / Linear do; a hover-only handle is too easy to miss. */
+.yp-resizer::before {
+    content: '';
+    position: absolute;
+    top: 2px;
+    bottom: 2px;
+    left: 50%;
+    width: 2px;
+    border-radius: 999px;
+    background: #d8dee8;
+    transform: translateX(-50%);
+    transition: background 0.15s ease, width 0.15s ease;
 }
 
-.yp-resizer:active {
+.yp-resizer:hover,
+.yp-resizer:focus-visible {
+    background: rgba(249, 115, 22, 0.07);
+}
+
+.yp-resizer.is-active {
     background: rgba(249, 115, 22, 0.1);
 }
 
-/* Grip bar — thin vertical pill that turns orange on hover */
+.yp-resizer:hover::before,
+.yp-resizer.is-active::before,
+.yp-resizer:focus-visible::before {
+    background: var(--primary, #f97316);
+    width: 3px;
+}
+
+.yp-resizer:focus-visible {
+    box-shadow: inset 0 0 0 2px rgba(249, 115, 22, 0.35);
+    border-radius: 6px;
+}
+
+/* Grip pill — sits on top of the line at vertical-center as the explicit
+   "grab here" affordance, visible at rest and growing more prominent on
+   hover/drag. */
 .yp-resizer-grip {
-    width: 3px;
-    height: 56px;
+    width: 5px;
+    height: 40px;
     border-radius: 999px;
-    background: #d1d5db;
-    opacity: 0.55;
-    transition: opacity 0.18s ease, background 0.18s ease, height 0.18s ease;
+    background: #b8c2d0;
+    border: 1px solid #ffffff;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+    transition: background 0.15s ease, height 0.15s ease;
+    pointer-events: none;
     position: relative;
-}
-
-/* Three-dot visual detail using pseudo-elements */
-.yp-resizer-grip::before,
-.yp-resizer-grip::after {
-    content: '';
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 3px;
-    height: 3px;
-    border-radius: 50%;
-    background: inherit;
-    transition: background 0.18s ease;
-}
-
-.yp-resizer-grip::before {
-    top: calc(50% - 9px);
-}
-
-.yp-resizer-grip::after {
-    top: calc(50% + 6px);
+    z-index: 1;
 }
 
 .yp-resizer:hover .yp-resizer-grip,
-.yp-resizer:active .yp-resizer-grip {
+.yp-resizer.is-active .yp-resizer-grip {
     background: var(--primary, #f97316);
-    opacity: 1;
     height: 64px;
+}
+
+/* ── Custom tooltip (replaces native title="" attribute) ─────────────────
+   Native browser tooltips can linger awkwardly mid-interaction and can't be
+   positioned reliably; this CSS-only tooltip fades in on hover only, and is
+   force-hidden the moment a drag starts. */
+.yp-resizer-tooltip {
+    position: absolute;
+    top: -6px;
+    left: 50%;
+    transform: translate(-50%, -100%);
+    white-space: nowrap;
+    background: #1e293b;
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 6px 10px;
+    border-radius: 8px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease 0.35s;
+    z-index: 5;
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.25);
+}
+
+.yp-resizer-tooltip::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-top-color: #1e293b;
+}
+
+.yp-resizer:hover .yp-resizer-tooltip {
+    opacity: 1;
+}
+
+/* Never show the tooltip while a drag is in progress */
+.yp-resizer.is-active .yp-resizer-tooltip {
+    opacity: 0 !important;
+    transition: none;
+}
+
+/* ── Drag-capture overlay ──────────────────────────────────────────────────
+   Spans the whole split container while dragging. Keeps the col-resize
+   cursor active everywhere (even over scrollbars / table cells / iframes)
+   and stops the mouse from accidentally selecting pane content mid-drag. */
+.yp-resize-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    cursor: col-resize;
+    background: transparent;
 }
 
 /* Body class applied during drag for global cursor & text-select lock */
 body.yp-resizing {
     cursor: col-resize !important;
     user-select: none !important;
+}
+
+body.yp-resizing * {
+    cursor: col-resize !important;
 }
 
 /* Collapse to stacked layout on tablet/mobile — resizer hidden */
@@ -1782,6 +1911,42 @@ body.yp-resizing {
     border-radius: 999px;
     text-transform: uppercase;
     letter-spacing: 0.05em;
+}
+
+/* Auto-selected variant — green tint to signal the system made the choice */
+.yp-form-year-display--auto {
+    border-color: #bbf7d0;
+    background: linear-gradient(135deg, #f0fdf4 0%, #f7fee7 100%);
+}
+
+.yp-form-year-auto {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.74rem;
+    font-weight: 700;
+    color: #15803d;
+    background: #dcfce7;
+    padding: 3px 9px;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* Small helper text rendered below a form field */
+.yp-field-hint {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin: 0;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #15803d;
+    line-height: 1.4;
+}
+
+.yp-field-hint--warn {
+    color: #b45309;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════
@@ -2129,4 +2294,174 @@ body.yp-resizing {
     .kra-ac-pill {
         max-width: 100%;
     }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   RESUBMIT PLAN MODAL — Rejection notice, reference panel, constraint warning
+═══════════════════════════════════════════════════════════════════════════════ */
+
+/* — MD Rejection notice banner — */
+.yp-resubmit-rejection-note {
+    border-radius: 14px;
+    border: 1px solid #fecaca;
+    background: linear-gradient(135deg, #fff5f5 0%, #fef2f2 100%);
+    padding: 16px 18px;
+}
+
+.yp-resubmit-rejection-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.yp-resubmit-rejection-icon {
+    color: #dc2626;
+    font-size: 1.25rem;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.yp-resubmit-rejection-header strong {
+    display: block;
+    font-size: 0.92rem;
+    font-weight: 800;
+    color: #b91c1c;
+    margin-bottom: 5px;
+}
+
+.yp-resubmit-rejection-header p {
+    margin: 0;
+    color: #7f1d1d;
+    font-size: 0.88rem;
+    line-height: 1.65;
+}
+
+/* — Collapsible original KRA reference panel — */
+.yp-resubmit-reference {
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    background: #f8fafc;
+    overflow: hidden;
+}
+
+.yp-resubmit-reference-toggle {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    transition: background 0.18s ease;
+    font-family: inherit;
+}
+
+.yp-resubmit-reference-toggle:hover {
+    background: #f1f5f9;
+}
+
+.yp-resubmit-reference-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-secondary);
+    font-size: 0.88rem;
+    font-weight: 700;
+}
+
+.yp-resubmit-reference-toggle svg {
+    color: var(--text-muted);
+    flex-shrink: 0;
+    font-size: 1rem;
+}
+
+.yp-resubmit-ref-body {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.28s ease;
+}
+
+.yp-resubmit-ref-body.is-open {
+    grid-template-rows: 1fr;
+}
+
+.yp-resubmit-ref-inner {
+    overflow: hidden;
+    border-top: 1px solid #e2e8f0;
+    padding: 14px 16px 16px;
+}
+
+.yp-resubmit-ref-hint {
+    margin: 0 0 12px;
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    line-height: 1.55;
+    font-style: italic;
+}
+
+/* — Modification constraint warning — */
+.yp-unchanged-warning {
+    margin-top: 14px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    border: 1px solid #fbbf24;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #fffbeb 0%, #fef9ee 100%);
+    padding: 14px 16px;
+    animation: yp-slide-in 0.22s ease;
+}
+
+@keyframes yp-slide-in {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.yp-unchanged-warning-icon {
+    color: #d97706;
+    font-size: 1.15rem;
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+
+.yp-unchanged-warning strong {
+    display: block;
+    font-size: 0.88rem;
+    font-weight: 800;
+    color: #92400e;
+    margin-bottom: 4px;
+}
+
+.yp-unchanged-warning p {
+    margin: 0;
+    color: #78350f;
+    font-size: 0.84rem;
+    line-height: 1.55;
+}
+
+/* — Footer hint below the action buttons — */
+.yp-unchanged-footer-hint {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+    color: #b45309;
+    font-size: 0.82rem;
+    font-weight: 600;
+}
+
+/* — Alert panel actions (Resubmit btn + hint text) — */
+.yp-alert-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+}
+
+.yp-alert-hint {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    line-height: 1.5;
 }

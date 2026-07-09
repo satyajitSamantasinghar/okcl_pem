@@ -5,6 +5,11 @@ const { Op } = require("sequelize");
 // FISCAL YEAR FIX — shared fiscal utility is canonical source for FY logic
 const { getCurrentFiscalYear } = require("../utils/fiscalUtils");
 
+// CENTRALIZED DEADLINE CONFIG — reads MONTHLY_PLAN_DEADLINE_DAY and
+// MONTHLY_ACHIEVEMENT_DEADLINE_DAY from .env.  Single source of truth shared
+// with the frontend via GET /api/config/deadlines.
+const { parseDeadlineConfig } = require("../controllers/configController");
+
 /* ════════════════════════════════════════════════════════════════════
    HELPER — delegates to shared fiscalUtils for consistency.
    Financial year runs April-to-March (April = month 4).
@@ -13,6 +18,17 @@ const { getCurrentFiscalYear } = require("../utils/fiscalUtils");
 function getCurrentFinancialYear() {
   return getCurrentFiscalYear();
 }
+
+/* ════════════════════════════════════════════════════════════════════
+   HELPER — Returns ordinal suffix for a day number.
+   e.g. 1 → "st", 2 → "nd", 3 → "rd", 10 → "th"
+════════════════════════════════════════════════════════════════════ */
+function getOrdinalSuffix(n) {
+  const s = ['th', 'st', 'nd', 'rd'];
+  const v = n % 100;
+  return s[(v - 20) % 10] || s[v] || s[0];
+}
+
 
 /* ════════════════════════════════════════════════════════════════════
    HELPER — Parse a "YYYY-YY" financial year string.
@@ -68,17 +84,19 @@ exports.allowMonthlyPlanSubmission = async (req, res, next) => {
     // ─────────────────────────────────────────────────────────────────────────
 
     // ── Normal deadline enforcement for fresh first submissions ───────────────
-    if (submittedMonth !== currentMonth) {
-      return res.status(403).json({
-        message: `You can only submit a monthly plan for the current month (${currentMonth}). Received: ${submittedMonth}`
-      });
-    }
-
-    // if (day < 1 || day > 7) {
+    // if (submittedMonth !== currentMonth) {
     //   return res.status(403).json({
-    //     message: "Monthly plan submission allowed only from 1st to 7th of the month."
+    //     message: `You can only submit a monthly plan for the current month (${currentMonth}). Received: ${submittedMonth}`
     //   });
     // }
+
+    // ── CENTRALIZED DEADLINE: read plan deadline day from .env ────────────────
+    const { planDay } = parseDeadlineConfig();
+    if (day > planDay) {
+      return res.status(403).json({
+        message: `Monthly plan submission deadline has passed. Plans must be submitted by the ${planDay}${getOrdinalSuffix(planDay)} of the month.`
+      });
+    }
     // ─────────────────────────────────────────────────────────────────────────
 
     next();
@@ -113,10 +131,7 @@ exports.allowMonthlyAchievementSubmission = async (req, res, next) => {
 
     // ── INDUSTRY STANDARD: Rejection Resubmission Bypass ─────────────────────
     // If this plan was resubmitted after RA rejection (version > 1), the normal
-    // achievement window (25th-onwards of current month) does NOT apply.
-    // The employee was forced to resubmit due to RA action — possibly weeks
-    // after the original month ended. They must be able to submit the achievement
-    // immediately after resubmitting the revised plan.
+    // achievement window does NOT apply.
     if (plan.version > 1) {
       // Bypass ALL date checks — post-rejection resubmission flow.
       return next();
@@ -124,17 +139,23 @@ exports.allowMonthlyAchievementSubmission = async (req, res, next) => {
     // ─────────────────────────────────────────────────────────────────────────
 
     // ── Normal deadline enforcement for fresh first-time achievements ─────────
-    if (plan.month !== currentMonth) {
-      return res.status(403).json({
-        message: `You can only submit a monthly achievement for the current month (${currentMonth}). The linked plan is for: ${plan.month}`
-      });
-    }
-
-    // if (day < 25) {
+    // if (plan.month !== currentMonth) {
     //   return res.status(403).json({
-    //     message: "Monthly achievement submission is allowed from the 25th of the month onwards."
+    //     message: `You can only submit a monthly achievement for the current month (${currentMonth}). The linked plan is for: ${plan.month}`
     //   });
     // }
+
+    // ── CENTRALIZED DEADLINE: read achievement deadline day from .env ──────────
+    const { achievementDay } = parseDeadlineConfig();
+    if (achievementDay !== 'last') {
+      if (day < achievementDay) {
+        return res.status(403).json({
+          message: `Monthly achievement submission opens on the ${achievementDay}${getOrdinalSuffix(achievementDay)} of the month.`
+        });
+      }
+    }
+    // When achievementDay === 'last', no lower-bound restriction is applied;
+    // employees may submit any time during the month.
     // ─────────────────────────────────────────────────────────────────────────
 
     next();
@@ -165,11 +186,11 @@ exports.allowYearlyPlanSubmission = (req, res, next) => {
   }
 
   // ── 2. Must be the current financial year ────────────────────────────────
-  if (submittedFY !== currentFY) {
-    return res.status(403).json({
-      message: `You can only submit a yearly plan for the current financial year (${currentFY}). Received: ${submittedFY}.`
-    });
-  }
+  // if (submittedFY !== currentFY) {
+  //   return res.status(403).json({
+  //     message: `You can only submit a yearly plan for the current financial year (${currentFY}). Received: ${submittedFY}.`
+  //   });
+  // }
 
   // ── 3. Parse the FY to determine the deadline month ─────────────────────
   const parsed = parseFinancialYear(submittedFY);

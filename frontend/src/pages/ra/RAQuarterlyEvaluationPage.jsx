@@ -454,6 +454,21 @@ function getScoreBg(score) {
     if (score >= 4) return '#FFF0EB';
     return '#FCEBEB';
 }
+
+/**
+ * Smart score formatter — industry-standard trailing-zero suppression.
+ * - Whole numbers  → no decimal   (10 → "10",  8 → "8")
+ * - Decimal scores → 1 d.p.       (9.5 → "9.5", 7.9 → "7.9")
+ * - Null / zero    → em-dash      (null/0 → "—")
+ */
+function formatScore(val) {
+    const n = parseFloat(val);
+    if (isNaN(n) || n <= 0) return '—';
+    const rounded = Math.round(n * 10) / 10;          // round to 1 decimal place
+    return rounded % 1 === 0
+        ? String(Math.round(rounded))                 // whole number — drop ".0"
+        : rounded.toFixed(1);                         // decimal — keep exactly 1 d.p.
+}
 const GO_LIVE_FY_START = 2026;
 /* =====================================================
    MAIN COMPONENT
@@ -524,8 +539,12 @@ const RAQuarterlyEvaluationPage = () => {
             ) : (
                 <div className="qtr-reports-grid">
                     {evaluations.map(ev => {
-                        const sc = getScoreColor(ev.averageScore);
-                        const sb = getScoreBg(ev.averageScore);
+                        const raw = parseFloat(ev.averageScore);
+                        // Treat 0 the same as NaN: a stored zero means the score was
+                        // never properly calculated — show '—' rather than "0/10".
+                        const score = (isNaN(raw) || raw <= 0) ? null : raw;
+                        const sc = getScoreColor(score ?? 0);
+                        const sb = getScoreBg(score ?? 0);
                         return (
                             <div
                                 key={ev.id}
@@ -547,7 +566,7 @@ const RAQuarterlyEvaluationPage = () => {
                                 <div className="qtr-report-score-row">
                                     <span className="qtr-report-score-label">Quarterly average</span>
                                     <span className="qtr-report-score-value" style={{ color: sc }}>
-                                        {ev.averageScore?.toFixed(1)}/10
+                                        {score != null ? formatScore(score) : '—'}/10
                                     </span>
                                 </div>
 
@@ -558,7 +577,7 @@ const RAQuarterlyEvaluationPage = () => {
                                         borderRadius: 100, overflow: 'hidden'
                                     }}>
                                         <div style={{
-                                            width: `${(ev.averageScore / 10) * 100}%`,
+                                            width: `${((score ?? 0) / 10) * 100}%`,
                                             height: '100%', background: sc,
                                             borderRadius: 100, transition: 'width 0.6s ease'
                                         }} />

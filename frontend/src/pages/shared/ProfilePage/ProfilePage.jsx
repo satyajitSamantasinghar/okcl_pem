@@ -447,7 +447,7 @@ export default function ProfilePage() {
                 <ProfileField
                   label="Reporting Authority"
                   value={profile.reportingAuthority.name}
-                  sub={`${profile.reportingAuthority.designation || ""} · ${profile.reportingAuthority.employeeCode}`}
+                  sub={`${profile.reportingAuthority.designation || ""}`}
                   span
                 />
               )}
@@ -502,9 +502,9 @@ export default function ProfilePage() {
                             {entry.ra.designation && (
                               <span className="ra-history-desig">{entry.ra.designation}</span>
                             )}
-                            {entry.ra.employeeCode && (
+                            {/* {entry.ra.employeeCode && (
                               <span className="ra-history-code">{entry.ra.employeeCode}</span>
-                            )}
+                            )} */}
                           </div>
                           {entry.isCurrent && (
                             <span className="ra-history-current-badge">Current</span>

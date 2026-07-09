@@ -139,7 +139,7 @@ exports.getMyProfile = async (req, res) => {
     if (role === "MD") {
       const [pendingYearlyPlans, pendingAppraisals] = await Promise.all([
         YearlyPlan.count({ where: { status: "PENDING" } }),
-        YearlyAppraisalReport.count({ where: { status: "HRD_REVIEWED" } }),
+        YearlyAppraisalReport.count({ where: { status: "HRD_EVALUATED" } }),
       ]);
       roleStats = {
         pendingYearlyPlanApprovals: pendingYearlyPlans,

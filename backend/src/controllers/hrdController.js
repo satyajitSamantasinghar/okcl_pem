@@ -233,8 +233,10 @@ exports.getEmployeeDetail = async (req, res) => {
       MonthlyEvaluation.findAll({ where: { employeeId: id }, include: [{ model: User, as: "ra", attributes: ["id", "name", "employeeCode"] }], order: [["month", "DESC"]], limit: 12 }),
       QuarterlyEvaluation.findAll({ where: { employeeId: id }, include: [{ model: User, as: "ra", attributes: ["id", "name", "employeeCode"] }], order: [["createdAt", "DESC"]] }),
       MonthlyAchievement.findAll({ where: { employeeId: id }, include: [{ model: MonthlyAchievementItem, as: "planAchievements" }] }),
-      YearlyPlan.findAll({ where: { employeeId: id }, include: [{ model: YearlyPlanKra, as: "kras", order: [["kraIndex", "ASC"]] }], order: [["submittedAt", "DESC"]] }),
-      YearlyAppraisalReport.findAll({ where: { employeeId: id }, include: [{ model: YearlyAppraisalKraAssessment, as: "kraAssessments" }], order: [["submittedAt", "DESC"]] }),
+      // FIX: exclude DRAFT yearly plans from per-employee detail view (HRD perspective).
+      YearlyPlan.findAll({ where: { employeeId: id, status: { [Op.ne]: "DRAFT" } }, include: [{ model: YearlyPlanKra, as: "kras", order: [["kraIndex", "ASC"]] }], order: [["submittedAt", "DESC"]] }),
+      // FIX: exclude DRAFT appraisal reports from per-employee detail view.
+      YearlyAppraisalReport.findAll({ where: { employeeId: id, status: { [Op.ne]: "DRAFT" } }, include: [{ model: YearlyAppraisalKraAssessment, as: "kraAssessments" }], order: [["submittedAt", "DESC"]] }),
     ]);
 
     res.json({ employee, monthlyPlans, monthlyEvaluations, quarterlyEvaluations, monthlyAchievements, yearlyPlans, yearlyReports });
@@ -250,7 +252,11 @@ exports.getEmployeeDetail = async (req, res) => {
 exports.getMonthlyPlansList = async (req, res) => {
   try {
     const { month, year, status } = req.query;
-    const where = {};
+
+    // FIX: exclude DRAFT monthly plans by default — HRD should only see plans
+    // the employee has actually submitted (PENDING / APPROVED / REJECTED).
+    // If the caller explicitly passes ?status=..., that overrides this default.
+    const where = { status: { [Op.ne]: "DRAFT" } };
 
     if (month) {
       if (!/^\d{4}-\d{2}$/.test(month)) return res.status(400).json({ error: "Invalid month format. Use YYYY-MM." });
@@ -260,6 +266,7 @@ exports.getMonthlyPlansList = async (req, res) => {
       // CHANGE 5: { $regex: `^${year}` } → Op.like `${year}%`
       where.month = { [Op.like]: `${year}%` };
     }
+    // Only override the default DRAFT exclusion if a specific status is requested
     if (status) where.status = status;
 
     // Step 1: Fetch plans with employee info
@@ -437,7 +444,8 @@ exports.evaluateYearlyReport = async (req, res) => {
 /* ─── ALL YEARLY PLANS ───────────────────────────────────────────────────────── */
 exports.getYearlyPlans = async (req, res) => {
   try {
-    const where = {};
+    // FIX: exclude DRAFT plans — HRD should only see plans the employee has submitted.
+    const where = { status: { [Op.ne]: "DRAFT" } };
     if (req.query.financialYear) where.financialYear = req.query.financialYear;
 
     const plans = await YearlyPlan.findAll({
@@ -459,7 +467,8 @@ exports.getYearlyPlans = async (req, res) => {
 /* ─── ALL YEARLY REPORTS ─────────────────────────────────────────────────────── */
 exports.getYearlyReports = async (req, res) => {
   try {
-    const where = {};
+    // FIX: exclude DRAFT appraisal reports from the HRD view.
+    const where = { status: { [Op.ne]: "DRAFT" } };
     if (req.query.financialYear) where.financialYear = req.query.financialYear;
 
     const reports = await YearlyAppraisalReport.findAll({

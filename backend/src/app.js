@@ -9,6 +9,7 @@ const hrdRoutes = require("./routes/hrdRoutes");
 const mdRoutes = require("./routes/mdRoutes");
 const profileRoutes = require("./routes/profileRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
+const configRoutes = require("./routes/configRoutes");
 
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
@@ -53,6 +54,7 @@ app.use("/api/hrd", hrdRoutes);
 app.use("/api/md", mdRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/profile", profileRoutes);
+app.use("/api/config", configRoutes);
 
 // ── Serve React frontend (must come AFTER all /api routes) ────────────────────
 app.use(express.static(path.join(__dirname, '../dist')));

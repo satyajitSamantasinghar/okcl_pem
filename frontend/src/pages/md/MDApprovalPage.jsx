@@ -23,7 +23,25 @@ const formatDate = (value) => {
     return new Date(value).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 };
 
-const yearOptions = ['2024-25', '2025-26', '2026-27', '2027-28'];
+// ── Go-live FY: the first fiscal year the app was in production ──
+const GO_LIVE_FY_START = 2026; // FY 2026-27 = April 2026 → March 2027
+
+// Compute current FY start year (April-based)
+const _now = new Date();
+const CURRENT_FY_START = _now.getMonth() >= 3 ? _now.getFullYear() : _now.getFullYear() - 1;
+
+// Default to current FY string — used by useState below
+const CURRENT_FY_SHORT = `${CURRENT_FY_START}-${(CURRENT_FY_START + 1).toString().slice(-2)}`;
+
+// Dynamically build FY options: go-live → current FY only.
+// Grows automatically every April 1 — never needs manual updating.
+const yearOptions = (() => {
+    const opts = [];
+    for (let s = GO_LIVE_FY_START; s <= CURRENT_FY_START; s++) {
+        opts.push(`${s}-${(s + 1).toString().slice(-2)}`);
+    }
+    return opts.reverse(); // most recent first
+})();
 
 const getStatusInfo = (status) => {
     const map = {
@@ -49,7 +67,9 @@ const getWorkflowStep = (status) => {
     if (status === 'COMPLETED') return 5;
     if (status === 'PENDING') return 0;
     if (status === 'REJECTED') return -1;
-    if (status === 'APPROVED' || status === 'EDITED_AFTER_APPROVAL') return 1;
+    // APPROVED / EDITED_AFTER_APPROVAL: plan stepper has 2 steps (indices 0 & 1).
+    // Return 2 so both steps evaluate as done (step > i) → green checkmarks.
+    if (status === 'APPROVED' || status === 'EDITED_AFTER_APPROVAL') return 2;
     return 1;
 };
 
@@ -498,7 +518,7 @@ const useCompareSplitPane = () => {
 ══════════════════════════════════════════════════════════ */
 export default function MDApprovalPage() {
     const [activeTab, setActiveTab]       = useState('plans');
-    const [year, setYear]                 = useState('2025-26');
+    const [year, setYear] = useState(CURRENT_FY_SHORT);
     const [plans, setPlans]               = useState([]);
     const [reports, setReports]           = useState([]);
     const [loading, setLoading]           = useState(true);

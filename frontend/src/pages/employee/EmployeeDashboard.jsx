@@ -10,6 +10,8 @@ import {
 import './EmployeeDashboard.css';
 // FISCAL YEAR FIX — shared fiscal utility
 import { getFiscalYearShort } from '../../utils/fiscalUtils';
+// CENTRALIZED DEADLINE CONFIG — single source of truth via DeadlineContext
+import { useDeadlines } from '../../context/DeadlineContext';
 
 const getInitials = (name) => {
     if (!name) return '?';
@@ -48,6 +50,8 @@ const EmployeeDashboard = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
     const actionCenterRef = useRef(null);
+    // CENTRALIZED DEADLINE CONFIG — plan & achievement days from .env via API
+    const { getPlanDeadline, getAchievementDeadline } = useDeadlines();
 
     const [stats, setStats] = useState({
         monthlyPlans: 0,
@@ -162,13 +166,22 @@ const EmployeeDashboard = () => {
                 const fyStartYear = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
                 const fyEndYear = fyStartYear + 1;
 
-                // Monthly Plan Deadline: 7th of current month
-                const planDeadline = new Date(now.getFullYear(), now.getMonth(), 7, 23, 59, 59);
-                const planDiff = Math.ceil((planDeadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                // Monthly Plan Deadline: from centralized config (env MONTHLY_PLAN_DEADLINE_DAY)
+                const planDeadline = getPlanDeadline(currentMonthString);
+                // BUG FIX: Use Math.floor so that when the deadline IS today (fraction < 1 day remaining)
+                // it correctly resolves to 0 ("Today") instead of 1. Math.ceil incorrectly rounded
+                // 0.54 days → 1, hiding the "Today" display and skewing urgency checks.
+                const planDiff = planDeadline
+                    ? Math.floor((planDeadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+                    : 999;
 
-                // Achievement Deadline: Last day of current month
-                const achDeadline = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
-                const achDiff = Math.ceil((achDeadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                // Achievement Deadline: from centralized config (env MONTHLY_ACHIEVEMENT_DEADLINE_DAY)
+                const achDeadline = getAchievementDeadline(currentMonthString);
+                // BUG FIX: Same Math.floor fix — deadline on last day of month with "last" config
+                // was yielding achDiff=1 all day, so the "Today" badge never appeared.
+                const achDiff = achDeadline
+                    ? Math.floor((achDeadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+                    : 999;
 
                 const currMonthDisplay = new Date(now.getFullYear(), now.getMonth()).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
@@ -181,9 +194,24 @@ const EmployeeDashboard = () => {
                     });
                 }
 
-                // Check if current month needs an achievement
-                const hasCurrentAchievement = achievements.some(a => a.monthlyPlanId?.id === currentPlan?.id || a.monthlyPlanId === currentPlan?.id);
-                if (currentPlan && !hasCurrentAchievement && achDiff >= -10) {
+                // BUG FIX: The original condition required `currentPlan &&` — meaning the achievement
+                // deadline was NEVER shown when the current month had no submitted plan (even if other
+                // months had pending achievements). Fix: check if ANY approved/pending plan is missing
+                // an achievement, and show the deadline whenever the window is open.
+                const anyPlanNeedsAchievement = plans.some(plan => {
+                    if (!['PENDING', 'APPROVED', 'RA_EVALUATED'].includes(plan.status)) return false;
+                    const hasAch = achievements.some(
+                        a => a.monthlyPlanId?.id === plan.id || a.monthlyPlanId === plan.id
+                    );
+                    return !hasAch;
+                });
+                // Also show if current month's plan exists and its achievement is missing
+                const hasCurrentAchievement = currentPlan
+                    ? achievements.some(a => a.monthlyPlanId?.id === currentPlan.id || a.monthlyPlanId === currentPlan.id)
+                    : false;
+                const needsAchievementDeadline = anyPlanNeedsAchievement || (currentPlan && !hasCurrentAchievement);
+
+                if (needsAchievementDeadline && achDiff >= -10) {
                     dls.push({
                         title: `Monthly Achievement (${currMonthDisplay})`,
                         date: achDeadline,

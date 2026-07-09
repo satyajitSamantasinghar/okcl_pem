@@ -5,6 +5,8 @@ import api from '../../services/api';
 import toast from 'react-hot-toast';
 import './RAMonthlyEvaluation.css';
 import ExtendDeadlineModal from './ExtendDeadlineModal';
+// CENTRALIZED DEADLINE CONFIG — single source of truth via DeadlineContext
+import { useDeadlines } from '../../context/DeadlineContext';
 import {
     FiFilter, FiSearch, FiStar, FiEye, FiX, FiUsers, FiClock,
     FiCheckCircle, FiTrendingUp, FiClipboard, FiMessageSquare,
@@ -907,6 +909,8 @@ const GO_LIVE = { year: 2026, month: 5 }; // June 2026
 
 const RAMonthlyEvaluationPage = () => {
     const location = useLocation();
+    // CENTRALIZED DEADLINE CONFIG — plan & achievement days from .env via API
+    const { getPlanDeadline, getAchievementDeadline } = useDeadlines();
     const [evaluations, setEvaluations] = useState([]);
     const [employeesList, setEmployeesList] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -979,8 +983,10 @@ const RAMonthlyEvaluationPage = () => {
         const [selYear, selMonth] = filterMonth.split('-').map(Number);
         if (!selYear || !selMonth) return [];
 
-        const planDeadline = new Date(selYear, selMonth - 1, 10, 23, 59, 59);
-        const achDeadline = new Date(selYear, selMonth - 1, 30, 23, 59, 59);
+        // CENTRALIZED DEADLINE CONFIG — days driven by .env via DeadlineContext
+        const planDeadline = getPlanDeadline(filterMonth);
+        const achDeadline  = getAchievementDeadline(filterMonth);
+        if (!planDeadline || !achDeadline) return [];
 
         const q = search.trim().toLowerCase();
 
@@ -1034,7 +1040,8 @@ const RAMonthlyEvaluationPage = () => {
                 originalDeadline
             };
         }).filter(Boolean);
-    }, [employeesList, evaluations, filterMonth, search]);
+    }, [employeesList, evaluations, filterMonth, search, getPlanDeadline, getAchievementDeadline]);
+
 
     /* ── Parsed filterMonth for the modal ── */
     const filterMonthYear = useMemo(() => {

@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { DeadlineProvider } from './context/DeadlineContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import DashboardLayout from './components/layout/DashboardLayout';
 
@@ -69,6 +70,7 @@ const HomeRedirect = () => {
 function App() {
   return (
     <AuthProvider>
+      <DeadlineProvider>
       <BrowserRouter>
         <Toaster
           position="top-right"
@@ -171,6 +173,7 @@ function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
+      </DeadlineProvider>
     </AuthProvider>
   );
 }

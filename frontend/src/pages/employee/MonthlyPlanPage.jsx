@@ -10,6 +10,8 @@ import {
 import './MonthlyPlanPage.css';
 // FISCAL YEAR FIX — shared fiscal utility
 import { getFiscalMonthOrder, getCurrentFiscalYear, getFiscalYearShort } from '../../utils/fiscalUtils';
+// CENTRALIZED DEADLINE CONFIG — single source of truth via DeadlineContext
+import { useDeadlines } from '../../context/DeadlineContext';
 
 /* ====================================================
    HELPERS
@@ -35,13 +37,20 @@ const calendarMonths = [
 ];
 
 // Build fiscal year options: e.g. ["2023-24", "2024-25", "2025-26", "2026-27"]
-const currentFYShort = getCurrentFiscalYear(); // e.g. "2025-26"
+// ── Go-live FY: the first fiscal year the app was in production ──
+const GO_LIVE_FY_START = 2026; // FY 2026-27 = April 2026 → March 2027
+
+const currentFYShort = getCurrentFiscalYear(); // e.g. "2026-27"
 const currentFYStart = parseInt(currentFYShort.split('-')[0], 10);
-const fyOptions = Array.from({ length: 5 }, (_, i) => {
-    const startY = currentFYStart - 2 + i;
-    const endY = (startY + 1).toString().slice(-2);
-    return `${startY}-${endY}`;
-});
+
+// Production FY options: go-live FY → current FY only. Grows every April 1 automatically.
+const fyOptions = (() => {
+    const opts = [];
+    for (let s = GO_LIVE_FY_START; s <= currentFYStart; s++) {
+        opts.push(`${s}-${(s + 1).toString().slice(-2)}`);
+    }
+    return opts.reverse(); // most recent first, matches screenshot UI
+})();
 
 /** Returns the 12 YYYY-MM strings that belong to a given fiscal year like "2025-26" */
 function getFYMonths(fyShort) {
@@ -261,11 +270,16 @@ function ProgressBar({ value, height = 6, color }) {
 const ENFORCE_DEADLINES = import.meta.env.VITE_ENFORCE_DEADLINES !== 'false';
 
 const MonthlyPlanPage = () => {
+    // CENTRALIZED DEADLINE CONFIG — plan & achievement days from .env via API
+    const { planDay, achievementDay, getPlanDeadline, getAchievementDeadline, resolvedAchievementDay } = useDeadlines();
     const [plans, setPlans] = useState([]);
     const [achievements, setAchievements] = useState([]);
     const [evaluations, setEvaluations] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [filterFY, setFilterFY] = useState(currentFYShort); // e.g. "2025-26"
+    const [filterFY, setFilterFY] = useState(() => {
+    const goLiveFY = `${GO_LIVE_FY_START}-${(GO_LIVE_FY_START + 1).toString().slice(-2)}`;
+    return currentFYShort < goLiveFY ? goLiveFY : currentFYShort;
+                     });      // e.g. "2025-26"
     const [filterMonth, setFilterMonth] = useState('');
     // Dev-mode calendar year filter (simple year, not FY)
     const [filterYear, setFilterYear] = useState(String(currentYear));
@@ -412,8 +426,9 @@ const MonthlyPlanPage = () => {
                 toast.error(`You can only submit a monthly plan for the current month (${currentMonthStr}).`);
                 return;
             }
-            if (today.getDate() < 1 || today.getDate() > 20) {
-                toast.error('Monthly plan submission allowed only from 1st to 7th.');
+            // CENTRALIZED DEADLINE: use planDay from .env via DeadlineContext
+            if (today.getDate() > planDay) {
+                toast.error(`Monthly plan submission deadline has passed (${planDay}th of the month).`);
                 return;
             }
         }
@@ -487,9 +502,14 @@ const MonthlyPlanPage = () => {
                 toast.error(`You can only submit a monthly achievement for the current month (${currentMonthStr}).`);
                 return;
             }
-            if (today.getDate() < 25) {
-                toast.error('Monthly achievement submission allowed from 25th onwards.');
-                return;
+            // CENTRALIZED DEADLINE: use achievementDay from .env via DeadlineContext
+            // When achievementDay === 'last', the deadline is the last day of the month
+            // so employees can submit any time — no lower-bound restriction needed.
+            if (achievementDay !== 'last') {
+                if (today.getDate() < achievementDay) {
+                    toast.error(`Monthly achievement submission opens from the ${achievementDay}th of the month.`);
+                    return;
+                }
             }
         }
 
@@ -1121,7 +1141,8 @@ const MonthlyPlanPage = () => {
                 const now = new Date();
                 const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
                 const todayDay = now.getDate();
-                const planDeadlinePassed = ENFORCE_DEADLINES && todayDay > 20;
+                // CENTRALIZED DEADLINE: planDay from .env via DeadlineContext
+                const planDeadlinePassed = ENFORCE_DEADLINES && todayDay > planDay;
 
                 return (
                     <div className="mp-form-card">
@@ -1142,7 +1163,7 @@ const MonthlyPlanPage = () => {
                                 <div className="mp-deadline-locked-content">
                                     <strong>Submission Window Closed</strong>
                                     <p>
-                                        The monthly plan for <strong>{new Date(now.getFullYear(), now.getMonth()).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</strong> can only be submitted between the <strong>1st–18th</strong> of each month.
+                                        The monthly plan for <strong>{new Date(now.getFullYear(), now.getMonth()).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</strong> can only be submitted between the <strong>1st–{planDay}th</strong> of each month.
                                         The deadline has passed.
                                     </p>
                                 </div>

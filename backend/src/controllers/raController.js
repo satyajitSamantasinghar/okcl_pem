@@ -47,9 +47,9 @@ function getQuarterMonths(quarter) {
 /* ─── 1. RA DASHBOARD ────────────────────────────────────────────────────────── */
 exports.getRADashboard = async (req, res) => {
   try {
-    const raId   = req.user.userId;
+    const raId = req.user.userId;
     const { month } = req.query;
-    
+
 
     if (!month) return res.status(400).json({ message: "Month is required" });
 
@@ -65,15 +65,15 @@ exports.getRADashboard = async (req, res) => {
     //   • Employees who left this RA mid-month  (effectiveTo inside the month)
     //   • Employees who were only ever with this RA (effectiveTo IS NULL)
     const [selYear, selMonthNum] = month.split("-").map(Number);
-    const startOfMonth   = new Date(selYear, selMonthNum - 1, 1, 0, 0, 0, 0);       // e.g. 2026-05-01 00:00:00
-    const endOfMonth     = new Date(selYear, selMonthNum,     0, 23, 59, 59, 999);  // e.g. 2026-05-31 23:59:59
+    const startOfMonth = new Date(selYear, selMonthNum - 1, 1, 0, 0, 0, 0);       // e.g. 2026-05-01 00:00:00
+    const endOfMonth = new Date(selYear, selMonthNum, 0, 23, 59, 59, 999);  // e.g. 2026-05-31 23:59:59
 
     // FIX: query EmployeeRAHistory instead of User.reportingAuthorityId + createdAt.
     // This correctly handles RA reassignments: if an employee moved from RA A → RA B
     // in June, they appear under RA A for May and under RA B for June.
     const historyRows = await EmployeeRAHistory.findAll({
       where: {
-        raId:          raId,
+        raId: raId,
         effectiveFrom: { [Op.lte]: endOfMonth },           // assignment started by end of month
         [Op.or]: [
           { effectiveTo: null },                           // still active with this RA
@@ -82,16 +82,21 @@ exports.getRADashboard = async (req, res) => {
       },
       attributes: ["employeeId"],
     });
-    const employeeIds    = [...new Set(historyRows.map(h => h.employeeId))];
+    const employeeIds = [...new Set(historyRows.map(h => h.employeeId))];
     const totalEmployees = employeeIds.length;
 
     // CHANGE 7: { $in: employeeIds } → Op.in
+    // FIX: exclude DRAFT plans — only count plans the employee has actually submitted.
     const submittedPlans = employeeIds.length > 0 ? await MonthlyPlan.findAll({
-      where: { employeeId: { [Op.in]: employeeIds }, month },
+      where: {
+        employeeId: { [Op.in]: employeeIds },
+        month,
+        status: { [Op.ne]: "DRAFT" },   // ← exclude drafts
+      },
       attributes: ["id", "employeeId"],
     }) : [];
 
-    const planIds              = submittedPlans.map(p => p.id);
+    const planIds = submittedPlans.map(p => p.id);
     const submittedEmployeeIds = submittedPlans.map(p => p.employeeId);
 
     const achievements = planIds.length > 0 ? await MonthlyAchievement.findAll({
@@ -99,24 +104,24 @@ exports.getRADashboard = async (req, res) => {
       include: [{ model: MonthlyPlan, as: "monthlyPlan", attributes: ["id", "employeeId"] }],
     }) : [];
 
-    const achievementsThisMonth    = achievements.length;
-    const achievementEmployeeIds   = achievements.map(a => a.monthlyPlan?.employeeId).filter(Boolean);
+    const achievementsThisMonth = achievements.length;
+    const achievementEmployeeIds = achievements.map(a => a.monthlyPlan?.employeeId).filter(Boolean);
 
     const evaluated = employeeIds.length > 0 ? await MonthlyEvaluation.findAll({
       where: { employeeId: { [Op.in]: employeeIds }, month, raId, status: "EVALUATED" },
       attributes: ["employeeId"],
     }) : [];
 
-    const evaluatedThisMonth    = evaluated.length;
-    const evaluatedEmployeeIds  = evaluated.map(e => e.employeeId);
+    const evaluatedThisMonth = evaluated.length;
+    const evaluatedEmployeeIds = evaluated.map(e => e.employeeId);
 
     // CHANGE 5: countDocuments → count
     const pendingEvaluation = await MonthlyEvaluation.count({
       where: { employeeId: { [Op.in]: employeeIds }, month, raId, status: "PENDING" },
     });
 
-    const submittedSet  = new Set(submittedEmployeeIds.map(String));
-    const notSubmitted  = employeeIds.filter(id => !submittedSet.has(String(id)));
+    const submittedSet = new Set(submittedEmployeeIds.map(String));
+    const notSubmitted = employeeIds.filter(id => !submittedSet.has(String(id)));
     const notYetSubmitted = notSubmitted.length;
 
     const pendingYearly = await YearlyAppraisalReport.count({
@@ -150,7 +155,7 @@ exports.getRADashboard = async (req, res) => {
 exports.getMonthlyTrend = async (req, res) => {
   try {
     const raId = req.user.userId;
-    const employees   = await User.findAll({ where: { reportingAuthorityId: raId }, attributes: ["id"] });
+    const employees = await User.findAll({ where: { reportingAuthorityId: raId }, attributes: ["id"] });
     const employeeIds = employees.map(e => e.id);
 
     const months = [];
@@ -162,8 +167,13 @@ exports.getMonthlyTrend = async (req, res) => {
 
     const trendData = await Promise.all(
       months.map(async (monthStr) => {
+        // FIX: exclude DRAFT plans — trend should reflect submitted plans only.
         const monthPlans = await MonthlyPlan.findAll({
-          where: { employeeId: { [Op.in]: employeeIds }, month: monthStr },
+          where: {
+            employeeId: { [Op.in]: employeeIds },
+            month: monthStr,
+            status: { [Op.ne]: "DRAFT" },   // ← exclude drafts
+          },
           attributes: ["id"],
         });
         const planIds = monthPlans.map(p => p.id);
@@ -174,7 +184,7 @@ exports.getMonthlyTrend = async (req, res) => {
         ]);
 
         const [year, mon] = monthStr.split("-");
-        const shortMonth  = new Date(parseInt(year), parseInt(mon) - 1).toLocaleDateString("en-US", { month: "short" });
+        const shortMonth = new Date(parseInt(year), parseInt(mon) - 1).toLocaleDateString("en-US", { month: "short" });
 
         return { month: monthStr, shortMonth, plans: monthPlans.length, achievements, evaluations };
       })
@@ -190,7 +200,7 @@ exports.getMonthlyTrend = async (req, res) => {
 exports.getMyEmployees = async (req, res) => {
   try {
     const raId = req.user.userId;
-    const now  = new Date();
+    const now = new Date();
     const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
     // ── Resolve employee IDs for the requested month ─────────────────────────
@@ -203,7 +213,7 @@ exports.getMyEmployees = async (req, res) => {
     if (req.query.month) {
       const [selYear, selMonthNum] = req.query.month.split("-").map(Number);
       const startOfMonth = new Date(selYear, selMonthNum - 1, 1, 0, 0, 0, 0);
-      const endOfMonth   = new Date(selYear, selMonthNum,     0, 23, 59, 59, 999);
+      const endOfMonth = new Date(selYear, selMonthNum, 0, 23, 59, 59, 999);
 
       const historyRows = await EmployeeRAHistory.findAll({
         where: {
@@ -222,13 +232,13 @@ exports.getMyEmployees = async (req, res) => {
     // Fetch full employee records — either the history-derived set or all current
     const employees = employeeIds !== null
       ? await User.findAll({
-          where: { id: { [Op.in]: employeeIds }, isActive: true },
-          attributes: ["id", "name", "employeeCode", "department", "email", "createdAt"],
-        })
+        where: { id: { [Op.in]: employeeIds }, isActive: true },
+        attributes: ["id", "name", "employeeCode", "department", "email", "createdAt"],
+      })
       : await User.findAll({
-          where: { reportingAuthorityId: raId, isActive: true },
-          attributes: ["id", "name", "employeeCode", "department", "email", "createdAt"],
-        });
+        where: { reportingAuthorityId: raId, isActive: true },
+        attributes: ["id", "name", "employeeCode", "department", "email", "createdAt"],
+      });
 
     const result = await Promise.all(
       employees.map(async (emp) => {
@@ -246,9 +256,9 @@ exports.getMyEmployees = async (req, res) => {
           id: emp.id, name: emp.name, employeeCode: emp.employeeCode,
           department: emp.department, email: emp.email, joinedAt: emp.createdAt,
           totalPlans, totalEvaluated, totalAchievements, currentMonth,
-          currentMonthPlanSubmitted:        !!currentMonthPlan,
+          currentMonthPlanSubmitted: !!currentMonthPlan,
           currentMonthAchievementSubmitted: !!currentMonthAchievement,
-          currentMonthEvaluated:            !!currentMonthEvaluation,
+          currentMonthEvaluated: !!currentMonthEvaluation,
         };
       })
     );
@@ -264,7 +274,7 @@ exports.getMyEmployees = async (req, res) => {
 exports.getEmployeeDetail = async (req, res) => {
   try {
     const { id } = req.params;
-    const raId   = req.user.userId;
+    const raId = req.user.userId;
 
     const employee = await User.findByPk(id, {
       attributes: ["id", "name", "employeeCode", "department", "role", "reportingAuthorityId", "isActive", "email", "createdAt"],
@@ -321,9 +331,9 @@ exports.submitMonthlyEvaluation = async (req, res) => {
       return res.status(400).json({ message: "Score must be an integer between 1 and 10." });
     }
 
-    evaluation.score       = numScore;
-    evaluation.remarks     = remarks || null;
-    evaluation.status      = "EVALUATED";
+    evaluation.score = numScore;
+    evaluation.remarks = remarks || null;
+    evaluation.status = "EVALUATED";
     evaluation.evaluatedAt = new Date();
     await evaluation.save();
 
@@ -337,11 +347,11 @@ exports.submitMonthlyEvaluation = async (req, res) => {
 /* ─── 3. GET MONTHLY EVALUATIONS ─────────────────────────────────────────────── */
 exports.getMonthlyEvaluations = async (req, res) => {
   try {
-    const page   = parseInt(req.query.page)  || 1;
-    const limit  = parseInt(req.query.limit) || 10;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
     const offset = (page - 1) * limit;
 
-    const where      = {};
+    const where = {};
     let excludeScore = false;
 
     if (req.user.role === "EMPLOYEE") {
@@ -363,7 +373,7 @@ exports.getMonthlyEvaluations = async (req, res) => {
         // Auto-create missing evaluation records for RA's employees this month
         // IMPORTANT: exclude the RA themselves from this loop
         if (req.query.month) {
-          const myEmps   = await User.findAll({
+          const myEmps = await User.findAll({
             where: { reportingAuthorityId: req.user.userId },
             attributes: ["id"],
           });
@@ -372,8 +382,17 @@ exports.getMonthlyEvaluations = async (req, res) => {
 
           // Guard: skip if no employees — Op.in([]) causes invalid SQL in some DB drivers
           if (myEmpIds.length > 0) {
+            // CRITICAL FIX: Only include plans that have actually been submitted
+            // (status !== "DRAFT"). A DRAFT plan means the employee has saved their
+            // work locally but has NOT submitted it for RA review. Previously, this
+            // query fetched ALL plans including DRAFTs, which caused draft plans to
+            // appear in the RA's evaluation queue — a clear business-logic violation.
             const plans = await MonthlyPlan.findAll({
-              where: { employeeId: { [Op.in]: myEmpIds }, month: req.query.month },
+              where: {
+                employeeId: { [Op.in]: myEmpIds },
+                month: req.query.month,
+                status: { [Op.ne]: "DRAFT" },   // ← exclude drafts
+              },
               attributes: ["id", "employeeId", "month"],
             });
 
@@ -384,13 +403,13 @@ exports.getMonthlyEvaluations = async (req, res) => {
 
               if (!exists) {
                 await MonthlyEvaluation.create({
-                  employeeId:    plan.employeeId,
+                  employeeId: plan.employeeId,
                   monthlyPlanId: plan.id,
-                  raId:          req.user.userId,
-                  evaluatorId:   null,
-                  month:         plan.month,
-                  score:         0,
-                  remarks:       "",
+                  raId: req.user.userId,
+                  evaluatorId: null,
+                  month: plan.month,
+                  score: 0,
+                  remarks: "",
                 });
               } else if (!exists.monthlyPlanId || exists.monthlyPlanId !== plan.id) {
                 await exists.update({
@@ -412,12 +431,14 @@ exports.getMonthlyEvaluations = async (req, res) => {
     const evaluations = await MonthlyEvaluation.findAll({
       where,
       include: [
-        { model: User,        as: "employee",    attributes: ["id", "name", "employeeCode", "department"] },
-        { model: MonthlyPlan, as: "monthlyPlan", attributes: ["id", "month", "planDetails", "status", "raRemarks", "submittedAt"],
-          include: [{ model: MonthlyPlanItem, as: "planItems", order: [["itemOrder", "ASC"]] }] },
+        { model: User, as: "employee", attributes: ["id", "name", "employeeCode", "department"] },
+        {
+          model: MonthlyPlan, as: "monthlyPlan", attributes: ["id", "month", "planDetails", "status", "raRemarks", "submittedAt"],
+          include: [{ model: MonthlyPlanItem, as: "planItems", order: [["itemOrder", "ASC"]] }]
+        },
         // ra may be null when evaluatorId is used (MD→RA flow) — Sequelize handles nullable FK fine
-        { model: User, as: "ra",       attributes: ["id", "name", "employeeCode"], required: false },
-        { model: User, as: "evaluator", attributes: ["id", "name"],               required: false },
+        { model: User, as: "ra", attributes: ["id", "name", "employeeCode"], required: false },
+        { model: User, as: "evaluator", attributes: ["id", "name"], required: false },
       ],
       order: [["createdAt", "DESC"]],
       offset,
@@ -426,17 +447,17 @@ exports.getMonthlyEvaluations = async (req, res) => {
 
     const totalCount = await MonthlyEvaluation.count({ where });
 
-    const planIds    = evaluations.map(ev => ev.monthlyPlanId).filter(Boolean);
+    const planIds = evaluations.map(ev => ev.monthlyPlanId).filter(Boolean);
     const achievements = await MonthlyAchievement.findAll({ where: { monthlyPlanId: { [Op.in]: planIds } }, attributes: ["monthlyPlanId"] });
-    const achSet     = new Set(achievements.map(a => String(a.monthlyPlanId)));
+    const achSet = new Set(achievements.map(a => String(a.monthlyPlanId)));
 
     const response = evaluations.map(ev => ({
-      id:           ev.id,
-      employee:     ev.employee,
-      month:        ev.month,
-      remarks:      ev.remarks || null,
-      score:        excludeScore ? null : ev.score,
-      status:       ev.status,
+      id: ev.id,
+      employee: ev.employee,
+      month: ev.month,
+      remarks: ev.remarks || null,
+      score: excludeScore ? null : ev.score,
+      status: ev.status,
       monthlyPlanId: ev.monthlyPlan,
       hasAchievement: ev.monthlyPlanId ? achSet.has(String(ev.monthlyPlanId)) : false,
     }));
@@ -452,9 +473,9 @@ exports.getMonthlyEvaluationById = async (req, res) => {
   try {
     const evaluation = await MonthlyEvaluation.findByPk(req.params.id, {
       include: [
-        { model: User,        as: "employee", attributes: ["id", "name", "employeeCode", "department"] },
+        { model: User, as: "employee", attributes: ["id", "name", "employeeCode", "department"] },
         { model: MonthlyPlan, as: "monthlyPlan", include: [{ model: MonthlyPlanItem, as: "planItems", order: [["itemOrder", "ASC"]] }] },
-        { model: User,        as: "ra",       attributes: ["id", "name", "employeeCode"] },
+        { model: User, as: "ra", attributes: ["id", "name", "employeeCode"] },
       ],
     });
 
@@ -464,7 +485,7 @@ exports.getMonthlyEvaluationById = async (req, res) => {
     if (req.user.role === "RA" && evaluation.ra?.id !== req.user.userId) return res.status(403).json({ message: "Not authorized" });
     if (req.user.role === "EMPLOYEE" && evaluation.employee?.id !== req.user.userId) return res.status(403).json({ message: "Not authorized" });
 
-    const planDoc    = evaluation.monthlyPlan || null;
+    const planDoc = evaluation.monthlyPlan || null;
     const achievement = planDoc
       ? await MonthlyAchievement.findOne({ where: { monthlyPlanId: planDoc.id }, include: [{ model: MonthlyAchievementItem, as: "planAchievements", order: [["planIndex", "ASC"]] }] })
       : null;
@@ -475,11 +496,11 @@ exports.getMonthlyEvaluationById = async (req, res) => {
       plan: planDoc,
       achievement: achievement || null,
       remarks: evaluation.remarks || null,
-      score:   canViewScore ? evaluation.score : null,
+      score: canViewScore ? evaluation.score : null,
       status: {
-        planSubmitted:        !!planDoc,
+        planSubmitted: !!planDoc,
         achievementSubmitted: !!achievement,
-        evaluated:            evaluation.status === "EVALUATED",
+        evaluated: evaluation.status === "EVALUATED",
       },
     });
   } catch (error) {
@@ -499,8 +520,8 @@ exports.generateQuarterlyEvaluation = async (req, res) => {
     const quarterMonths = getQuarterMonths(quarter);
     if (!quarterMonths) return res.status(400).json({ message: "Invalid quarter format. Use Q1-2026, Q2-2026, etc." });
 
-    const myEmployees  = await User.findAll({ where: { reportingAuthorityId: raId }, attributes: ["id"] });
-    const myEmpIds     = myEmployees.map(e => e.id);
+    const myEmployees = await User.findAll({ where: { reportingAuthorityId: raId }, attributes: ["id"] });
+    const myEmpIds = myEmployees.map(e => e.id);
 
     let generated = 0, skipped = 0;
     const results = [];
@@ -515,7 +536,7 @@ exports.generateQuarterlyEvaluation = async (req, res) => {
       });
 
       if (evals.length === 3) {
-        const totalScore   = evals.reduce((sum, ev) => sum + (ev.score || 0), 0);
+        const totalScore = evals.reduce((sum, ev) => sum + (ev.score || 0), 0);
         const averageScore = +(totalScore / 3).toFixed(2);
 
         const quarterly = await QuarterlyEvaluation.create({ employeeId: empId, quarter, raId, averageScore, remarks: remarks || null });
@@ -548,7 +569,7 @@ exports.getQuarterlyDetail = async (req, res) => {
     const quarterly = await QuarterlyEvaluation.findByPk(req.params.id, {
       include: [
         { model: User, as: "employee", attributes: ["id", "name", "employeeCode", "department"] },
-        { model: User, as: "ra",       attributes: ["id", "name", "employeeCode"] },
+        { model: User, as: "ra", attributes: ["id", "name", "employeeCode"] },
       ],
     });
 
@@ -556,7 +577,7 @@ exports.getQuarterlyDetail = async (req, res) => {
     if (req.user.role === "RA" && quarterly.ra?.id !== req.user.userId) return res.status(403).json({ message: "Not authorized" });
 
     const quarterMonths = getQuarterMonths(quarterly.quarter);
-    const monthlyEvals  = await MonthlyEvaluation.findAll({
+    const monthlyEvals = await MonthlyEvaluation.findAll({
       where: { employeeId: quarterly.employeeId, raId: quarterly.raId, month: { [Op.in]: quarterMonths }, status: "EVALUATED" },
       order: [["month", "ASC"]],
     });
@@ -575,7 +596,7 @@ exports.getQuarterlyDetail = async (req, res) => {
 exports.updateQuarterlyRemarks = async (req, res) => {
   try {
     const { remarks } = req.body;
-    const quarterly   = await QuarterlyEvaluation.findByPk(req.params.id);
+    const quarterly = await QuarterlyEvaluation.findByPk(req.params.id);
 
     if (!quarterly) return res.status(404).json({ message: "Quarterly evaluation not found" });
     if (quarterly.raId !== req.user.userId) return res.status(403).json({ message: "Not authorized" });
@@ -599,11 +620,11 @@ exports.updateQuarterlyRemarks = async (req, res) => {
 /* ─── GET QUARTERLY EVALUATIONS (list) ──────────────────────────────────────── */
 exports.getQuarterlyEvaluations = async (req, res) => {
   try {
-    const page   = parseInt(req.query.page)  || 1;
-    const limit  = parseInt(req.query.limit) || 10;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
     const offset = (page - 1) * limit;
 
-    const where      = {};
+    const where = {};
     let excludeScore = false;
 
     if (req.user.role === "EMPLOYEE") {
@@ -616,20 +637,36 @@ exports.getQuarterlyEvaluations = async (req, res) => {
       if (req.query.quarter) {
         const quarterMonths = getQuarterMonths(req.query.quarter);
         if (quarterMonths) {
-          const myEmps   = await User.findAll({ where: { reportingAuthorityId: req.user.userId }, attributes: ["id"] });
+          const myEmps = await User.findAll({ where: { reportingAuthorityId: req.user.userId }, attributes: ["id"] });
           const myEmpIds = myEmps.map(e => e.id);
 
           for (const empId of myEmpIds) {
             const existing = await QuarterlyEvaluation.findOne({ where: { employeeId: empId, quarter: req.query.quarter } });
-            if (existing) continue;
 
+            // Always fetch evaluated monthly records — used for both create and recalc paths
             const evals = await MonthlyEvaluation.findAll({
               where: { employeeId: empId, raId: req.user.userId, month: { [Op.in]: quarterMonths }, status: "EVALUATED" },
               attributes: ["score"],
             });
 
+            if (existing) {
+              // BUG FIX: previously we `continue`d here, leaving stale/zero averageScore
+              // permanently in the DB. Now we recalculate from live monthly evaluations
+              // and persist the corrected value so both list and detail views stay accurate.
+              if (evals.length > 0) {
+                const total = evals.reduce((sum, ev) => sum + Number(ev.score || 0), 0);
+                const recalcAvg = +(total / evals.length).toFixed(2);
+                const storedAvg = parseFloat(existing.averageScore);
+                // Only write if the value is actually wrong (null, 0, or diverged)
+                if (isNaN(storedAvg) || storedAvg === 0 || Math.abs(storedAvg - recalcAvg) > 0.005) {
+                  await existing.update({ averageScore: recalcAvg });
+                }
+              }
+              continue;
+            }
+
             if (evals.length === 3) {
-              const totalScore   = evals.reduce((sum, ev) => sum + (ev.score || 0), 0);
+              const totalScore = evals.reduce((sum, ev) => sum + Number(ev.score || 0), 0);
               const averageScore = +(totalScore / 3).toFixed(2);
               await QuarterlyEvaluation.create({ employeeId: empId, quarter: req.query.quarter, raId: req.user.userId, averageScore, remarks: null });
             }
@@ -646,13 +683,13 @@ exports.getQuarterlyEvaluations = async (req, res) => {
     const include = [{ model: User, as: "employee", attributes: ["id", "name", "employeeCode", "department"] }];
     if (req.user.role !== "EMPLOYEE") include.push({ model: User, as: "ra", attributes: ["id", "name", "employeeCode"] });
 
-    const evaluations  = await QuarterlyEvaluation.findAll({ where, include, order: [["createdAt", "DESC"]], offset, limit });
-    const totalCount   = await QuarterlyEvaluation.count({ where });
+    const evaluations = await QuarterlyEvaluation.findAll({ where, include, order: [["createdAt", "DESC"]], offset, limit });
+    const totalCount = await QuarterlyEvaluation.count({ where });
 
     const response = evaluations.map(ev => ({
       id: ev.id, employee: ev.employee, quarter: ev.quarter,
       remarks: ev.remarks || null, hasRemarks: !!(ev.remarks?.trim()),
-      averageScore: excludeScore ? null : ev.averageScore,
+      averageScore: excludeScore ? null : parseFloat(ev.averageScore),
     }));
 
     res.json({ page, limit, totalRecords: totalCount, totalPages: Math.ceil(totalCount / limit), data: response });
@@ -667,7 +704,7 @@ exports.getQuarterlyEvaluationById = async (req, res) => {
     const quarterly = await QuarterlyEvaluation.findByPk(req.params.id, {
       include: [
         { model: User, as: "employee", attributes: ["id", "name", "employeeCode", "department"] },
-        { model: User, as: "ra",       attributes: ["id", "name", "employeeCode"] },
+        { model: User, as: "ra", attributes: ["id", "name", "employeeCode"] },
       ],
     });
 
@@ -698,14 +735,14 @@ exports.evaluateYearlyReport = async (req, res) => {
 
     if (total > 80) return res.status(400).json({ message: "RA total score cannot exceed 80" });
 
-    report.raWorkKRAScore         = raWorkKRAScore;
-    report.raAdditionalScore      = raAdditionalScore;
-    report.raPersonalAttributes   = raPersonalAttributes;
-    report.raTeamAttributes       = raTeamAttributes;
+    report.raWorkKRAScore = raWorkKRAScore;
+    report.raAdditionalScore = raAdditionalScore;
+    report.raPersonalAttributes = raPersonalAttributes;
+    report.raTeamAttributes = raTeamAttributes;
     report.raLeadershipAttributes = raLeadershipAttributes;
-    report.raTotalScore           = total;
-    report.raRemarks              = raRemarks || null;
-    report.raEvaluatedAt          = new Date();
+    report.raTotalScore = total;
+    report.raRemarks = raRemarks || null;
+    report.raEvaluatedAt = new Date();
     if (report.status === "SUBMITTED") report.status = "RA_EVALUATED";
     await report.save();
 
@@ -719,10 +756,15 @@ exports.evaluateYearlyReport = async (req, res) => {
 /* ─── YEARLY PLANS & REPORTS (RA VIEW) ──────────────────────────────────────── */
 exports.getYearlyPlans = async (req, res) => {
   try {
-    const myEmps   = await User.findAll({ where: { reportingAuthorityId: req.user.userId }, attributes: ["id"] });
+    const myEmps = await User.findAll({ where: { reportingAuthorityId: req.user.userId }, attributes: ["id"] });
     const myEmpIds = myEmps.map(e => e.id);
 
-    const where = { employeeId: { [Op.in]: myEmpIds } };
+    // FIX: exclude DRAFT plans — RA should only see plans the employee has submitted.
+    // A DRAFT plan is private to the employee until they explicitly hit "Submit".
+    const where = {
+      employeeId: { [Op.in]: myEmpIds },
+      status: { [Op.ne]: "DRAFT" },   // ← exclude drafts
+    };
     if (req.query.financialYear) where.financialYear = req.query.financialYear;
 
     const plans = await YearlyPlan.findAll({
@@ -742,10 +784,14 @@ exports.getYearlyPlans = async (req, res) => {
 
 exports.getYearlyReports = async (req, res) => {
   try {
-    const myEmps   = await User.findAll({ where: { reportingAuthorityId: req.user.userId }, attributes: ["id"] });
+    const myEmps = await User.findAll({ where: { reportingAuthorityId: req.user.userId }, attributes: ["id"] });
     const myEmpIds = myEmps.map(e => e.id);
 
-    const where = { employeeId: { [Op.in]: myEmpIds } };
+    // FIX: exclude DRAFT appraisal reports — only show submitted reports to RA.
+    const where = {
+      employeeId: { [Op.in]: myEmpIds },
+      status: { [Op.ne]: "DRAFT" },   // ← exclude drafts
+    };
     if (req.query.financialYear) where.financialYear = req.query.financialYear;
 
     const reports = await YearlyAppraisalReport.findAll({
@@ -775,7 +821,7 @@ exports.getQuarterlyFullDetail = async (req, res) => {
     const quarterly = await QuarterlyEvaluation.findByPk(req.params.id, {
       include: [
         { model: User, as: "employee", attributes: ["id", "name", "employeeCode", "department"] },
-        { model: User, as: "ra",       attributes: ["id", "name", "employeeCode"] },
+        { model: User, as: "ra", attributes: ["id", "name", "employeeCode"] },
       ],
     });
 
@@ -783,7 +829,7 @@ exports.getQuarterlyFullDetail = async (req, res) => {
     if (req.user.role === "RA" && quarterly.ra?.id !== req.user.userId) return res.status(403).json({ message: "Not authorized" });
 
     const quarterMonths = getQuarterMonths(quarterly.quarter);
-    const monthlyEvals  = await MonthlyEvaluation.findAll({
+    const monthlyEvals = await MonthlyEvaluation.findAll({
       where: { employeeId: quarterly.employeeId, raId: quarterly.raId, month: { [Op.in]: quarterMonths }, status: "EVALUATED" },
       include: [
         {
@@ -801,12 +847,12 @@ exports.getQuarterlyFullDetail = async (req, res) => {
         // CHANGE 13: find achievement with planAchievements via include
         const achievement = planDoc
           ? await MonthlyAchievement.findOne({
-              where: { monthlyPlanId: planDoc.id, status: "SUBMITTED" },
-              include: [{ model: MonthlyAchievementItem, as: "planAchievements", order: [["planIndex", "ASC"]] }],
-            }) || await MonthlyAchievement.findOne({
-              where: { monthlyPlanId: planDoc.id },
-              include: [{ model: MonthlyAchievementItem, as: "planAchievements", order: [["planIndex", "ASC"]] }],
-            })
+            where: { monthlyPlanId: planDoc.id, status: "SUBMITTED" },
+            include: [{ model: MonthlyAchievementItem, as: "planAchievements", order: [["planIndex", "ASC"]] }],
+          }) || await MonthlyAchievement.findOne({
+            where: { monthlyPlanId: planDoc.id },
+            include: [{ model: MonthlyAchievementItem, as: "planAchievements", order: [["planIndex", "ASC"]] }],
+          })
           : null;
 
         return {
@@ -817,9 +863,24 @@ exports.getQuarterlyFullDetail = async (req, res) => {
       })
     );
 
+    // BUG FIX: always recompute average from the live monthly evaluations fetched above.
+    // The stored quarterly.averageScore can be 0 or null when the record was auto-generated
+    // before the RA finished evaluating all months and was never subsequently corrected.
+    // Computing here gives us the ground-truth value every time this endpoint is called.
+    const recomputedAvg = monthlyData.length > 0
+      ? +(monthlyData.reduce((sum, m) => sum + Number(m.score || 0), 0) / monthlyData.length).toFixed(2)
+      : 0;
+
+    // Persist the corrected value so the list view (getQuarterlyEvaluations) stays in sync
+    const storedAvg = parseFloat(quarterly.averageScore);
+    if (recomputedAvg > 0 && (isNaN(storedAvg) || storedAvg === 0 || Math.abs(storedAvg - recomputedAvg) > 0.005)) {
+      await quarterly.update({ averageScore: recomputedAvg });
+    }
+
     res.json({
       id: quarterly.id, employee: quarterly.employee, quarter: quarterly.quarter,
-      averageScore: quarterly.averageScore, remarks: quarterly.remarks || null,
+      averageScore: recomputedAvg > 0 ? recomputedAvg : (parseFloat(quarterly.averageScore) || 0),
+      remarks: quarterly.remarks || null,
       hasRemarks: !!(quarterly.remarks?.trim()), generatedAt: quarterly.createdAt, monthlyData,
     });
   } catch (error) {
@@ -830,9 +891,9 @@ exports.getQuarterlyFullDetail = async (req, res) => {
 /* ─── RA: REJECT MONTHLY PLAN ───────────────────────────────────────────────── */
 exports.rejectMonthlyPlan = async (req, res) => {
   try {
-    const { id }       = req.params;
+    const { id } = req.params;
     const { raRemarks } = req.body;
-    const raId          = req.user.userId;
+    const raId = req.user.userId;
 
     if (!raRemarks || raRemarks.trim().length < 10) return res.status(400).json({ message: "Rejection reason (raRemarks) is required and must be at least 10 characters." });
 
@@ -840,19 +901,19 @@ exports.rejectMonthlyPlan = async (req, res) => {
     if (!plan) return res.status(404).json({ message: "Monthly plan not found." });
 
     const myEmployees = await User.findAll({ where: { reportingAuthorityId: raId }, attributes: ["id"] });
-    const myEmpIds    = myEmployees.map(e => String(e.id));
+    const myEmpIds = myEmployees.map(e => String(e.id));
 
     if (!myEmpIds.includes(String(plan.employeeId))) return res.status(403).json({ message: "You are not authorized to reject this plan." });
-    if (plan.status === "DRAFT")     return res.status(400).json({ message: "Cannot reject a plan that is still in DRAFT status." });
-    if (plan.status === "REJECTED")  return res.status(400).json({ message: "This plan is already rejected." });
-    if (plan.status === "APPROVED")  return res.status(400).json({ message: "Cannot reject an already approved plan." });
+    if (plan.status === "DRAFT") return res.status(400).json({ message: "Cannot reject a plan that is still in DRAFT status." });
+    if (plan.status === "REJECTED") return res.status(400).json({ message: "This plan is already rejected." });
+    if (plan.status === "APPROVED") return res.status(400).json({ message: "Cannot reject an already approved plan." });
 
     const existingEvaluation = await MonthlyEvaluation.findOne({
       where: { employeeId: plan.employeeId, month: plan.month, raId, status: "EVALUATED" },
     });
     if (existingEvaluation) return res.status(400).json({ message: "Cannot reject: you have already submitted an evaluation for this employee's plan this month." });
 
-    plan.status    = "REJECTED";
+    plan.status = "REJECTED";
     plan.raRemarks = raRemarks.trim();
     await plan.save();
 
@@ -884,7 +945,7 @@ exports.extendDeadline = async (req, res) => {
     const employee = await User.findOne({ where: { id: employeeId, reportingAuthorityId: raId } });
     if (!employee) return res.status(403).json({ message: "Employee not found under your authority" });
 
-    const monthStr             = `${year}-${String(month).padStart(2, "0")}`;
+    const monthStr = `${year}-${String(month).padStart(2, "0")}`;
     const extendedDeadlineDate = new Date(newDeadline);
     if (extendedDeadlineDate < new Date()) return res.status(400).json({ message: "New deadline cannot be in the past" });
 

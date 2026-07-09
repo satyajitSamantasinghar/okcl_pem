@@ -77,6 +77,21 @@ function getScoreBorder(s) {
     return '#FCA5A5';
 }
 
+/**
+ * Smart score formatter — industry-standard trailing-zero suppression.
+ * - Whole numbers  → no decimal   (10 → "10",  8 → "8")
+ * - Decimal scores → 1 d.p.       (9.5 → "9.5", 7.9 → "7.9")
+ * - Null / zero    → em-dash      (null/0 → "—")
+ */
+function formatScore(val) {
+    const n = parseFloat(val);
+    if (isNaN(n) || n <= 0) return '—';
+    const rounded = Math.round(n * 10) / 10;          // round to 1 decimal place
+    return rounded % 1 === 0
+        ? String(Math.round(rounded))                 // whole number — drop ".0"
+        : rounded.toFixed(1);                         // decimal — keep exactly 1 d.p.
+}
+
 /* Month chip palette */
 const MONTH_PALETTE = {
     '01': { bg: '#DBEAFE', color: '#1D4ED8', line: '#3B82F6' },
@@ -377,7 +392,19 @@ const RAQuarterlyDetailPage = () => {
     );
     if (!data) return null;
 
-    const { employee, quarter, averageScore, remarks, generatedAt, monthlyData = [] } = data;
+    const { employee, quarter, remarks, generatedAt, monthlyData = [] } = data;
+
+    // BUG FIX: if the backend's stored averageScore is 0 or null (stale/missing),
+    // compute it client-side from monthlyData as a reliable fallback.
+    // After the backend fix this path is rarely hit, but it keeps the UI correct
+    // even if the server hasn't yet self-healed the stored value.
+    const storedAvg = Number(data.averageScore);
+    const evaluatedMonths = monthlyData.filter(m => Number(m.score) > 0);
+    const computedAvg = evaluatedMonths.length > 0
+        ? evaluatedMonths.reduce((sum, m) => sum + Number(m.score), 0) / evaluatedMonths.length
+        : 0;
+    const averageScore = storedAvg > 0 ? storedAvg : computedAvg;
+
     const scoreColor = getScoreColor(averageScore);
     const scoreBg = getScoreBg(averageScore);
     const scoreBorder = getScoreBorder(averageScore);
@@ -452,7 +479,7 @@ const RAQuarterlyDetailPage = () => {
                                             <div className="qd-tl-month-right">
                                                 <span className="qd-tl-score-pill"
                                                     style={{ background: sb, color: sc, border: `1px solid ${sborder}` }}>
-                                                    {m.score}/10
+                                                    {formatScore(m.score)}/10
                                                 </span>
                                                 {m.evaluatedAt && (
                                                     <span className="qd-tl-eval-date">
@@ -580,7 +607,7 @@ const RAQuarterlyDetailPage = () => {
                         <div className="qd-score-top"
                             style={{ borderBottom: `2px solid ${scoreBorder}` }}>
                             <div className="qd-score-big" style={{ color: scoreColor }}>
-                                {averageScore?.toFixed(1)}
+                                {formatScore(averageScore)}
                                 <span className="qd-score-denom">/10</span>
                             </div>
                             <div className="qd-score-label">Quarterly average</div>
@@ -606,7 +633,7 @@ const RAQuarterlyDetailPage = () => {
                                         </div>
                                         <span className="qd-mb-score-chip"
                                             style={{ background: sb, color: sc, border: `1px solid ${sbo}` }}>
-                                            {m.score}
+                                            {formatScore(m.score)}
                                         </span>
                                     </div>
                                 );

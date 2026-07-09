@@ -17,6 +17,8 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
 import ExtendDeadlineModal from './ExtendDeadlineModal';
+// CENTRALIZED DEADLINE CONFIG — single source of truth via DeadlineContext
+import { useDeadlines } from '../../context/DeadlineContext';
 import './RADashboard.css';
 
 /* ── Arrow icon ── */
@@ -134,6 +136,8 @@ const lbScoreConfig = (score) => {
 const RADashboard = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
+    // CENTRALIZED DEADLINE CONFIG — plan & achievement days from .env via API
+    const { getPlanDeadline, getAchievementDeadline } = useDeadlines();
 
     const [stats, setStats] = useState({
         totalEmployees: 0,
@@ -347,16 +351,17 @@ const RADashboard = () => {
 
     /* ── Missed deadline employees — derived from existing data ── */
     /* An employee is "missed" if:
-       (a) today > plan deadline (10th of month) AND no plan submitted, OR
-       (b) plan submitted BUT today > achievement deadline (25th of month) AND no achievement */
+       (a) today > plan deadline (centralized config day) AND no plan submitted, OR
+       (b) plan submitted BUT today > achievement deadline (centralized config day) AND no achievement */
     const missedEmployees = useMemo(() => {
         const today = new Date();
         const [selYear, selMonth] = (selectedMonth || '').split('-').map(Number);
         if (!selYear || !selMonth) return [];
 
-        // Deadlines: plan = 10th, achievement = 25th of the selected month
-        const planDeadline = new Date(selYear, selMonth - 1, 10, 23, 59, 59);
-        const achDeadline = new Date(selYear, selMonth - 1, 30, 23, 59, 59);
+        // CENTRALIZED DEADLINE CONFIG — days driven by .env via DeadlineContext
+        const planDeadline = getPlanDeadline(selectedMonth);
+        const achDeadline  = getAchievementDeadline(selectedMonth);
+        if (!planDeadline || !achDeadline) return [];
 
         const submittedSet = new Set((stats.lists?.submitted || []).map(id => id?.toString()));
         const achievementsSet = new Set((stats.lists?.achievements || []).map(id => id?.toString()));
@@ -377,7 +382,8 @@ const RADashboard = () => {
                 return null;
             })
             .filter(Boolean);
-    }, [employeesList, stats.lists, selectedMonth]);
+    }, [employeesList, stats.lists, selectedMonth, getPlanDeadline, getAchievementDeadline]);
+
 
     /* ── Helper: open extend modal ── */
     const openExtendModal = (emp) => {
@@ -801,7 +807,7 @@ const RADashboard = () => {
                 <p>Submit and track your own plans — you are also an employee reporting to MD</p>
             </div>
             <div className="ra-actions-grid ra-perf-grid">
-                <Link to="/ra/my-monthly-plan" className="ra-action-tile indigo coming-soon">
+                <Link to="/ra/my-monthly-plan" className="ra-action-tile indigo ">
                     <div className="ra-at-icon"><FiFileText /></div>
                     <div className="ra-at-content">
                         <h3>My Monthly Plan</h3>
@@ -809,7 +815,7 @@ const RADashboard = () => {
                     </div>
                     <ArrowRightIcon className="ra-at-arrow" />
                 </Link>
-                <Link to="/ra/my-yearly-plan" className="ra-action-tile sky coming-soon">
+                <Link to="/ra/my-yearly-plan" className="ra-action-tile sky">
                     <div className="ra-at-icon"><FiClipboard /></div>
                     <div className="ra-at-content">
                         <h3>My Yearly Plan</h3>
