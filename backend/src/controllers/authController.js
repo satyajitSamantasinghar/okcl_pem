@@ -220,10 +220,21 @@ exports.hrmsSSO = async (req, res) => {
       return res.status(400).json({ message: "SSO token is required" });
     }
 
+    // ── 0. Debug log — always visible in server console ─────────────────────
+    //  Helps trace which employee triggered the request without decrypting.
+    //  Logged before decryption so even a bad token is traceable.
+    console.log("[HRMS SSO] Incoming SSO request — token length:", token.length);
+
     // ── 1. Decrypt the AES-256-CBC encrypted token ──────────────────────────
     let decoded;
     try {
       decoded = decryptKraToken(token);
+      // Log key identity fields immediately after decryption so every login is traceable
+      console.log(
+        `[HRMS SSO] Decrypted → emp_code: "${decoded.emp_code}" | ` +
+        `raw email: ${JSON.stringify(decoded.ismail)} | ` +
+        `ra_id: "${decoded.ra_id}" | ishod: ${JSON.stringify(decoded.ishod)}`
+      );
     } catch (err) {
       console.error("[HRMS SSO] Token decryption failed:", err.message);
       return res.status(400).json({ message: "Invalid or tampered SSO token" });
@@ -289,7 +300,7 @@ exports.hrmsSSO = async (req, res) => {
     // Industry-standard approach: reject the login with a clear 409 Conflict
     // so the HRD/admin knows exactly what to fix, rather than silently
     // corrupting data or logging the user in with the wrong account.
-    const incomingEmail = decoded.ismail || null;
+    const incomingEmail = decoded.ismail ? decoded.ismail.trim() : null;
     if (incomingEmail) {
       const emailConflict = await User.findOne({
         where: { email: incomingEmail },
@@ -452,7 +463,17 @@ exports.hrmsSSO = async (req, res) => {
     });
 
   } catch (error) {
-    console.error("[HRMS SSO Error]", error.message);
+    // Log the FULL error (type + message + stack) so the root cause is always
+    // visible in server logs and never silently swallowed.
+    console.error("[HRMS SSO Error] type    :", error.name || error.constructor?.name);
+    console.error("[HRMS SSO Error] message :", error.message);
+    if (error.errors) {
+      // SequelizeValidationError / SequelizeUniqueConstraintError carry per-field details
+      error.errors.forEach((e) =>
+        console.error(`  field: ${e.path} | type: ${e.type} | msg: ${e.message}`)
+      );
+    }
+    console.error("[HRMS SSO Error] stack   :", error.stack);
     return res.status(500).json({ message: "SSO authentication failed. Please try again." });
   }
 };
