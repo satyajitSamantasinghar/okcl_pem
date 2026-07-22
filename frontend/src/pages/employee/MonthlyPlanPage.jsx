@@ -895,11 +895,11 @@ const MonthlyPlanPage = () => {
                         </div>
                     </div>
                     <div className="mp-ach-actions">
-                        <button className="btn btn-primary" disabled={submitting} onClick={() => handleAchSubmit(false)}>
-                            <FiSend /> {submitting ? 'Submitting...' : 'Submit Achievement'}
-                        </button>
                         <button className="btn btn-secondary" disabled={submitting} onClick={() => handleAchSubmit(true)}>
                             <FiSave /> Save as Draft
+                        </button>
+                        <button className="btn btn-primary" disabled={submitting} onClick={() => handleAchSubmit(false)}>
+                            <FiSend /> {submitting ? 'Submitting...' : 'Submit Achievement'}
                         </button>
                         <button className="btn btn-secondary" onClick={() => setAchModal(null)}>Cancel</button>
                     </div>
@@ -1219,6 +1219,7 @@ const MonthlyPlanPage = () => {
         return createPortal(
             <div className="mp-overlay" onClick={() => setConfirmDialog(null)}>
                 <div className="mp-confirm-modal" onClick={e => e.stopPropagation()}>
+                    <button className="mp-modal-close mp-confirm-close" onClick={() => setConfirmDialog(null)}><FiX /></button>
                     <div className="mp-confirm-icon-wrap"><FiSend size={20} /></div>
                     <h3 className="mp-confirm-title">{title}</h3>
                     <p className="mp-confirm-message">{message}</p>
@@ -1426,12 +1427,12 @@ const MonthlyPlanPage = () => {
                                     </div>
                                 </div>
                                 <div className="mp-form-actions">
-                                    <button type="submit" className="btn btn-primary" disabled={submitting}>{submitting ? 'Submitting...' : 'Submit Plan'}</button>
                                     <button type="button" className="btn btn-secondary"
                                         disabled={submitting || !planMonth || !planItems.some(p => p.trim())}
                                         onClick={() => handleSubmitPlan(null, true)}>
                                         <FiSave /> Save as Draft
                                     </button>
+                                    <button type="submit" className="btn btn-primary" disabled={submitting}>{submitting ? 'Submitting...' : 'Submit Plan'}</button>
                                     <button type="button" className="btn btn-secondary" onClick={() => setShowPlanForm(false)}>Cancel</button>
                                 </div>
                             </form>
@@ -1597,16 +1598,16 @@ const MonthlyPlanPage = () => {
                             </div>
                         </div>
                         <div className="mp-ach-actions">
-                            <button className="btn btn-primary"
-                                disabled={submitting || !resubmitItems.some(p => p.trim())}
-                                onClick={() => handleResubmitPlan(false)}>
-                                <FiSend /> {submitting ? 'Submitting...' : (resubmitPlan.status === 'DRAFT' ? 'Submit Plan' : 'Resubmit Plan')}
-                            </button>
                             {resubmitPlan.status === 'DRAFT' && (
                                 <button className="btn btn-secondary" disabled={submitting || !resubmitItems.some(p => p.trim())} onClick={() => handleResubmitPlan(true)}>
                                     <FiSave /> Save as Draft
                                 </button>
                             )}
+                            <button className="btn btn-primary"
+                                disabled={submitting || !resubmitItems.some(p => p.trim())}
+                                onClick={() => handleResubmitPlan(false)}>
+                                <FiSend /> {submitting ? 'Submitting...' : (resubmitPlan.status === 'DRAFT' ? 'Submit Plan' : 'Resubmit Plan')}
+                            </button>
                             <button className="btn btn-secondary" onClick={() => setResubmitPlan(null)}>Cancel</button>
                         </div>
                     </div>

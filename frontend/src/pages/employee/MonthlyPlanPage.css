@@ -537,11 +537,11 @@
 }
 
 .mp-unified-card.status-achievement {
-    border-top: 3px solid #16A34A;
+    border-top: 3px solid #7C3AED;
 }
 
 .mp-unified-card.status-evaluated {
-    border-top: 3px solid #7C3AED;
+    border-top: 3px solid #16A34A;
 }
 
 .mp-unified-card.status-rejected {
@@ -609,13 +609,13 @@
 }
 
 .mp-status-badge.achievement {
-    background: #F0FDF4;
-    color: #15803D;
+    background: #F5F3FF;
+    color: #7C3AED;
 }
 
 .mp-status-badge.evaluated {
-    background: #F5F3FF;
-    color: #7C3AED;
+    background: #F0FDF4;
+    color: #15803D;
 }
 
 .mp-status-badge.rejected {
@@ -819,11 +819,11 @@
     align-items: center;
     gap: 6px;
     padding: 8px 15px;
-    background: #F5F3FF;
-    border-top: 1px solid #DDD6FE;
+    background: #F0FDF4;
+    border-top: 1px solid #BBF7D0;
     font-size: 0.6875rem;
     font-weight: 600;
-    color: #7C3AED;
+    color: #15803D;
 }
 
 .mp-eval-strip-score {
@@ -897,6 +897,7 @@
    achievement submission
 ============================================================ */
 .mp-confirm-modal {
+    position: relative;
     background: var(--bg-card);
     border-radius: var(--radius-lg);
     width: 100%;
@@ -908,6 +909,12 @@
     flex-direction: column;
     align-items: center;
     text-align: center;
+}
+
+.mp-confirm-close {
+    position: absolute;
+    top: 10px;
+    right: 10px;
 }
 
 .mp-confirm-icon-wrap {
