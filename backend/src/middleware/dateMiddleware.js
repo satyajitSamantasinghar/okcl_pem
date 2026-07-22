@@ -86,11 +86,11 @@ exports.allowMonthlyPlanSubmission = async (req, res, next) => {
     // ─────────────────────────────────────────────────────────────────────────
 
     // ── Normal deadline enforcement for fresh first submissions ───────────────
-    // if (submittedMonth !== currentMonth) {
-    //   return res.status(403).json({
-    //     message: `You can only submit a monthly plan for the current month (${currentMonth}). Received: ${submittedMonth}`
-    //   });
-    // }
+    if (submittedMonth !== currentMonth) {
+      return res.status(403).json({
+        message: `You can only submit a monthly plan for the current month (${currentMonth}). Received: ${submittedMonth}`
+      });
+    }
 
     // ── CENTRALIZED DEADLINE: read plan deadline day from .env ────────────────
     const { planDay } = parseDeadlineConfig();
@@ -141,11 +141,11 @@ exports.allowMonthlyAchievementSubmission = async (req, res, next) => {
     // ─────────────────────────────────────────────────────────────────────────
 
     // ── Normal deadline enforcement for fresh first-time achievements ─────────
-    // if (plan.month !== currentMonth) {
-    //   return res.status(403).json({
-    //     message: `You can only submit a monthly achievement for the current month (${currentMonth}). The linked plan is for: ${plan.month}`
-    //   });
-    // }
+    if (plan.month !== currentMonth) {
+      return res.status(403).json({
+        message: `You can only submit a monthly achievement for the current month (${currentMonth}). The linked plan is for: ${plan.month}`
+      });
+    }
 
     // ── CENTRALIZED DEADLINE: read achievement window from .env ────────────────
     // The window is bounded on BOTH sides:

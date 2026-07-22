@@ -29,7 +29,7 @@ const DashboardLayout = () => {
 
     const handleLogout = async () => {
         await logout();
-        // window.location.href = HRMS_LOGOUT_URL;
+        window.location.href = HRMS_LOGOUT_URL;
     };
 
     const handleRedirectToHRMS = async () => {
