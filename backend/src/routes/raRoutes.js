@@ -6,17 +6,24 @@ const { authorizeRoles } = require("../middleware/roleMiddleware");
 
 const raController = require("../controllers/raController");
 
+// ─── NOTE ON "MD" IN RA ROUTES ────────────────────────────────────────────────
+//  MD can switch to "RA View" in the frontend to evaluate the employees who
+//  directly report to MD (those whose reportingAuthorityId = MD's userId).
+//  All RA controllers already scope data by req.user.userId, so an MD calling
+//  these routes sees only the employees reporting to MD — zero data leakage.
+// ──────────────────────────────────────────────────────────────────────────────
+
 router.post(
   "/monthly-evaluation",
   verifyToken,
-  authorizeRoles("RA"),
+  authorizeRoles("RA", "MD"),   // MD in RA-view can submit monthly evaluation
   raController.submitMonthlyEvaluation
 );
 
 router.post(
   "/quarterly-evaluation",
   verifyToken,
-  authorizeRoles("RA"),
+  authorizeRoles("RA", "MD"),   // MD in RA-view can generate quarterly evaluation
   raController.generateQuarterlyEvaluation
 );
 router.get(
@@ -42,27 +49,27 @@ router.get(
 router.get(
   "/dashboard",
   verifyToken,
-  authorizeRoles("RA"),
+  authorizeRoles("RA", "MD"),   // MD in RA-view fetches their own RA dashboard
   raController.getRADashboard
 );
 
 router.get(
   "/monthly-trend",
   verifyToken,
-  authorizeRoles("RA"),
+  authorizeRoles("RA", "MD"),   // MD in RA-view can see monthly trend for their reportees
   raController.getMonthlyTrend
 );
 router.get(
   "/my-employees",
   verifyToken,
-  authorizeRoles("RA"),
+  authorizeRoles("RA", "MD"),   // MD in RA-view sees employees who directly report to MD
   raController.getMyEmployees
 );
 
 router.get(
   "/employee/:id",
   verifyToken,
-  authorizeRoles("RA"),
+  authorizeRoles("RA", "MD"),   // MD in RA-view can view individual employee detail
   raController.getEmployeeDetail
 );
 
@@ -83,23 +90,23 @@ router.get(
 router.put(
   "/quarterly-evaluations/:id/remarks",
   verifyToken,
-  authorizeRoles("RA"),
+  authorizeRoles("RA", "MD"),   // MD in RA-view can add quarterly remarks
   raController.updateQuarterlyRemarks
 );
 
-/* RA: Reject a monthly plan */
+/* RA / MD (in RA-view): Reject a monthly plan */
 router.put(
   "/monthly-plan/:id/reject",
   verifyToken,
-  authorizeRoles("RA"),
+  authorizeRoles("RA", "MD"),   // MD in RA-view can reject a monthly plan
   raController.rejectMonthlyPlan
 );
 
-/* Yearly Appraisal Report Evaluation */
+/* Yearly Appraisal Report Evaluation — first as RA, then MD evaluates again as MD */
 router.put(
   "/yearly-report/:id",
   verifyToken,
-  authorizeRoles("RA"),
+  authorizeRoles("RA", "MD"),   // MD in RA-view evaluates yearly appraisal report (RA stage)
   raController.evaluateYearlyReport
 );
 
@@ -107,7 +114,7 @@ router.put(
 router.get(
   "/yearly-plans",
   verifyToken,
-  authorizeRoles("RA"),
+  authorizeRoles("RA", "MD"),   // MD in RA-view can see yearly plans of their reportees
   raController.getYearlyPlans
 );
 
@@ -115,7 +122,7 @@ router.get(
 router.get(
   "/yearly-reports",
   verifyToken,
-  authorizeRoles("RA"),
+  authorizeRoles("RA", "MD"),   // MD in RA-view can see yearly appraisal reports
   raController.getYearlyReports
 );
 
@@ -131,7 +138,7 @@ router.get("/quarterly-evaluations/:id/full-detail",
 router.patch(
   "/extend-deadline",
   verifyToken,
-  authorizeRoles("RA"),
+  authorizeRoles("RA", "MD"),   // MD in RA-view can extend deadlines
   raController.extendDeadline
 );
 

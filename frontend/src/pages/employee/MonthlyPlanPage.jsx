@@ -99,6 +99,13 @@ function formatDateShort(dateStr) {
     return new Date(dateStr).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
+// CENTRALIZED DEADLINE: matches the ordinal-suffix style used in backend messages
+function ordinalSuffix(n) {
+    const s = ['th', 'st', 'nd', 'rd'];
+    const v = n % 100;
+    return s[(v - 20) % 10] || s[v] || s[0];
+}
+
 function getProgressTokens(progress) {
     const p = Math.min(100, Math.max(0, progress || 0));
     if (p === 100) return {
@@ -271,7 +278,20 @@ const ENFORCE_DEADLINES = import.meta.env.VITE_ENFORCE_DEADLINES !== 'false';
 
 const MonthlyPlanPage = () => {
     // CENTRALIZED DEADLINE CONFIG — plan & achievement days from .env via API
-    const { planDay, achievementDay, getPlanDeadline, getAchievementDeadline, resolvedAchievementDay } = useDeadlines();
+    const { planDay, achievementStartDay, achievementDay, getPlanDeadline, getAchievementDeadline, resolvedAchievementDay } = useDeadlines();
+
+    // CENTRALIZED DEADLINE: achievement window is bounded on both sides —
+    // opens on achievementStartDay, closes on achievementDay ('last' = last
+    // calendar day of the month). Drives the proactive UI lock states below,
+    // so employees see the window state before opening the modal, not after.
+    const achievementWindowStatus = useMemo(() => {
+        if (!ENFORCE_DEADLINES) return 'open';
+        const day = new Date().getDate();
+        if (day < achievementStartDay) return 'not_open';
+        if (achievementDay !== 'last' && day > achievementDay) return 'closed';
+        return 'open';
+    }, [achievementStartDay, achievementDay]);
+
     const [plans, setPlans] = useState([]);
     const [achievements, setAchievements] = useState([]);
     const [evaluations, setEvaluations] = useState([]);
@@ -301,6 +321,10 @@ const MonthlyPlanPage = () => {
     const [selectedPlan, setSelectedPlan] = useState(null);
     const [resubmitPlan, setResubmitPlan] = useState(null);
     const [resubmitItems, setResubmitItems] = useState(['']);
+
+    // Confirmation dialog shown before any final (non-draft) submission.
+    // Shape: { title, message, confirmLabel, onConfirm }
+    const [confirmDialog, setConfirmDialog] = useState(null);
 
     const fetchData = async () => {
         try {
@@ -369,6 +393,76 @@ const MonthlyPlanPage = () => {
         return { total, withAch, drafts, evaluated };
     }, [plans, filterFY, filterYear, achievementByPlanId, evaluationByMonth]);
 
+    // ────────────────────────────────────────────────────────────────────
+    // CURRENT-MONTH PLAN STATE — single source of truth for the top
+    // "Submit Monthly Plan" CTA.
+    //
+    // LOGICAL GAP THIS CLOSES: previously the CTA always did
+    // setShowPlanForm(!showPlanForm) and the form always mounted blank,
+    // regardless of whether a plan already existed for the current month
+    // (DRAFT / PENDING / REJECTED). That let an employee re-open an empty
+    // form after already submitting, fill it in again, and hit the
+    // server's duplicate-plan guard (409 "Monthly plan already submitted
+    // for this month") — a confusing, reactive error instead of the UI
+    // simply never offering the invalid action in the first place.
+    //
+    // The backend checks (dateMiddleware.allowMonthlyPlanSubmission and
+    // the existingPlan branch in employeeController.submitMonthlyPlan)
+    // stay exactly as they are — this is defense-in-depth, not something
+    // to remove. This block only makes the UI agree with them ahead of
+    // time instead of finding out after a failed request.
+    // ────────────────────────────────────────────────────────────────────
+    const currentMonthPlan = useMemo(
+        () => plans.find(p => p.month === currentMonthDefault) || null,
+        [plans, currentMonthDefault]
+    );
+
+    const planCtaState = useMemo(() => {
+        if (!ENFORCE_DEADLINES) {
+            // Dev mode: always allow free-form create (any month, any time).
+            return { mode: 'create', label: 'Submit Monthly Plan', disabled: false };
+        }
+
+        const deadlinePassed = new Date().getDate() > planDay;
+
+        if (!currentMonthPlan) {
+            return deadlinePassed
+                ? { mode: 'locked', label: 'Submission Window Closed', disabled: true }
+                : { mode: 'create', label: 'Submit Monthly Plan', disabled: false };
+        }
+
+        if (currentMonthPlan.status === 'DRAFT') {
+            // Route into the SAME pre-filled editor used for rejections —
+            // never re-open the blank create form over an existing draft.
+            return { mode: 'continue-draft', label: 'Continue Draft', disabled: false, plan: currentMonthPlan };
+        }
+
+        if (currentMonthPlan.status === 'REJECTED') {
+            return { mode: 'resubmit', label: 'Resubmit Plan', disabled: false, plan: currentMonthPlan };
+        }
+
+        // PENDING (or any other already-submitted state) — nothing left to do
+        // here; the CTA should say so rather than inviting a second attempt.
+        return {
+            mode: 'submitted',
+            label: `Plan Submitted — ${formatMonth(currentMonthDefault)}`,
+            disabled: true,
+            plan: currentMonthPlan,
+        };
+    }, [currentMonthPlan, planDay, currentMonthDefault]);
+
+    const handlePlanCtaClick = () => {
+        if (planCtaState.mode === 'create') { setShowPlanForm(true); return; }
+        if (planCtaState.mode === 'continue-draft' || planCtaState.mode === 'resubmit') {
+            openResubmitModal(planCtaState.plan);
+            return;
+        }
+        // 'submitted' / 'locked': button is disabled for pointer users; this
+        // is just a safety net for keyboard/assistive-tech activation, and
+        // routes to a harmless read-only view instead of doing nothing.
+        if (planCtaState.plan) setSelectedPlan(planCtaState.plan);
+    };
+
     const getProgress = (plan) => {
         const ach = achievementByPlanId[plan.id];
         const ev = evaluationByMonth[plan.month];
@@ -408,7 +502,21 @@ const MonthlyPlanPage = () => {
         setAdditionalAchItems(additionalAchItems.filter((_, i) => i !== index));
     };
 
-    const handleSubmitPlan = async (e, asDraft = false) => {
+    // Actual network call — only runs after validation has passed and,
+    // for a real submission, after the user has confirmed via the dialog.
+    const submitPlanRequest = async (month, filled, asDraft) => {
+        setSubmitting(true);
+        try {
+            await api.post('/employee/monthly-plan', { month, planItems: filled, planDetails: filled.join('\n'), status: asDraft ? 'DRAFT' : 'PENDING' });
+            toast.success(asDraft ? 'Plan saved as draft!' : 'Monthly plan submitted!');
+            setPlanMonth(''); setPlanItems(['']); setShowPlanForm(false);
+            fetchData();
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Submission failed');
+        } finally { setSubmitting(false); }
+    };
+
+    const handleSubmitPlan = (e, asDraft = false) => {
         if (e) e.preventDefault();
         const filled = planItems.filter(p => p.trim());
         if (!planMonth) { toast.error('Please select a month'); return; }
@@ -433,15 +541,19 @@ const MonthlyPlanPage = () => {
             }
         }
 
-        setSubmitting(true);
-        try {
-            await api.post('/employee/monthly-plan', { month: planMonth, planItems: filled, planDetails: filled.join('\n'), status: asDraft ? 'DRAFT' : 'PENDING' });
-            toast.success(asDraft ? 'Plan saved as draft!' : 'Monthly plan submitted!');
-            setPlanMonth(''); setPlanItems(['']); setShowPlanForm(false);
-            fetchData();
-        } catch (err) {
-            toast.error(err.response?.data?.message || 'Submission failed');
-        } finally { setSubmitting(false); }
+        // Drafts are low-stakes and freely editable — save immediately, no confirmation needed.
+        if (asDraft) {
+            submitPlanRequest(planMonth, filled, true);
+            return;
+        }
+
+        // Final submission is consequential (goes to the RA and locks editing) — confirm first.
+        setConfirmDialog({
+            title: 'Submit Monthly Plan?',
+            message: `You're about to submit ${filled.length} plan${filled.length !== 1 ? 's' : ''} for ${formatMonth(planMonth)}. Once submitted, your Reporting Authority will be notified for review, and you won't be able to edit it unless it's rejected.`,
+            confirmLabel: 'Yes, Submit Plan',
+            onConfirm: () => submitPlanRequest(planMonth, filled, false),
+        });
     };
 
     const openAchModal = (plan) => {
@@ -463,7 +575,19 @@ const MonthlyPlanPage = () => {
 
     const openResubmitModal = (plan) => { setResubmitPlan(plan); const items = getPlanItems(plan); setResubmitItems(items.length ? items : ['']); };
 
-    const handleResubmitPlan = async (asDraft = false) => {
+    const submitResubmitRequest = async (month, filled, asDraft, wasDraft) => {
+        setSubmitting(true);
+        try {
+            await api.post('/employee/monthly-plan', { month, planItems: filled, planDetails: filled.join('\n'), status: asDraft ? 'DRAFT' : 'PENDING' });
+            toast.success(asDraft ? 'Draft saved!' : (wasDraft ? 'Plan submitted!' : 'Plan resubmitted!'));
+            setResubmitPlan(null); setResubmitItems(['']);
+            fetchData();
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Submission failed');
+        } finally { setSubmitting(false); }
+    };
+
+    const handleResubmitPlan = (asDraft = false) => {
         const filled = resubmitItems.filter(p => p.trim());
         if (filled.length === 0) { toast.error('Please enter at least one plan'); return; }
 
@@ -478,52 +602,25 @@ const MonthlyPlanPage = () => {
             }
         }
 
-        setSubmitting(true);
-        try {
-            await api.post('/employee/monthly-plan', { month: resubmitPlan.month, planItems: filled, planDetails: filled.join('\n'), status: asDraft ? 'DRAFT' : 'PENDING' });
-            toast.success(asDraft ? 'Draft saved!' : (resubmitPlan.status === 'DRAFT' ? 'Plan submitted!' : 'Plan resubmitted!'));
-            setResubmitPlan(null); setResubmitItems(['']);
-            fetchData();
-        } catch (err) {
-            toast.error(err.response?.data?.message || 'Submission failed');
-        } finally { setSubmitting(false); }
+        // Drafts are low-stakes and freely editable — save immediately, no confirmation needed.
+        if (asDraft) {
+            submitResubmitRequest(resubmitPlan.month, filled, true, resubmitPlan.status === 'DRAFT');
+            return;
+        }
+
+        const wasDraft = resubmitPlan.status === 'DRAFT';
+        const month = resubmitPlan.month;
+        setConfirmDialog({
+            title: wasDraft ? 'Submit Monthly Plan?' : 'Resubmit Monthly Plan?',
+            message: wasDraft
+                ? `You're about to submit ${filled.length} plan${filled.length !== 1 ? 's' : ''} for ${formatMonth(month)}. Once submitted, your Reporting Authority will be notified for review.`
+                : `You're about to resubmit your revised plan for ${formatMonth(month)} to your Reporting Authority for review.`,
+            confirmLabel: wasDraft ? 'Yes, Submit Plan' : 'Yes, Resubmit Plan',
+            onConfirm: () => submitResubmitRequest(month, filled, false, wasDraft),
+        });
     };
 
-    const handleAchSubmit = async (asDraft) => {
-        // INDUSTRY STANDARD: If the plan was resubmitted after RA rejection
-        // (version > 1), skip all deadline checks. The employee is not at fault
-        // for the delay — RA rejection creates a new submission window.
-        const isPostRejectionResubmit = (achModal?.version || 1) > 1;
-
-        if (!isPostRejectionResubmit && import.meta.env.VITE_ENFORCE_DEADLINES !== 'false') {
-            const today = new Date();
-            const currentMonthStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-            if (achModal.month !== currentMonthStr) {
-                toast.error(`You can only submit a monthly achievement for the current month (${currentMonthStr}).`);
-                return;
-            }
-            // CENTRALIZED DEADLINE: use achievementDay from .env via DeadlineContext
-            // When achievementDay === 'last', the deadline is the last day of the month
-            // so employees can submit any time — no lower-bound restriction needed.
-            if (achievementDay !== 'last') {
-                if (today.getDate() < achievementDay) {
-                    toast.error(`Monthly achievement submission opens from the ${achievementDay}th of the month.`);
-                    return;
-                }
-            }
-        }
-
-        if (!asDraft) {
-            const missingIndex = achItems.findIndex(a => !(a.achievementDetails || '').trim());
-            if (missingIndex !== -1) {
-                toast.error(`Plan ${missingIndex + 1} achievement is pending. Please write it before submitting.`);
-                return;
-            }
-        } else {
-            const hasAny = achItems.some(a => (a.achievementDetails || '').trim()) || additionalAchItems.some(a => (a.text || '').trim());
-            if (!hasAny) { toast.error('Please describe at least one achievement to save as draft'); return; }
-        }
-
+    const submitAchievementRequest = async (asDraft) => {
         setSubmitting(true);
         const filledAdditional = additionalAchItems.filter(a => a.text.trim());
         const additionalStr = filledAdditional.length ? JSON.stringify(filledAdditional) : '';
@@ -541,6 +638,62 @@ const MonthlyPlanPage = () => {
         } catch (err) {
             toast.error(err.response?.data?.message || 'Failed');
         } finally { setSubmitting(false); }
+    };
+
+    const handleAchSubmit = (asDraft) => {
+        // INDUSTRY STANDARD: If the plan was resubmitted after RA rejection
+        // (version > 1), skip all deadline checks. The employee is not at fault
+        // for the delay — RA rejection creates a new submission window.
+        const isPostRejectionResubmit = (achModal?.version || 1) > 1;
+
+        if (!isPostRejectionResubmit && import.meta.env.VITE_ENFORCE_DEADLINES !== 'false') {
+            const today = new Date();
+            const currentMonthStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+            if (achModal.month !== currentMonthStr) {
+                toast.error(`You can only submit a monthly achievement for the current month (${currentMonthStr}).`);
+                return;
+            }
+            // CENTRALIZED DEADLINE: achievement window is bounded on both sides —
+            // opens on achievementStartDay, closes on achievementDay ('last' = last
+            // calendar day of the month, so no upper-bound check is needed then).
+            const todayDate = today.getDate();
+            if (todayDate < achievementStartDay) {
+                toast.error(`Monthly achievement submission opens on the ${achievementStartDay}${ordinalSuffix(achievementStartDay)} of the month.`);
+                return;
+            }
+            if (achievementDay !== 'last' && todayDate > achievementDay) {
+                toast.error(`Monthly achievement submission deadline has passed (${achievementDay}${ordinalSuffix(achievementDay)} of the month).`);
+                return;
+            }
+        }
+
+        if (!asDraft) {
+            const missingIndex = achItems.findIndex(a => !(a.achievementDetails || '').trim());
+            if (missingIndex !== -1) {
+                toast.error(`Plan ${missingIndex + 1} achievement is pending. Please write it before submitting.`);
+                return;
+            }
+        } else {
+            const hasAny = achItems.some(a => (a.achievementDetails || '').trim()) || additionalAchItems.some(a => (a.text || '').trim());
+            if (!hasAny) { toast.error('Please describe at least one achievement to save as draft'); return; }
+        }
+
+        // Drafts are low-stakes and freely editable — save immediately, no confirmation needed.
+        if (asDraft) {
+            submitAchievementRequest(true);
+            return;
+        }
+
+        const overallProgress = achItems.length > 0
+            ? Math.round(achItems.reduce((s, a) => s + (Math.min(100, a.progress || 0)), 0) / achItems.length) : 0;
+        const monthLabel = formatMonth(achModal.month);
+
+        setConfirmDialog({
+            title: 'Submit Achievement?',
+            message: `You're about to submit your achievement for ${monthLabel} at ${overallProgress}% overall progress. Once submitted, it will be sent to your Reporting Authority for evaluation.`,
+            confirmLabel: 'Yes, Submit Achievement',
+            onConfirm: () => submitAchievementRequest(false),
+        });
     };
 
     if (loading) {
@@ -835,12 +988,12 @@ const MonthlyPlanPage = () => {
                                 <h2 className="dmod-title">{formatMonth(selectedPlan.month)}</h2>
                                 <div className="dmod-meta">
                                     <FiClock size={11} />
-                                    <span>Submitted {formatDate(selectedPlan.submittedAt)}</span>
+                                    <span>{prog.isPlanDraft ? 'Saved as Draft' : `Submitted ${formatDate(selectedPlan.submittedAt)}`}</span>
                                     <span className="dmod-meta-dot" />
                                     <span>{planItemsList.length} Plan{planItemsList.length !== 1 ? 's' : ''}</span>
                                     <span className="dmod-meta-dot" />
-                                    <span className={`dmod-status-pill ${isEval ? 'dmod-sp-eval' : prog.achDone ? 'dmod-sp-ach' : 'dmod-sp-plan'}`}>
-                                        {isEval ? 'Evaluated' : prog.achDone ? 'Achievement Submitted' : 'Plan Submitted'}
+                                    <span className={`dmod-status-pill ${isEval ? 'dmod-sp-eval' : prog.achDone ? 'dmod-sp-ach' : prog.isPlanDraft ? 'dmod-sp-draft' : 'dmod-sp-plan'}`}>
+                                        {isEval ? 'Evaluated' : prog.achDone ? 'Achievement Submitted' : prog.isPlanDraft ? 'Plan Draft' : 'Plan Submitted'}
                                     </span>
                                 </div>
                             </div>
@@ -1057,6 +1210,39 @@ const MonthlyPlanPage = () => {
     };
 
     /* ======================================================
+       SUBMIT CONFIRMATION MODAL — shared across plan & achievement submits
+    ====================================================== */
+    const renderConfirmDialog = () => {
+        if (!confirmDialog) return null;
+        const { title, message, confirmLabel, onConfirm } = confirmDialog;
+
+        return createPortal(
+            <div className="mp-overlay" onClick={() => setConfirmDialog(null)}>
+                <div className="mp-confirm-modal" onClick={e => e.stopPropagation()}>
+                    <div className="mp-confirm-icon-wrap"><FiSend size={20} /></div>
+                    <h3 className="mp-confirm-title">{title}</h3>
+                    <p className="mp-confirm-message">{message}</p>
+                    <div className="mp-confirm-actions">
+                        <button className="btn btn-secondary" onClick={() => setConfirmDialog(null)}>
+                            Cancel
+                        </button>
+                        <button
+                            className="btn btn-primary"
+                            onClick={() => {
+                                setConfirmDialog(null);
+                                onConfirm();
+                            }}
+                        >
+                            <FiCheckCircle /> {confirmLabel}
+                        </button>
+                    </div>
+                </div>
+            </div>,
+            document.body
+        );
+    };
+
+    /* ======================================================
        MAIN RENDER
     ====================================================== */
     return (
@@ -1090,8 +1276,23 @@ const MonthlyPlanPage = () => {
 
             {/* Actions + Filters */}
             <div className="mp-action-row">
-                <button className="btn btn-primary" onClick={() => setShowPlanForm(!showPlanForm)}>
-                    <FiPlus /> Submit Monthly Plan
+                <button
+                    className={`btn btn-primary mp-plan-cta mp-plan-cta--${planCtaState.mode}`}
+                    disabled={planCtaState.disabled}
+                    onClick={handlePlanCtaClick}
+                    title={
+                        planCtaState.mode === 'submitted'
+                            ? `Already submitted for ${formatMonth(currentMonthDefault)} — view it in the list below`
+                            : planCtaState.mode === 'locked'
+                                ? `The window to submit for ${formatMonth(currentMonthDefault)} has closed`
+                                : undefined
+                    }
+                >
+                    {planCtaState.mode === 'submitted' ? <FiCheckCircle />
+                        : planCtaState.mode === 'continue-draft' ? <FiEdit3 />
+                        : planCtaState.mode === 'resubmit' ? <FiRefreshCw />
+                        : <FiPlus />}
+                    {' '}{planCtaState.label}
                 </button>
                 <div className="mp-filters">
                     {ENFORCE_DEADLINES ? (
@@ -1305,7 +1506,13 @@ const MonthlyPlanPage = () => {
                                             <div className="mp-card-plan-more">+{planItemsList.length - 3} more plan{planItemsList.length - 3 > 1 ? 's' : ''}</div>
                                         )}
                                     </div>
-                                    <div className="mp-section-date"><FiClock size={10} /> Submitted {formatDateShort(plan.submittedAt)}</div>
+                                    {isPlanDraft ? (
+                                        <div className="mp-section-date mp-section-date--draft">
+                                            <FiSave size={10} /> Saved as draft — not yet submitted
+                                        </div>
+                                    ) : (
+                                        <div className="mp-section-date"><FiClock size={10} /> Submitted {formatDateShort(plan.submittedAt)}</div>
+                                    )}
                                 </div>
                                 <div className={`mp-section achievement ${ach && !isDraftAch ? 'filled' : 'empty'}`}>
                                     <div className="mp-section-label"><FiTrendingUp /> Achievement</div>
@@ -1333,6 +1540,10 @@ const MonthlyPlanPage = () => {
                                         <div className="mp-ach-locked"><FiAlertCircle className="mp-ach-locked-icon" /><span>Submit your plan first to unlock achievement entry</span></div>
                                     ) : isRejected ? (
                                         <div className="mp-ach-locked"><FiAlertCircle className="mp-ach-locked-icon" /><span>Resubmit your plan to unlock achievement entry</span></div>
+                                    ) : plan.month === currentMonthDefault && achievementWindowStatus === 'not_open' ? (
+                                        <div className="mp-ach-locked"><FiAlertCircle className="mp-ach-locked-icon" /><span>Achievement submission opens on the {achievementStartDay}{ordinalSuffix(achievementStartDay)} of the month</span></div>
+                                    ) : plan.month === currentMonthDefault && achievementWindowStatus === 'closed' ? (
+                                        <div className="mp-ach-locked"><FiAlertCircle className="mp-ach-locked-icon" /><span>Achievement submission window has closed for this month</span></div>
                                     ) : (
                                         <button className="mp-add-ach-btn" onClick={() => openAchModal(plan)}><FiPlus /> Add Achievement</button>
                                     )}
@@ -1402,6 +1613,8 @@ const MonthlyPlanPage = () => {
                 </div>,
                 document.body
             )}
+
+            {renderConfirmDialog()}
         </div>
     );
 };

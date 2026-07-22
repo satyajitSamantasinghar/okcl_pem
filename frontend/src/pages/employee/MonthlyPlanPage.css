@@ -94,6 +94,39 @@
     flex-wrap: wrap;
 }
 
+/* ============================================================
+   STATE-AWARE PLAN CTA
+   Visual language for each planCtaState.mode so the button reads
+   correctly even before the person notices it's disabled.
+============================================================ */
+.mp-plan-cta--submitted {
+    background: #F0FDF4 !important;
+    color: #15803D !important;
+    border: 1px solid #BBF7D0 !important;
+    cursor: default;
+    opacity: 1 !important;
+}
+
+.mp-plan-cta--locked {
+    background: var(--bg-hover, #F1F5F9) !important;
+    color: var(--text-muted, #64748B) !important;
+    border: 1px solid var(--border-default, #E2E8F0) !important;
+    cursor: not-allowed;
+    opacity: 1 !important;
+}
+
+.mp-plan-cta--continue-draft {
+    background: #FFFBEB !important;
+    color: #B45309 !important;
+    border: 1px solid #FDE68A !important;
+}
+
+.mp-plan-cta--resubmit {
+    background: #FEF2F2 !important;
+    color: #B91C1C !important;
+    border: 1px solid #FECACA !important;
+}
+
 .mp-filter-group {
     display: flex;
     align-items: center;
@@ -686,6 +719,10 @@
     margin-top: 6px;
 }
 
+.mp-section-date--draft {
+    color: #92600A;
+}
+
 .mp-card-ach-summary {
     display: flex;
     flex-direction: column;
@@ -856,6 +893,61 @@
 }
 
 /* ============================================================
+   CONFIRM MODAL — shared "are you sure?" dialog for plan &
+   achievement submission
+============================================================ */
+.mp-confirm-modal {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    width: 100%;
+    max-width: 420px;
+    padding: 28px 26px 22px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, .25);
+    animation: scaleUp .2s ease-out;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.mp-confirm-icon-wrap {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 107, 53, .1);
+    color: var(--primary);
+    margin-bottom: 14px;
+}
+
+.mp-confirm-title {
+    margin: 0 0 8px;
+    font-size: 1.0625rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.mp-confirm-message {
+    margin: 0 0 22px;
+    font-size: .8125rem;
+    line-height: 1.55;
+    color: var(--text-muted);
+}
+
+.mp-confirm-actions {
+    display: flex;
+    gap: 10px;
+    width: 100%;
+}
+
+.mp-confirm-actions .btn {
+    flex: 1;
+    justify-content: center;
+}
+
+/* ============================================================
    DETAIL MODAL — dmod namespace (v5 — chip header + stepper below)
 ============================================================ */
 .dmod {
@@ -973,6 +1065,11 @@
 .dmod-sp-ach {
     background: #F0FDF4;
     color: #16A34A;
+}
+
+.dmod-sp-draft {
+    background: #FFFBEB;
+    color: #B45309;
 }
 
 .dmod-sp-eval {

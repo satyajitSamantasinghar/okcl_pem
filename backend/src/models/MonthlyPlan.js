@@ -10,25 +10,25 @@ module.exports = (sequelize) => {
     "MonthlyPlan",
     {
       id: {
-        type:         DataTypes.UUID,
+        type: DataTypes.UUID,
         defaultValue: DataTypes.UUIDV4,
-        primaryKey:   true,
+        primaryKey: true,
       },
       employeeId: {
-        type:      DataTypes.UUID,
+        type: DataTypes.UUID,
         allowNull: false,
       },
       month: {
-        type:      DataTypes.STRING, // "2026-01"
+        type: DataTypes.STRING, // "2026-01"
         allowNull: false,
       },
       planDetails: {
-        type:      DataTypes.TEXT,   // auto-derived from planItems in the controller
+        type: DataTypes.TEXT,   // auto-derived from planItems in the controller
         allowNull: false,
         defaultValue: "",
       },
       status: {
-        type:         DataTypes.ENUM("DRAFT", "PENDING", "APPROVED", "REJECTED"),
+        type: DataTypes.ENUM("DRAFT", "PENDING", "APPROVED", "REJECTED"),
         defaultValue: "PENDING",
       },
       mdRemarks: {
@@ -38,18 +38,18 @@ module.exports = (sequelize) => {
         type: DataTypes.TEXT,
       },
       version: {
-        type:         DataTypes.INTEGER,
+        type: DataTypes.INTEGER,
         defaultValue: 1,
       },
       submittedAt: {
-        type:         DataTypes.DATE,
-        defaultValue: DataTypes.NOW,
+        type: DataTypes.DATE,
+        allowNull: true, // only ever set by the controller when status actually becomes PENDING
       },
     },
     {
-      tableName:   "monthly_plans",
+      tableName: "monthly_plans",
       underscored: true,
-      timestamps:  false,
+      timestamps: false,
       indexes: [
         // Replaces Mongoose: one plan per employee per month
         { unique: true, fields: ["employee_id", "month"] },

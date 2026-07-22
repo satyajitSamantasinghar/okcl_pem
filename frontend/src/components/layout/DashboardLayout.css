@@ -189,6 +189,69 @@
     color: #DC2626;
 }
 
+/* ── Switch View item in dropdown ── */
+.dropdown-item--switch {
+    color: var(--primary);
+}
+.dropdown-item--switch:hover {
+    background: rgba(var(--primary-rgb, 99, 102, 241), 0.06);
+    color: var(--primary);
+}
+
+/* ── "Acting in X View" label inside dropdown header ── */
+.dropdown-view-badge {
+    font-size: 0.75rem !important;
+    font-weight: 600 !important;
+    margin-top: 4px !important;
+    letter-spacing: 0.3px;
+}
+
+/* ── Topbar active-view chip (clickable — toggles view) ── */
+.topbar-view-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 13px;
+    border-radius: 20px;
+    border: 1.5px solid var(--chip-color, #6366f1);
+    background: transparent;
+    color: var(--chip-color, #6366f1);
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    letter-spacing: 0.3px;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.topbar-view-chip:hover {
+    background: var(--chip-color, #6366f1);
+    color: #ffffff;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+/* Alternate view chip pulses gently to remind user they are in a different mode */
+.topbar-view-chip--alt {
+    background: color-mix(in srgb, var(--chip-color, #6366f1) 10%, transparent);
+    animation: chipGlow 3s ease-in-out infinite;
+}
+
+@keyframes chipGlow {
+    0%, 100% { box-shadow: 0 0 0 0 transparent; }
+    50%       { box-shadow: 0 0 0 3px color-mix(in srgb, var(--chip-color, #6366f1) 20%, transparent); }
+}
+
+.topbar-view-chip-icon {
+    font-size: 0.85rem;
+    transition: transform 0.3s ease;
+}
+
+.topbar-view-chip:hover .topbar-view-chip-icon {
+    transform: rotate(180deg);
+}
+
+
 /* ===== Content ===== */
 .dashboard-content {
     flex: 1;

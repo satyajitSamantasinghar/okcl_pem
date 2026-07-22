@@ -1209,8 +1209,9 @@ const RAMonthlyEvaluationPage = () => {
         {Array.from({ length: 12 }, (_, i) => i + 1).map(m => {
             const selectedYear = Number(filterMonth.split('-')[0]);
             const isBeforeGoLive = selectedYear === GO_LIVE.year && m < GO_LIVE.month;
-            const isAfterToday  = selectedYear === currentYM.year && m > currentYM.month;
-            if (isBeforeGoLive || isAfterToday) return null;
+            // const isAfterToday  = selectedYear === currentYM.year && m > currentYM.month;
+            // if (isBeforeGoLive || isAfterToday) return null;
+            if(isBeforeGoLive) return null;
             return (
                 <option key={m} value={String(m).padStart(2, '0')}>
                     {new Date(2000, m - 1).toLocaleString('en-US', { month: 'long' })}

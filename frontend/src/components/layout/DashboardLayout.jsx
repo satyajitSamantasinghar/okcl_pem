@@ -3,33 +3,41 @@ import { Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import Sidebar from './Sidebar';
 import NotificationBell from './NotificationBell';
-import { FiMenu, FiLogOut, FiUser, FiSettings, FiChevronDown, FiExternalLink } from 'react-icons/fi';
+import {
+    FiMenu, FiLogOut, FiUser, FiChevronDown,
+    FiExternalLink, FiRepeat,
+} from 'react-icons/fi';
 import './DashboardLayout.css';
 
-const HRMS_PORTAL_URL  = 'https://hrmserp.okcl.co.in/plist.php';
-const HRMS_LOGOUT_URL  = 'https://hrmserp.okcl.co.in/phpscript/logout.php';
+const HRMS_PORTAL_URL = 'https://hrmserp.okcl.co.in/plist.php';
+const HRMS_LOGOUT_URL = 'https://hrmserp.okcl.co.in/phpscript/logout.php';
+
+// ── View mode label + colour ──────────────────────────────────────────────────
+const viewMeta = {
+    EMPLOYEE: { label: 'Employee View', color: '#6366f1' },
+    RA:       { label: 'RA View',       color: '#0ea5e9' },
+    HRD:      { label: 'HRD',           color: '#10b981' },
+    MD:       { label: 'MD View',       color: '#f97316' },
+};
 
 const DashboardLayout = () => {
     const [sidebarOpen, setSidebarOpen]   = useState(false);
     const [dropdownOpen, setDropdownOpen] = useState(false);
-    const { user, logout } = useAuth();
+    const { user, logout, activeView, switchView, mdIsRA } = useAuth();
     const dropdownRef = useRef(null);
     const navigate    = useNavigate();
 
-    
     const handleLogout = async () => {
         await logout();
-         window.location.href = HRMS_LOGOUT_URL;
+        // window.location.href = HRMS_LOGOUT_URL;
     };
 
-    
     const handleRedirectToHRMS = async () => {
         setDropdownOpen(false);
         await logout();
         window.location.href = HRMS_PORTAL_URL;
     };
 
-    
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -44,6 +52,45 @@ const DashboardLayout = () => {
         if (!name) return 'U';
         return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
     };
+
+    // ── Switch action from topbar dropdown / chip ─────────────────────────────
+    const handleSwitchView = () => {
+        setDropdownOpen(false);
+        if (user.role === 'RA') {
+            if (activeView === 'RA') {
+                switchView('EMPLOYEE');
+                navigate('/employee');
+            } else {
+                switchView('RA');
+                navigate('/ra');
+            }
+        } else if (user.role === 'MD') {
+            if (activeView === 'MD') {
+                switchView('RA');
+                navigate('/ra');
+            } else {
+                switchView('MD');
+                navigate('/md');
+            }
+        }
+    };
+
+    const switchLabel = () => {
+        if (user?.role === 'RA') {
+            return activeView === 'RA' ? 'Switch to Employee View' : 'Switch to RA View';
+        }
+        if (user?.role === 'MD') {
+            return activeView === 'MD' ? 'Switch to RA View' : 'Switch to MD View';
+        }
+        return null;
+    };
+
+    const showSwitchInDropdown =
+        (user?.role === 'RA') ||
+        (user?.role === 'MD' && mdIsRA);
+
+    const meta = viewMeta[activeView] || viewMeta[user?.role] || { label: user?.role, color: '#64748b' };
+    const isInAlternateView = user && activeView !== user.role;
 
     return (
         <div className="dashboard-layout">
@@ -61,6 +108,23 @@ const DashboardLayout = () => {
                         <div className="topbar-greeting">
                             Welcome, <strong>{user?.name}</strong>
                         </div>
+
+                        {/* ── Active View Chip ──────────────────────────────────────
+                            Only shown for multi-role users (RA and MD with reportees).
+                            Provides a clear visual indicator of the current operating context.
+                            Clicking it toggles the view directly from the topbar.
+                        ─────────────────────────────────────────────────────────── */}
+                        {showSwitchInDropdown && (
+                            <button
+                                className={`topbar-view-chip ${isInAlternateView ? 'topbar-view-chip--alt' : ''}`}
+                                style={{ '--chip-color': meta.color }}
+                                onClick={handleSwitchView}
+                                title={switchLabel()}
+                            >
+                                <FiRepeat className="topbar-view-chip-icon" />
+                                <span>{meta.label}</span>
+                            </button>
+                        )}
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
@@ -87,16 +151,40 @@ const DashboardLayout = () => {
                                     <div className="dropdown-header">
                                         <strong>{user?.name}</strong>
                                         <span>{user?.email}</span>
+                                        {isInAlternateView && (
+                                            <span className="dropdown-view-badge" style={{ color: meta.color }}>
+                                                Acting in {meta.label}
+                                            </span>
+                                        )}
                                     </div>
                                     <div className="dropdown-divider"></div>
 
-                                    {/* My Profile — unchanged */}
-                                    <button className="dropdown-item" onClick={() => { setDropdownOpen(false); navigate(`/${user.role.toLowerCase()}/profile`); }}>
+                                    {/* My Profile */}
+                                    <button
+                                        className="dropdown-item"
+                                        onClick={() => {
+                                            setDropdownOpen(false);
+                                            // Profile route depends on current active view's base path
+                                            const profileBase =
+                                                user.role === 'RA' ? '/ra' :
+                                                user.role === 'MD' ? '/md' :
+                                                `/${user.role.toLowerCase()}`;
+                                            navigate(`${profileBase}/profile`);
+                                        }}
+                                    >
                                         <FiUser />
                                         <span>My Profile</span>
                                     </button>
 
-                                    {/* ✅ Change 5 — New Redirect to HRMS button */}
+                                    {/* Switch View — shown for RA and eligible MD */}
+                                    {showSwitchInDropdown && (
+                                        <button className="dropdown-item dropdown-item--switch" onClick={handleSwitchView}>
+                                            <FiRepeat />
+                                            <span>{switchLabel()}</span>
+                                        </button>
+                                    )}
+
+                                    {/* Go to HRMS */}
                                     <button className="dropdown-item" onClick={handleRedirectToHRMS}>
                                         <FiExternalLink />
                                         <span>Go to HRMS</span>
@@ -104,7 +192,7 @@ const DashboardLayout = () => {
 
                                     <div className="dropdown-divider"></div>
 
-                                    {/* Logout — now also logs out of HRMS */}
+                                    {/* Logout */}
                                     <button className="dropdown-item logout" onClick={handleLogout}>
                                         <FiLogOut />
                                         <span>Logout</span>

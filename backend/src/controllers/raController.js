@@ -116,17 +116,18 @@ exports.getRADashboard = async (req, res) => {
     const evaluatedEmployeeIds = evaluated.map(e => e.employeeId);
 
     // CHANGE 5: countDocuments → count
-    const pendingEvaluation = await MonthlyEvaluation.count({
+    // Guard Op.in([]) — PostgreSQL throws on empty IN lists
+    const pendingEvaluation = employeeIds.length > 0 ? await MonthlyEvaluation.count({
       where: { employeeId: { [Op.in]: employeeIds }, month, raId, status: "PENDING" },
-    });
+    }) : 0;
 
     const submittedSet = new Set(submittedEmployeeIds.map(String));
     const notSubmitted = employeeIds.filter(id => !submittedSet.has(String(id)));
     const notYetSubmitted = notSubmitted.length;
 
-    const pendingYearly = await YearlyAppraisalReport.count({
+    const pendingYearly = employeeIds.length > 0 ? await YearlyAppraisalReport.count({
       where: { employeeId: { [Op.in]: employeeIds }, status: "SUBMITTED" },
-    });
+    }) : 0;
 
     // CHANGE 7: { $or: [{ remarks: null }, { remarks: '' }, { remarks: { $exists: false } }] }
     //           → Op.or with Op.is, Op.eq
@@ -167,6 +168,12 @@ exports.getMonthlyTrend = async (req, res) => {
 
     const trendData = await Promise.all(
       months.map(async (monthStr) => {
+        if (employeeIds.length === 0) {
+          const [year, mon] = monthStr.split("-");
+          const shortMonth = new Date(parseInt(year), parseInt(mon) - 1).toLocaleDateString("en-US", { month: "short" });
+          return { month: monthStr, shortMonth, plans: 0, achievements: 0, evaluations: 0 };
+        }
+
         // FIX: exclude DRAFT plans — trend should reflect submitted plans only.
         const monthPlans = await MonthlyPlan.findAll({
           where: {
@@ -178,10 +185,12 @@ exports.getMonthlyTrend = async (req, res) => {
         });
         const planIds = monthPlans.map(p => p.id);
 
-        const [achievements, evaluations] = await Promise.all([
-          MonthlyAchievement.count({ where: { monthlyPlanId: { [Op.in]: planIds } } }),
-          MonthlyEvaluation.count({ where: { employeeId: { [Op.in]: employeeIds }, month: monthStr, raId, status: "EVALUATED" } }),
-        ]);
+        const achievements = planIds.length > 0
+          ? await MonthlyAchievement.count({ where: { monthlyPlanId: { [Op.in]: planIds } } })
+          : 0;
+        const evaluations = await MonthlyEvaluation.count({
+          where: { employeeId: { [Op.in]: employeeIds }, month: monthStr, raId, status: "EVALUATED" },
+        });
 
         const [year, mon] = monthStr.split("-");
         const shortMonth = new Date(parseInt(year), parseInt(mon) - 1).toLocaleDateString("en-US", { month: "short" });
@@ -308,13 +317,33 @@ exports.submitMonthlyEvaluation = async (req, res) => {
   try {
     const { evaluationId, score, remarks } = req.body;
 
-    if (req.user.role !== "RA") return res.status(403).json({ message: "Only Reporting Authority can evaluate" });
+    // Allow RA — and MD acting as RA (MD evaluates their direct reports via RA view).
+    // Hard-reject everyone else (EMPLOYEE, HRD).
+    if (req.user.role !== "RA" && req.user.role !== "MD") {
+      return res.status(403).json({ message: "Only Reporting Authority can evaluate" });
+    }
 
     const evaluation = await MonthlyEvaluation.findByPk(evaluationId, {
       include: [{ model: MonthlyPlan, as: "monthlyPlan", attributes: ["id", "status"] }],
     });
     if (!evaluation) return res.status(404).json({ message: "Evaluation not found" });
     if (evaluation.status === "EVALUATED") return res.status(400).json({ message: "Evaluation already submitted" });
+
+    // ── Ownership check ──────────────────────────────────────────────────────
+    //  For RA:  evaluation.raId must equal this RA's userId.
+    //  For MD:  the employee must directly report to the MD
+    //           (reportingAuthorityId = MD's userId), OR the evaluation record
+    //           was created with raId = MD's userId (unlikely but safe to allow).
+    if (req.user.role === "RA" && evaluation.raId !== req.user.userId) {
+      return res.status(403).json({ message: "You are not authorized to evaluate this record" });
+    }
+    if (req.user.role === "MD") {
+      // Verify the employee directly reports to the MD
+      const emp = await User.findByPk(evaluation.employeeId, { attributes: ["reportingAuthorityId"] });
+      if (!emp || String(emp.reportingAuthorityId) !== String(req.user.userId)) {
+        return res.status(403).json({ message: "You are not authorized to evaluate this record" });
+      }
+    }
 
     // ── BUSINESS RULE: Cannot evaluate a rejected plan ──────────────────────
     // The employee must revise and resubmit the plan before the RA can evaluate.
@@ -344,6 +373,7 @@ exports.submitMonthlyEvaluation = async (req, res) => {
   }
 };
 
+
 /* ─── 3. GET MONTHLY EVALUATIONS ─────────────────────────────────────────────── */
 exports.getMonthlyEvaluations = async (req, res) => {
   try {
@@ -363,9 +393,11 @@ exports.getMonthlyEvaluations = async (req, res) => {
       const isSelfView = req.query.selfView === "true";
 
       if (isSelfView) {
-        // RA as employee: find records where I am the subject (employeeId=me)
-        // These rows have raId=null and evaluatorId=MD's id
+        // RA as employee: find records where I am the subject (employeeId=me).
+        // excludeScore = true mirrors the EMPLOYEE behaviour — the score is
+        // never shown to the subject of the evaluation (only remarks are visible).
         where.employeeId = req.user.userId;
+        excludeScore = true;   // ← hide score just like any other employee
       } else {
         // RA as evaluator: find records where I am the RA
         where.raId = req.user.userId;
@@ -397,11 +429,25 @@ exports.getMonthlyEvaluations = async (req, res) => {
             });
 
             for (const plan of plans) {
-              const exists = await MonthlyEvaluation.findOne({
-                where: { employeeId: plan.employeeId, month: plan.month, raId: req.user.userId },
+              // ── Look up by monthlyPlanId (UNIQUE key), NOT by (employeeId, month, raId).
+              //
+              //  Why: monthlyPlanId has a UNIQUE constraint — only ONE MonthlyEvaluation
+              //  can exist per plan. If an employee is reassigned from RA_A → RA_B:
+              //    • The old record has  { monthlyPlanId: X, raId: RA_A }
+              //    • findOne({ raId: RA_B }) returns null
+              //    • create({ monthlyPlanId: X, raId: RA_B }) → unique-constraint crash (500)
+              //
+              //  Correct approach: find the record by the plan's unique id.
+              //  • No record exists  → create fresh for this RA.
+              //  • Record exists, same RA, wrong planId → update planId (plan was resubmitted).
+              //  • Record exists, different RA, PENDING → reassign to this RA (employee moved).
+              //  • Record exists, EVALUATED → leave it alone; evaluation is done.
+              const existsByPlan = await MonthlyEvaluation.findOne({
+                where: { monthlyPlanId: plan.id },
               });
 
-              if (!exists) {
+              if (!existsByPlan) {
+                // No evaluation record for this plan at all — create one.
                 await MonthlyEvaluation.create({
                   employeeId: plan.employeeId,
                   monthlyPlanId: plan.id,
@@ -411,18 +457,61 @@ exports.getMonthlyEvaluations = async (req, res) => {
                   score: 0,
                   remarks: "",
                 });
-              } else if (!exists.monthlyPlanId || exists.monthlyPlanId !== plan.id) {
-                await exists.update({
-                  monthlyPlanId: plan.id,
-                  ...(exists.status === "PENDING" ? { score: 0, remarks: "" } : {}),
+              } else if (
+                existsByPlan.raId !== req.user.userId &&
+                existsByPlan.status === "PENDING"
+              ) {
+                // Record belongs to a different RA (employee was reassigned) and is
+                // still pending — reassign to the current RA so they can evaluate it.
+                await existsByPlan.update({
+                  raId: req.user.userId,
+                  score: 0,
+                  remarks: "",
                 });
               }
+              // If status === "EVALUATED" or raId already matches: no action needed.
             }
           }
         }
       }
-    } else if (req.user.role === "HRD" || req.user.role === "MD") {
-      if (!req.query.month && !req.query.year) return res.status(400).json({ message: "Month or year is required for HRD/MD view" });
+    } else if (req.user.role === "MD") {
+      // ── MD in RA-View ────────────────────────────────────────────────────────
+      //  MD evaluates their direct reports (employees whose reportingAuthorityId = MD).
+      //
+      //  IMPORTANT — why NOT raId = MD's userId:
+      //    Existing MonthlyEvaluation rows are created by the employee's own RA
+      //    (raId = that RA's userId). MD never appears as raId in those rows.
+      //    Setting raId = MD's userId would return 0 results.
+      //
+      //  IMPORTANT — why NOT auto-create rows here:
+      //    monthlyPlanId has a UNIQUE constraint (one evaluation per plan).
+      //    The plan already has an evaluation row (raId = the RA who created it).
+      //    Trying to create a second row for the same plan → Validation error (500).
+      //
+      //  Correct approach: filter by employeeId IN [MD's direct reports].
+      //  MD can then view and evaluate those records (the evaluate endpoint uses
+      //  MonthlyEvaluation.update, not create, so no uniqueness issue there).
+      if (!req.query.month && !req.query.year) {
+        return res.status(400).json({ message: "Month or year is required for MD view" });
+      }
+
+      // Fetch MD's direct reports
+      const directReports = await User.findAll({
+        where: { reportingAuthorityId: req.user.userId },
+        attributes: ["id"],
+      });
+      const directReportIds = directReports.map(u => u.id);
+
+      if (directReportIds.length === 0) {
+        // MD has no direct reports — return empty result immediately
+        return res.json({ page: 1, limit, totalRecords: 0, totalPages: 0, data: [] });
+      }
+
+      // Scope the main query to direct reports only
+      where.employeeId = { [Op.in]: directReportIds };
+
+    } else if (req.user.role === "HRD") {
+      if (!req.query.month && !req.query.year) return res.status(400).json({ message: "Month or year is required for HRD view" });
       if (req.query.employeeId) where.employeeId = req.query.employeeId;
     }
 
@@ -448,8 +537,16 @@ exports.getMonthlyEvaluations = async (req, res) => {
     const totalCount = await MonthlyEvaluation.count({ where });
 
     const planIds = evaluations.map(ev => ev.monthlyPlanId).filter(Boolean);
-    const achievements = await MonthlyAchievement.findAll({ where: { monthlyPlanId: { [Op.in]: planIds } }, attributes: ["monthlyPlanId"] });
-    const achSet = new Set(achievements.map(a => String(a.monthlyPlanId)));
+    // Guard: Op.in([]) generates invalid SQL in PostgreSQL ("IN ()") → 500.
+    // When no evaluations have a linked plan, skip the achievement lookup entirely.
+    const achSet = new Set();
+    if (planIds.length > 0) {
+      const achievements = await MonthlyAchievement.findAll({
+        where: { monthlyPlanId: { [Op.in]: planIds } },
+        attributes: ["monthlyPlanId"],
+      });
+      achievements.forEach(a => achSet.add(String(a.monthlyPlanId)));
+    }
 
     const response = evaluations.map(ev => ({
       id: ev.id,
@@ -514,7 +611,10 @@ exports.generateQuarterlyEvaluation = async (req, res) => {
     const { quarter, remarks } = req.body;
     const raId = req.user.userId;
 
-    if (req.user.role !== "RA") return res.status(403).json({ message: "Only Reporting Authority can generate quarterly evaluation" });
+    // Allow RA — and MD acting as RA (MD generates quarterly eval for their direct reports).
+    if (req.user.role !== "RA" && req.user.role !== "MD") {
+      return res.status(403).json({ message: "Only Reporting Authority can generate quarterly evaluation" });
+    }
     if (!quarter) return res.status(400).json({ message: "quarter is required (e.g. Q1-2026)" });
 
     const quarterMonths = getQuarterMonths(quarter);
@@ -577,15 +677,24 @@ exports.getQuarterlyDetail = async (req, res) => {
     if (req.user.role === "RA" && quarterly.ra?.id !== req.user.userId) return res.status(403).json({ message: "Not authorized" });
 
     const quarterMonths = getQuarterMonths(quarterly.quarter);
+    // NOTE: do NOT filter by raId here.
+    //  For MD-generated quarterly evals, quarterly.raId = MD's userId, but the
+    //  MonthlyEvaluation records retain their original raId (the RA who was set
+    //  when the record was first created). Filtering by raId would return 0 rows.
+    //  The correct key is (employeeId, month) — at most one EVALUATED record per
+    //  employee per month due to the unique monthlyPlanId constraint.
     const monthlyEvals = await MonthlyEvaluation.findAll({
-      where: { employeeId: quarterly.employeeId, raId: quarterly.raId, month: { [Op.in]: quarterMonths }, status: "EVALUATED" },
+      where: { employeeId: quarterly.employeeId, month: { [Op.in]: quarterMonths }, status: "EVALUATED" },
       order: [["month", "ASC"]],
     });
+    // Deduplicate: keep one record per month (defensive against edge cases)
+    const seenM = new Set();
+    const deduplicatedMonthlyEvals = monthlyEvals.filter(ev => { if (seenM.has(ev.month)) return false; seenM.add(ev.month); return true; });
 
     res.json({
       id: quarterly.id, employee: quarterly.employee, quarter: quarterly.quarter,
       averageScore: quarterly.averageScore, remarks: quarterly.remarks, generatedAt: quarterly.createdAt,
-      monthlyBreakdown: monthlyEvals.map(ev => ({ month: ev.month, score: ev.score, remarks: ev.remarks, evaluatedAt: ev.evaluatedAt })),
+      monthlyBreakdown: deduplicatedMonthlyEvals.map(ev => ({ month: ev.month, score: ev.score, remarks: ev.remarks, evaluatedAt: ev.evaluatedAt })),
     });
   } catch (error) {
     res.status(500).json({ message: "Failed to fetch quarterly detail", error: error.message });
@@ -599,7 +708,20 @@ exports.updateQuarterlyRemarks = async (req, res) => {
     const quarterly = await QuarterlyEvaluation.findByPk(req.params.id);
 
     if (!quarterly) return res.status(404).json({ message: "Quarterly evaluation not found" });
-    if (quarterly.raId !== req.user.userId) return res.status(403).json({ message: "Not authorized" });
+
+    // ── Authorization ─────────────────────────────────────────────────────────
+    //  RA:  the raId on this quarterly record must match the logged-in RA.
+    //  MD:  raId won't match MD's userId (the record was created by the original RA),
+    //       so check ownership via the employee's current reportingAuthorityId instead.
+    const isAuthorizedRA = req.user.role === "RA" && quarterly.raId === req.user.userId;
+    let isAuthorizedMD = false;
+    if (req.user.role === "MD") {
+      const emp = await User.findByPk(quarterly.employeeId, { attributes: ["reportingAuthorityId"] });
+      isAuthorizedMD = emp && String(emp.reportingAuthorityId) === String(req.user.userId);
+    }
+    if (!isAuthorizedRA && !isAuthorizedMD) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
 
     quarterly.remarks = remarks;
     await quarterly.save();
@@ -628,6 +750,15 @@ exports.getQuarterlyEvaluations = async (req, res) => {
     let excludeScore = false;
 
     if (req.user.role === "EMPLOYEE") {
+      // ── Plain employee: see evaluations received by them ──
+      where.employeeId = req.user.userId;
+      excludeScore = true;
+    } else if (req.user.role === "RA" && req.query.asEmployee === "true") {
+      // ── RA acting as employee (switched to Employee View) ──
+      //  They want to see the quarterly evaluation that THEIR reporting authority gave THEM,
+      //  not the evaluations they gave to their own subordinates.
+      //  Filter by employeeId (the RA is the employee here) and hide the raw averageScore
+      //  exactly as we do for plain EMPLOYEE users.
       where.employeeId = req.user.userId;
       excludeScore = true;
     } else if (req.user.role === "RA") {
@@ -673,22 +804,121 @@ exports.getQuarterlyEvaluations = async (req, res) => {
           }
         }
       }
-    } else if (["HRD", "MD"].includes(req.user.role)) {
-      if (!req.query.quarter && !req.query.year) return res.status(400).json({ message: "Quarter or year is required for HRD/MD view" });
+    } else if (req.user.role === "MD") {
+      // ── MD in RA-View ────────────────────────────────────────────────────────
+      //  MD sees quarterly evaluations for their direct reports only.
+      //
+      //  IMPORTANT — why NOT raId = MD's userId in the main query:
+      //    QuarterlyEvaluation rows are created with raId = the original RA's userId.
+      //    MD never appears as raId in pre-existing rows, so raId = MD's id returns 0.
+      //    Correct approach: filter by employeeId IN [MD's direct reports].
+      //
+      //  IMPORTANT — why the monthly eval query has NO raId filter:
+      //    When MD evaluates a monthly plan, the MonthlyEvaluation record retains its
+      //    original raId (the RA who was assigned when the record was created — could be
+      //    a different RA or null). Filtering by raId = MD's userId would find 0 rows
+      //    and the quarterly auto-generation would never fire.
+      const directReports = await User.findAll({
+        where: { reportingAuthorityId: req.user.userId },
+        attributes: ["id"],
+      });
+      const directReportIds = directReports.map(u => u.id);
+
+      if (directReportIds.length === 0) {
+        return res.json({ page: 1, limit, totalRecords: 0, totalPages: 0, data: [] });
+      }
+
+      // ── Auto-generate quarterly records for MD's direct reports ──────────────
+      if (req.query.quarter) {
+        const quarterMonths = getQuarterMonths(req.query.quarter);
+        if (quarterMonths) {
+          for (const empId of directReportIds) {
+            const existing = await QuarterlyEvaluation.findOne({
+              where: { employeeId: empId, quarter: req.query.quarter },
+            });
+
+            // Fetch evaluated monthly records for this employee for the quarter.
+            // NO raId filter — the records may have raId = original RA's id, not MD's.
+            const evals = await MonthlyEvaluation.findAll({
+              where: {
+                employeeId: empId,
+                month: { [Op.in]: quarterMonths },
+                status: "EVALUATED",
+              },
+              attributes: ["score", "month"],
+            });
+
+            // Deduplicate: keep only one record per month (edge case: multiple RAs)
+            const seenMonths = new Set();
+            const uniqueEvals = evals.filter(ev => {
+              if (seenMonths.has(ev.month)) return false;
+              seenMonths.add(ev.month);
+              return true;
+            });
+
+            if (existing) {
+              // Recalculate averageScore from live evaluated monthly records
+              if (uniqueEvals.length > 0) {
+                const total = uniqueEvals.reduce((sum, ev) => sum + Number(ev.score || 0), 0);
+                const recalcAvg = +(total / uniqueEvals.length).toFixed(2);
+                const storedAvg = parseFloat(existing.averageScore);
+                if (isNaN(storedAvg) || storedAvg === 0 || Math.abs(storedAvg - recalcAvg) > 0.005) {
+                  await existing.update({ averageScore: recalcAvg });
+                }
+              }
+              continue;
+            }
+
+            // All 3 months evaluated → create quarterly evaluation with raId = MD's userId
+            // so updateQuarterlyRemarks ownership check works correctly.
+            if (uniqueEvals.length === 3) {
+              const totalScore = uniqueEvals.reduce((sum, ev) => sum + Number(ev.score || 0), 0);
+              const averageScore = +(totalScore / 3).toFixed(2);
+              await QuarterlyEvaluation.create({
+                employeeId: empId,
+                quarter: req.query.quarter,
+                raId: req.user.userId,   // MD's userId — matched by updateQuarterlyRemarks
+                averageScore,
+                remarks: null,
+              });
+            }
+          }
+        }
+      }
+
+      // Scope the main fetch to direct reports
+      where.employeeId = { [Op.in]: directReportIds };
+
+    } else if (req.user.role === "HRD") {
+      if (!req.query.quarter && !req.query.year) return res.status(400).json({ message: "Quarter or year is required for HRD view" });
       if (req.query.employeeId) where.employeeId = req.query.employeeId;
     }
 
     if (req.query.quarter) where.quarter = req.query.quarter;
 
+    const isAsEmployee = (req.user.role === "RA" || req.user.role === "EMPLOYEE") && req.query.asEmployee === "true";
+    const isPlainEmployee = req.user.role === "EMPLOYEE";
+
+    // Always include the employee association.
+    // Include the ra association for everyone except plain EMPLOYEE viewing their own evals.
+    // Exception: when RA is acting as employee (asEmployee=true) we DO include ra so the
+    // frontend can show "Evaluated by: [RA/MD name]".
     const include = [{ model: User, as: "employee", attributes: ["id", "name", "employeeCode", "department"] }];
-    if (req.user.role !== "EMPLOYEE") include.push({ model: User, as: "ra", attributes: ["id", "name", "employeeCode"] });
+    if (!isPlainEmployee || isAsEmployee) {
+      include.push({ model: User, as: "ra", attributes: ["id", "name", "employeeCode"] });
+    }
 
     const evaluations = await QuarterlyEvaluation.findAll({ where, include, order: [["createdAt", "DESC"]], offset, limit });
     const totalCount = await QuarterlyEvaluation.count({ where });
 
     const response = evaluations.map(ev => ({
-      id: ev.id, employee: ev.employee, quarter: ev.quarter,
-      remarks: ev.remarks || null, hasRemarks: !!(ev.remarks?.trim()),
+      id: ev.id,
+      // In asEmployee mode the logged-in RA IS the employee — omit redundant self-reference
+      employee: isAsEmployee ? null : ev.employee,
+      ra: ev.ra || null,            // who gave the evaluation (RA or MD)
+      quarter: ev.quarter,
+      remarks: ev.remarks || null,
+      hasRemarks: !!(ev.remarks?.trim()),
       averageScore: excludeScore ? null : parseFloat(ev.averageScore),
     }));
 
@@ -759,6 +989,9 @@ exports.getYearlyPlans = async (req, res) => {
     const myEmps = await User.findAll({ where: { reportingAuthorityId: req.user.userId }, attributes: ["id"] });
     const myEmpIds = myEmps.map(e => e.id);
 
+    // Guard: Op.in([]) → invalid SQL in PostgreSQL
+    if (myEmpIds.length === 0) return res.json([]);
+
     // FIX: exclude DRAFT plans — RA should only see plans the employee has submitted.
     // A DRAFT plan is private to the employee until they explicitly hit "Submit".
     const where = {
@@ -786,6 +1019,9 @@ exports.getYearlyReports = async (req, res) => {
   try {
     const myEmps = await User.findAll({ where: { reportingAuthorityId: req.user.userId }, attributes: ["id"] });
     const myEmpIds = myEmps.map(e => e.id);
+
+    // Guard: Op.in([]) → invalid SQL in PostgreSQL
+    if (myEmpIds.length === 0) return res.json([]);
 
     // FIX: exclude DRAFT appraisal reports — only show submitted reports to RA.
     const where = {
@@ -829,8 +1065,14 @@ exports.getQuarterlyFullDetail = async (req, res) => {
     if (req.user.role === "RA" && quarterly.ra?.id !== req.user.userId) return res.status(403).json({ message: "Not authorized" });
 
     const quarterMonths = getQuarterMonths(quarterly.quarter);
-    const monthlyEvals = await MonthlyEvaluation.findAll({
-      where: { employeeId: quarterly.employeeId, raId: quarterly.raId, month: { [Op.in]: quarterMonths }, status: "EVALUATED" },
+    // NOTE: do NOT filter by raId here.
+    //  For MD-generated quarterly evals, quarterly.raId = MD's userId, but the
+    //  MonthlyEvaluation records retain their original raId (the RA who was set
+    //  when the record was first created). Filtering by raId would return 0 rows.
+    //  The correct key is (employeeId, month) — at most one EVALUATED record per
+    //  employee per month due to the unique monthlyPlanId constraint.
+    const allMonthlyEvals = await MonthlyEvaluation.findAll({
+      where: { employeeId: quarterly.employeeId, month: { [Op.in]: quarterMonths }, status: "EVALUATED" },
       include: [
         {
           model: MonthlyPlan, as: "monthlyPlan",
@@ -838,6 +1080,14 @@ exports.getQuarterlyFullDetail = async (req, res) => {
         },
       ],
       order: [["month", "ASC"]],
+    });
+    // Deduplicate: keep one EVALUATED record per month (defensive against edge cases
+    // such as multiple RAs having evaluated the same employee in the same month).
+    const seenMonths = new Set();
+    const monthlyEvals = allMonthlyEvals.filter(ev => {
+      if (seenMonths.has(ev.month)) return false;
+      seenMonths.add(ev.month);
+      return true;
     });
 
     const monthlyData = await Promise.all(

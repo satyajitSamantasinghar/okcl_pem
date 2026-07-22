@@ -2,7 +2,7 @@
 const dotenv = require('dotenv');
 dotenv.config();
 const app = require("./src/app");
-const { sequelize, EmployeeRAHistory, User } = require("./src/models");
+const { sequelize, EmployeeRAHistory, User, MonthlyPlan, MonthlyPlanItem, MonthlyAchievement, MonthlyAchievementItem, MonthlyEvaluation } = require("./src/models");
 const { DataTypes, Op } = require("sequelize");
 
 
@@ -81,12 +81,12 @@ const runMigrations = async () => {
     //  as the MD in the PES system. All their linked data (MonthlyEvaluations,
     //  EmployeeRAHistory, MonthlyPlans) is preserved — only the role column is updated.
     //  Idempotent: the WHERE role='MD' clause means re-running is a safe no-op.
-    const [mdToRaCount] = await sequelize.query(
-        `UPDATE users SET role = 'RA' WHERE employee_code = '1686011' AND role = 'MD'`
-    );
-    if (mdToRaCount?.rowCount > 0) {
-        console.log("✅ Migration 6: emp_code '1686011' role updated MD → RA");
-    }
+    // const [mdToRaCount] = await sequelize.query(
+    //     `UPDATE users SET role = 'RA' WHERE employee_code = '1686011' AND role = 'MD'`
+    // );
+    // if (mdToRaCount?.rowCount > 0) {
+    //     console.log("✅ Migration 6: emp_code '1686011' role updated MD → RA");
+    // }
 };
 
 // ─── Backfill EmployeeRAHistory ───────────────────────────────────────────────
@@ -138,6 +138,200 @@ const backfillRAHistory = async () => {
 };
 
 
+// ─── One-time Monthly Plan Deletion ──────────────────────────────────────────
+//  Deletes the July 2026 monthly plans for four employees, including ALL
+//  dependent rows first to avoid FK-constraint violations:
+//    MonthlyEvaluation (FK → monthly_plans.id, no CASCADE)
+//    MonthlyAchievementItem (FK → monthly_achievements.id, CASCADE — but we
+//                            delete explicitly to be safe)
+//    MonthlyAchievement (FK → monthly_plans.id, no CASCADE)
+//    MonthlyPlanItem (FK → monthly_plans.id, CASCADE — explicit for clarity)
+//    MonthlyPlan (the target row)
+//
+//  Idempotent: destroy() on already-gone rows is always a safe no-op.
+//  Wrapped in its own try/catch so a DB error here NEVER crashes the server.
+//
+//  Employee codes: 1686029, 1686017, 1686008, 1035
+//  Target month  : 2026-07
+//
+//  ⚠️  REMOVE THIS BLOCK after the next successful deployment to keep startup lean.
+// ─────────────────────────────────────────────────────────────────────────────
+// const deleteJuly2026Plans = async () => {
+//     const TARGET_EMP_CODES = ["1686013", "1686012"];
+//     const TARGET_MONTH = "2026-07";
+
+//     try {
+//         // Step 1: Resolve employee UUIDs from their employee codes
+//         const targetUsers = await User.findAll({
+//             where: { employeeCode: { [Op.in]: TARGET_EMP_CODES } },
+//             attributes: ["id", "employeeCode", "name"],
+//         });
+
+//         if (targetUsers.length === 0) {
+//             console.log("⚠️  Monthly Plan Cleanup: none of the target employees found in DB — skipping.");
+//             return;
+//         }
+
+//         const targetUserIds = targetUsers.map(u => u.id);
+
+//         // Step 2: Find the target monthly plans
+//         const plansToDelete = await MonthlyPlan.findAll({
+//             where: {
+//                 employeeId: { [Op.in]: targetUserIds },
+//                 month: TARGET_MONTH,
+//             },
+//             attributes: ["id", "employeeId", "month", "status"],
+//         });
+
+//         if (plansToDelete.length === 0) {
+//             console.log(`✅ Monthly Plan Cleanup: no ${TARGET_MONTH} plans found for the target employees — nothing to delete.`);
+//             return;
+//         }
+
+//         const planIds = plansToDelete.map(p => p.id);
+
+//         // Step 3: Delete MonthlyEvaluations that reference these plans
+//         //  (FK monthly_evaluations.monthly_plan_id → monthly_plans.id, NO CASCADE)
+//         await MonthlyEvaluation.destroy({
+//             where: { monthlyPlanId: { [Op.in]: planIds } },
+//         });
+
+//         // Step 4: Find MonthlyAchievements linked to these plans, then delete
+//         //  their child items before deleting the achievement rows themselves.
+//         //  (FK monthly_achievements.monthly_plan_id → monthly_plans.id, NO CASCADE)
+//         const achievements = await MonthlyAchievement.findAll({
+//             where: { monthlyPlanId: { [Op.in]: planIds } },
+//             attributes: ["id"],
+//         });
+//         if (achievements.length > 0) {
+//             const achIds = achievements.map(a => a.id);
+//             // Step 4a: Delete achievement items (CASCADE, but explicit for safety)
+//             await MonthlyAchievementItem.destroy({
+//                 where: { monthlyAchievementId: { [Op.in]: achIds } },
+//             });
+//             // Step 4b: Delete the achievement rows
+//             await MonthlyAchievement.destroy({
+//                 where: { id: { [Op.in]: achIds } },
+//             });
+//         }
+
+//         // Step 5: Delete plan items (CASCADE, but explicit for safety)
+//         const deletedItemCount = await MonthlyPlanItem.destroy({
+//             where: { monthlyPlanId: { [Op.in]: planIds } },
+//         });
+
+//         // Step 6: Delete the plans themselves — all FK children are already gone
+//         const deletedPlanCount = await MonthlyPlan.destroy({
+//             where: { id: { [Op.in]: planIds } },
+//         });
+
+//         const affectedCodes = targetUsers
+//             .filter(u => plansToDelete.some(p => String(p.employeeId) === String(u.id)))
+//             .map(u => `${u.name} (${u.employeeCode})`);
+
+//         console.log(
+//             `✅ Monthly Plan Cleanup: deleted ${deletedPlanCount} plan(s) + ${deletedItemCount} item(s) ` +
+//             `for ${TARGET_MONTH}. Affected employees: ${affectedCodes.join(", ")}`
+//         );
+//     } catch (cleanupErr) {
+//         // Log but do NOT rethrow — a cleanup failure must never prevent the server
+//         // from starting. Fix the data manually if needed.
+//         console.error("❌ Monthly Plan Cleanup failed (server will still start):", cleanupErr.message);
+//     }
+// };
+
+// ─── One-time RA Fix: Branch-3 employees with missing ra_id ──────────────────
+//  ABHINAV DAS (1056), PRIYANKA BEHERA (1037), DILIP KUMAR BEHERA (1010)
+//  all belong to branch 3 and have "ra_id": "" in their HRMS SSO tokens.
+//  This means the SSO flow cannot auto-resolve their Reporting Authority.
+//  Fix: assign them to the RA with emp_code "1686008" in both the users table
+//  and the EmployeeRAHistory table.
+//
+//  Safety guarantees:
+//    • Idempotent — checks current reportingAuthorityId before acting, so
+//      re-running on subsequent server restarts is always a safe no-op.
+//    • No CASCADE risk — only touches users.reporting_authority_id and
+//      employee_ra_histories rows. No plan/evaluation data is touched.
+//    • Wrapped in try/catch — a failure here NEVER crashes the server.
+//
+//  ⚠️  REMOVE THIS BLOCK after the next successful deployment to keep startup lean.
+// ─────────────────────────────────────────────────────────────────────────────
+// const fixMissingRAForBranch3Employees = async () => {
+//     const TARGET_EMP_CODES = ["1056", "1037", "1010"];
+//     const RA_EMP_CODE = "1686008";
+
+//     try {
+//         // Step 1: Find the RA user (1686008) — their UUID is what we store
+//         const raUser = await User.findOne({
+//             where: { employeeCode: RA_EMP_CODE },
+//             attributes: ["id", "name", "employeeCode"],
+//         });
+
+//         if (!raUser) {
+//             console.warn(
+//                 `⚠️  RA Fix: RA with emp_code "${RA_EMP_CODE}" not found in DB. ` +
+//                 `Ensure this employee logs in via HRMS SSO first, then restart the server.`
+//             );
+//             return;
+//         }
+
+//         // Step 2: Find the three employees
+//         const targetEmployees = await User.findAll({
+//             where: { employeeCode: { [Op.in]: TARGET_EMP_CODES } },
+//             attributes: ["id", "name", "employeeCode", "reportingAuthorityId"],
+//         });
+
+//         if (targetEmployees.length === 0) {
+//             console.log("⚠️  RA Fix: none of the three target employees found in DB — skipping.");
+//             return;
+//         }
+
+//         const now = new Date();
+//         let fixedCount = 0;
+
+//         for (const emp of targetEmployees) {
+//             // Idempotency guard: skip if already pointing to the correct RA
+//             if (String(emp.reportingAuthorityId) === String(raUser.id)) {
+//                 console.log(`✅ RA Fix: ${emp.name} (${emp.employeeCode}) already assigned to RA ${RA_EMP_CODE} — skipping.`);
+//                 continue;
+//             }
+
+//             // Step 3a: Update the users table
+//             emp.reportingAuthorityId = raUser.id;
+//             await emp.save();
+
+//             // Step 3b: Close any currently-open EmployeeRAHistory row
+//             //  (effectiveTo IS NULL means it is the active assignment)
+//             await EmployeeRAHistory.update(
+//                 { effectiveTo: now },
+//                 { where: { employeeId: emp.id, effectiveTo: null } }
+//             );
+
+//             // Step 3c: Open a new EmployeeRAHistory row for the corrected RA
+//             await EmployeeRAHistory.create({
+//                 employeeId: emp.id,
+//                 raId: raUser.id,
+//                 effectiveFrom: now,
+//                 effectiveTo: null,
+//                 assignedBy: null,   // system-driven correction — no admin actor
+//             });
+
+//             console.log(`✅ RA Fix: ${emp.name} (${emp.employeeCode}) → RA ${raUser.name} (${RA_EMP_CODE})`);
+//             fixedCount++;
+//         }
+
+//         if (fixedCount === 0) {
+//             console.log("✅ RA Fix: all target employees already correctly assigned — nothing to do.");
+//         } else {
+//             console.log(`✅ RA Fix: successfully updated ${fixedCount} employee(s) to RA ${RA_EMP_CODE}.`);
+//         }
+
+//     } catch (raFixErr) {
+//         // Log but do NOT rethrow — this fix must never prevent the server from starting.
+//         console.error("❌ RA Fix failed (server will still start):", raFixErr.message);
+//     }
+// };
+
 // ─── STEP 3: async startup — connect DB first, then start server ──────────
 const startServer = async () => {
     try {
@@ -165,6 +359,14 @@ const startServer = async () => {
         // Backfill EmployeeRAHistory for pre-existing employees (runs after sync
         // so the table is guaranteed to exist).
         await backfillRAHistory();
+
+        // One-time monthly plan deletion for July 2026
+        // await deleteJuly2026Plans();
+
+        // One-time RA fix: assign emp_codes 1056, 1037, 1010 → RA 1686008
+        // (their HRMS tokens carry ra_id: "" so SSO cannot resolve this automatically)
+        // await fixMissingRAForBranch3Employees();
+
 
         // // ── Startup diagnostic: warn if any RA has no reporting authority ─────
         // // This catches the case where an RA logged in via HRMS SSO before the MD

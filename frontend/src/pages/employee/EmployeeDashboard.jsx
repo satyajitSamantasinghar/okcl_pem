@@ -51,7 +51,7 @@ const EmployeeDashboard = () => {
     const navigate = useNavigate();
     const actionCenterRef = useRef(null);
     // CENTRALIZED DEADLINE CONFIG — plan & achievement days from .env via API
-    const { getPlanDeadline, getAchievementDeadline } = useDeadlines();
+    const { getPlanDeadline, getAchievementWindowStart, getAchievementDeadline, isLoading: isConfigLoading } = useDeadlines();
 
     const [stats, setStats] = useState({
         monthlyPlans: 0,
@@ -67,14 +67,20 @@ const EmployeeDashboard = () => {
     const [latestRemarks, setLatestRemarks] = useState([]);
 
     useEffect(() => {
+        if (isConfigLoading) return; // Wait for config to load so deadlines are correct
         const fetchData = async () => {
             try {
                 const [plansRes, achievementsRes, yearlyRes, quarterlyRes, evalsRes, appraisalRes] = await Promise.all([
                     api.get('/employee/monthly-plans'),
                     api.get('/employee/monthly-achievements'),
                     api.get('/employee/yearly-plans'),
-                    api.get('/ra/quarterly-evaluations'),
-                    api.get('/ra/monthly-evaluations', { params: { limit: 100 } }),
+                    // asEmployee=true: when the logged-in user is an RA, return quarterly
+                    // evaluations given TO them (by their RA/MD), not ones they gave to others.
+                    // For plain EMPLOYEE users this param is ignored by the backend.
+                    api.get('/ra/quarterly-evaluations', { params: { asEmployee: 'true' } }),
+                    // selfView=true: return monthly evaluations where this user IS the
+                    // employee being evaluated, not the RA who evaluated others.
+                    api.get('/ra/monthly-evaluations', { params: { limit: 100, selfView: 'true' } }),
                     api.get('/employee/yearly-appraisal-reports').catch(() => ({ data: [] }))
                 ]);
 
@@ -175,12 +181,19 @@ const EmployeeDashboard = () => {
                     ? Math.floor((planDeadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
                     : 999;
 
-                // Achievement Deadline: from centralized config (env MONTHLY_ACHIEVEMENT_DEADLINE_DAY)
+                // Achievement window: bounded on both sides —
+                // getAchievementWindowStart() = opens, getAchievementDeadline() = closes.
+                const achStart = getAchievementWindowStart(currentMonthString);
                 const achDeadline = getAchievementDeadline(currentMonthString);
+                const windowNotYetOpen = achStart && now < achStart;
+
                 // BUG FIX: Same Math.floor fix — deadline on last day of month with "last" config
                 // was yielding achDiff=1 all day, so the "Today" badge never appeared.
                 const achDiff = achDeadline
                     ? Math.floor((achDeadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+                    : 999;
+                const achStartDiff = achStart
+                    ? Math.floor((achStart.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
                     : 999;
 
                 const currMonthDisplay = new Date(now.getFullYear(), now.getMonth()).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
@@ -190,7 +203,7 @@ const EmployeeDashboard = () => {
                         title: `Monthly Plan (${currMonthDisplay})`,
                         date: planDeadline,
                         days: planDiff,
-                        critical: planDiff <= 2 && planDiff >= 0
+                        critical: planDiff <= 2
                     });
                 }
 
@@ -211,12 +224,19 @@ const EmployeeDashboard = () => {
                     : false;
                 const needsAchievementDeadline = anyPlanNeedsAchievement || (currentPlan && !hasCurrentAchievement);
 
-                if (needsAchievementDeadline && achDiff >= -10) {
+                if (needsAchievementDeadline && windowNotYetOpen && achStartDiff >= 0) {
+                    dls.push({
+                        title: `Achievement Window Opens (${currMonthDisplay})`,
+                        date: achStart,
+                        days: achStartDiff,
+                        critical: false
+                    });
+                } else if (needsAchievementDeadline && achDiff >= -10) {
                     dls.push({
                         title: `Monthly Achievement (${currMonthDisplay})`,
                         date: achDeadline,
                         days: achDiff,
-                        critical: achDiff <= 3 && achDiff >= 0
+                        critical: achDiff <= 3
                     });
                 }
 
@@ -229,7 +249,7 @@ const EmployeeDashboard = () => {
                         title: `Yearly Plan (FY ${currentFinancialYear})`,
                         date: yearlyPlanDeadline,
                         days: yearlyPlanDiff,
-                        critical: yearlyPlanDiff <= 7 && yearlyPlanDiff >= 0
+                        critical: yearlyPlanDiff <= 7
                     });
                 }
 
@@ -248,7 +268,7 @@ const EmployeeDashboard = () => {
                         title: `Yearly Appraisal (FY ${currentFinancialYear})`,
                         date: yearlyAppraisalDeadline,
                         days: yearlyAppraisalDiff,
-                        critical: yearlyAppraisalDiff <= 7 && yearlyAppraisalDiff >= 0
+                        critical: yearlyAppraisalDiff <= 7
                     });
                 }
 
@@ -328,7 +348,7 @@ const EmployeeDashboard = () => {
             }
         };
         fetchData();
-    }, []);
+    }, [isConfigLoading]);
 
     const scrollToActions = () => {
         if (actionCenterRef.current) {
@@ -504,8 +524,12 @@ const EmployeeDashboard = () => {
                                             <strong>{dl.title}</strong>
                                             <span>{formatDate(dl.date)}</span>
                                         </div>
-                                        <div className="emp-dash-dl-days">
-                                            {dl.days === 0 ? 'Today' : `${dl.days} day${dl.days > 1 ? 's' : ''}`}
+                                        <div className={`emp-dash-dl-days ${dl.days < 0 ? 'overdue' : ''}`}>
+                                            {dl.days === 0
+                                                ? 'Today'
+                                                : dl.days < 0
+                                                    ? `${Math.abs(dl.days)} day${Math.abs(dl.days) > 1 ? 's' : ''} overdue`
+                                                    : `${dl.days} day${dl.days > 1 ? 's' : ''}`}
                                         </div>
                                     </div>
                                 ))

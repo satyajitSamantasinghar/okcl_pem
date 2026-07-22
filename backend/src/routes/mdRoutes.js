@@ -105,5 +105,13 @@ router.get(
   mdController.getRAMonthlyEvaluations
 );
 
+/* ── MD: check if MD has direct employee/RA reportees (RA-view eligibility) ── */
+router.get(
+  "/ra-eligibility",
+  verifyToken,
+  authorizeRoles("MD"),
+  mdController.checkRAEligibility
+);
+
 module.exports = router;
 

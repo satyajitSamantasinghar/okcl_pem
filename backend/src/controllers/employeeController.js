@@ -73,7 +73,9 @@ exports.submitMonthlyPlan = async (req, res) => {
         existingPlan.status = planStatus;
         existingPlan.mdRemarks = null;
         existingPlan.version = (existingPlan.version || 1) + 1;
-        existingPlan.submittedAt = new Date();
+        // BUGFIX: only stamp submittedAt when this is an actual submission (PENDING),
+        // not a draft save — otherwise the UI shows a false "Submitted" date.
+        if (planStatus === "PENDING") existingPlan.submittedAt = new Date();
         await existingPlan.save({ transaction: t });
 
         // CHANGE I: replace planItems rows
@@ -123,7 +125,10 @@ exports.submitMonthlyPlan = async (req, res) => {
       if (existingPlan.status === "DRAFT") {
         existingPlan.planDetails = resolvedPlanDetails;
         existingPlan.status = planStatus;
-        existingPlan.submittedAt = new Date();
+        // BUGFIX: previously this always stamped "now", so re-saving a draft
+        // (status staying DRAFT) showed a false "Submitted" date on the UI.
+        // Only stamp submittedAt when the plan is actually moving to PENDING.
+        if (planStatus === "PENDING") existingPlan.submittedAt = new Date();
         await existingPlan.save({ transaction: t });
 
         if (Array.isArray(planItems) && planItems.length > 0) {
@@ -146,10 +151,10 @@ exports.submitMonthlyPlan = async (req, res) => {
               const isRA = req.user.role === "RA";
               await MonthlyEvaluation.create(
                 {
-                  employeeId:   req.user.userId,
+                  employeeId: req.user.userId,
                   monthlyPlanId: existingPlan.id,
-                  raId:         isRA ? null : user.reportingAuthorityId,
-                  evaluatorId:  isRA ? user.reportingAuthorityId : null,
+                  raId: isRA ? null : user.reportingAuthorityId,
+                  evaluatorId: isRA ? user.reportingAuthorityId : null,
                   month,
                   score: 0,
                   remarks: "",
@@ -177,8 +182,17 @@ exports.submitMonthlyPlan = async (req, res) => {
     }
 
     // New plan
+    // BUGFIX: explicitly set submittedAt based on planStatus instead of leaving it
+    // to a model/column default — otherwise a brand-new DRAFT can be stamped with
+    // "now" and the UI incorrectly displays it as submitted.
     const plan = await MonthlyPlan.create(
-      { employeeId: req.user.userId, month, planDetails: resolvedPlanDetails, status: planStatus },
+      {
+        employeeId: req.user.userId,
+        month,
+        planDetails: resolvedPlanDetails,
+        status: planStatus,
+        submittedAt: planStatus === "PENDING" ? new Date() : null,
+      },
       { transaction: t }
     );
 
@@ -202,10 +216,10 @@ exports.submitMonthlyPlan = async (req, res) => {
           const isRA = req.user.role === "RA";
           await MonthlyEvaluation.create(
             {
-              employeeId:   req.user.userId,
+              employeeId: req.user.userId,
               monthlyPlanId: plan.id,
-              raId:         isRA ? null : user.reportingAuthorityId,
-              evaluatorId:  isRA ? user.reportingAuthorityId : null,
+              raId: isRA ? null : user.reportingAuthorityId,
+              evaluatorId: isRA ? user.reportingAuthorityId : null,
               month,
               score: 0,
               remarks: "",

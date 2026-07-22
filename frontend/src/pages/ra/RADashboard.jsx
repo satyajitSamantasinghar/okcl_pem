@@ -790,48 +790,6 @@ const RADashboard = () => {
                 </Link>
             </div>
 
-            {/* ── 5b. My Performance (RA acting as an Employee) ── */}
-            {/*
-             * ─── FEATURE FLAGS ───────────────────────────────────────────────────
-             * To temporarily disable a card before going live, add the CSS class
-             * "coming-soon" to that <Link>, e.g.:
-             *
-             *   className="ra-action-tile indigo coming-soon"
-             *
-             * That will grey it out, block clicks, and show a "Coming Soon" badge.
-             * To hide it completely instead, just comment out the entire <Link> block.
-             * ─────────────────────────────────────────────────────────────────────
-             */}
-            <div className="ra-section-header" style={{ marginTop: '2rem' }}>
-                <h2>My Performance</h2>
-                <p>Submit and track your own plans — you are also an employee reporting to MD</p>
-            </div>
-            <div className="ra-actions-grid ra-perf-grid">
-                <Link to="/ra/my-monthly-plan" className="ra-action-tile indigo ">
-                    <div className="ra-at-icon"><FiFileText /></div>
-                    <div className="ra-at-content">
-                        <h3>My Monthly Plan</h3>
-                        <p>Submit your own monthly plan &amp; achievement</p>
-                    </div>
-                    <ArrowRightIcon className="ra-at-arrow" />
-                </Link>
-                <Link to="/ra/my-yearly-plan" className="ra-action-tile sky">
-                    <div className="ra-at-icon"><FiClipboard /></div>
-                    <div className="ra-at-content">
-                        <h3>My Yearly Plan</h3>
-                        <p>Set your annual KRAs for MD approval</p>
-                    </div>
-                    <ArrowRightIcon className="ra-at-arrow" />
-                </Link>
-                <Link to="/ra/my-quarterly-evaluation" className="ra-action-tile teal coming-soon">
-                    <div className="ra-at-icon"><FiBarChart2 /></div>
-                    <div className="ra-at-content">
-                        <h3>My Quarterly Review</h3>
-                        <p>View your own quarterly evaluation scores</p>
-                    </div>
-                    <ArrowRightIcon className="ra-at-arrow" />
-                </Link>
-            </div>
 
             {/* ════════════════════════════════════════════════
                 ── 6. NEW: 6-Month Activity Trend — full width ──

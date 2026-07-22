@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
 import { FiFilter, FiMessageSquare } from 'react-icons/fi';
@@ -45,12 +46,22 @@ const QuarterlyEvaluationPage = () => {
     const [evaluations, setEvaluations] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filterQuarter, setFilterQuarter] = useState('');
+    const location = useLocation();
+
+    // Detect RA-in-Employee-View: path is /ra/my-quarterly-evaluation
+    // In this case the JWT role is "RA" but the user wants to see evaluations
+    // given TO them (as an employee) by their reporting authority, not evaluations
+    // they gave to their own subordinates.
+    const isRAasEmployee = location.pathname === '/ra/my-quarterly-evaluation';
 
     useEffect(() => {
         const fetchEvaluations = async () => {
             try {
                 const params = {};
                 if (filterQuarter) params.quarter = filterQuarter;
+                // Signal to backend that this RA is requesting their own evaluations
+                // (received from their RA/MD), not the evaluations they gave to others.
+                if (isRAasEmployee) params.asEmployee = 'true';
                 const res = await api.get('/ra/quarterly-evaluations', { params });
                 setEvaluations(res.data?.data || []);
             } catch (err) {
@@ -60,7 +71,7 @@ const QuarterlyEvaluationPage = () => {
             }
         };
         fetchEvaluations();
-    }, [filterQuarter]);
+    }, [filterQuarter, isRAasEmployee]);
 
     
 
@@ -112,11 +123,20 @@ const QuarterlyEvaluationPage = () => {
                                     {ev.remarks || 'No remarks provided.'}
                                 </p>
                             </div>
-                            {ev.employee && (
-                                <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: '8px' }}>
-                                    Employee: {ev.employee.name} ({ev.employee.employeeCode})
-                                </div>
-                            )}
+                            {/* In RA-as-employee mode: show who evaluated the RA (their reporting authority).
+                                In normal employee mode: show the employee's name (for RA's own reference). */}
+                            {isRAasEmployee
+                                ? ev.ra && (
+                                    <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: '8px' }}>
+                                        Evaluated by: {ev.ra.name} ({ev.ra.employeeCode})
+                                    </div>
+                                )
+                                : ev.employee && (
+                                    <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: '8px' }}>
+                                        Employee: {ev.employee.name} ({ev.employee.employeeCode})
+                                    </div>
+                                )
+                            }
                         </div>
                     ))}
                 </div>

@@ -5,9 +5,11 @@ const { Op } = require("sequelize");
 // FISCAL YEAR FIX — shared fiscal utility is canonical source for FY logic
 const { getCurrentFiscalYear } = require("../utils/fiscalUtils");
 
-// CENTRALIZED DEADLINE CONFIG — reads MONTHLY_PLAN_DEADLINE_DAY and
-// MONTHLY_ACHIEVEMENT_DEADLINE_DAY from .env.  Single source of truth shared
-// with the frontend via GET /api/config/deadlines.
+// CENTRALIZED DEADLINE CONFIG — reads MONTHLY_PLAN_DEADLINE_DAY,
+// MONTHLY_ACHIEVEMENT_START_DAY, and MONTHLY_ACHIEVEMENT_DEADLINE_DAY from
+// .env. Single source of truth shared with the frontend via
+// GET /api/config/deadlines. The achievement window is bounded on both
+// sides: it opens on achievementStartDay and closes on achievementDay.
 const { parseDeadlineConfig } = require("../controllers/configController");
 
 /* ════════════════════════════════════════════════════════════════════
@@ -84,11 +86,11 @@ exports.allowMonthlyPlanSubmission = async (req, res, next) => {
     // ─────────────────────────────────────────────────────────────────────────
 
     // ── Normal deadline enforcement for fresh first submissions ───────────────
-    if (submittedMonth !== currentMonth) {
-      return res.status(403).json({
-        message: `You can only submit a monthly plan for the current month (${currentMonth}). Received: ${submittedMonth}`
-      });
-    }
+    // if (submittedMonth !== currentMonth) {
+    //   return res.status(403).json({
+    //     message: `You can only submit a monthly plan for the current month (${currentMonth}). Received: ${submittedMonth}`
+    //   });
+    // }
 
     // ── CENTRALIZED DEADLINE: read plan deadline day from .env ────────────────
     const { planDay } = parseDeadlineConfig();
@@ -139,23 +141,32 @@ exports.allowMonthlyAchievementSubmission = async (req, res, next) => {
     // ─────────────────────────────────────────────────────────────────────────
 
     // ── Normal deadline enforcement for fresh first-time achievements ─────────
-    if (plan.month !== currentMonth) {
+    // if (plan.month !== currentMonth) {
+    //   return res.status(403).json({
+    //     message: `You can only submit a monthly achievement for the current month (${currentMonth}). The linked plan is for: ${plan.month}`
+    //   });
+    // }
+
+    // ── CENTRALIZED DEADLINE: read achievement window from .env ────────────────
+    // The window is bounded on BOTH sides:
+    //   • OPENS  on achievementStartDay
+    //   • CLOSES on achievementDay (or the real last day of the month, for "last")
+    const { achievementStartDay, achievementDay } = parseDeadlineConfig();
+
+    if (day < achievementStartDay) {
       return res.status(403).json({
-        message: `You can only submit a monthly achievement for the current month (${currentMonth}). The linked plan is for: ${plan.month}`
+        message: `Monthly achievement submission opens on the ${achievementStartDay}${getOrdinalSuffix(achievementStartDay)} of the month.`
       });
     }
 
-    // ── CENTRALIZED DEADLINE: read achievement deadline day from .env ──────────
-    const { achievementDay } = parseDeadlineConfig();
-    if (achievementDay !== 'last') {
-      if (day < achievementDay) {
-        return res.status(403).json({
-          message: `Monthly achievement submission opens on the ${achievementDay}${getOrdinalSuffix(achievementDay)} of the month.`
-        });
-      }
+    if (achievementDay !== 'last' && day > achievementDay) {
+      return res.status(403).json({
+        message: `Monthly achievement submission deadline has passed. Achievements must be submitted by the ${achievementDay}${getOrdinalSuffix(achievementDay)} of the month.`
+      });
     }
-    // When achievementDay === 'last', no lower-bound restriction is applied;
-    // employees may submit any time during the month.
+    // When achievementDay === 'last', no explicit upper-bound check is needed:
+    // the `plan.month !== currentMonth` check above already makes it
+    // impossible for `day` to exceed the real last day of the current month.
     // ─────────────────────────────────────────────────────────────────────────
 
     next();

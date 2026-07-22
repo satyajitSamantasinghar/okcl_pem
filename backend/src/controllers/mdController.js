@@ -588,3 +588,32 @@ exports.getRAMonthlyEvaluations = async (req, res) => {
     res.status(500).json({ message: "Failed to fetch RA monthly evaluations.", error: error.message });
   }
 };
+
+/* ─── MD RA-ELIGIBILITY CHECK ──────────────────────────────────────────────────
+ *  Called by the frontend on MD login/load to decide whether to show the
+ *  "Switch to RA View" button. Returns { isRA: bool, subordinateCount: number }.
+ *
+ *  "isRA" is true when at least one employee (of any role) has reportingAuthorityId
+ *  equal to the MD's own userId — i.e., the MD acts as a direct RA for those people.
+ *
+ *  This is scoped to direct reports only (second interpretation confirmed by user):
+ *  employees who report to an RA who reports to MD are NOT counted here.
+ * ──────────────────────────────────────────────────────────────────────────── */
+exports.checkRAEligibility = async (req, res) => {
+  try {
+    const mdId = req.user.userId;
+
+    // Count employees (any role) who directly report to this MD user
+    const subordinateCount = await User.count({
+      where: { reportingAuthorityId: mdId },
+    });
+
+    res.json({
+      isRA: subordinateCount > 0,
+      subordinateCount,
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to check RA eligibility.", error: error.message });
+  }
+};
+
