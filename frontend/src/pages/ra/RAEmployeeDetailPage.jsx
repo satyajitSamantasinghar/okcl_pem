@@ -277,7 +277,11 @@ const RAEmployeeDetailPage = () => {
     const {
         employee, monthlyPlans, monthlyAchievements,
         monthlyEvaluations, quarterlyEvaluations, yearlyPlans, yearlyReports,
+        deadlineExtensions: rawDeadlineExtensions,
     } = data;
+    // Defensive: API may return null/undefined if the field is new and the
+    // backend hasn't been redeployed yet — default to empty array.
+    const deadlineExtensions = Array.isArray(rawDeadlineExtensions) ? rawDeadlineExtensions : [];
 
     /* ── Unified monthly list — UNCHANGED ── */
     const unifiedMonths = monthlyPlans
@@ -368,22 +372,35 @@ const availableYears = Array.from(fySet).sort((a, b) =>
     const filteredYearlyReports = yearlyReports.filter(y => fyMatch(y.financialYear));
     const filteredEvals = monthlyEvaluations.filter(e => monthInFY(e.month, filterYear));
 
-    /* ── Stats — UNCHANGED ── */
-    const evaluatedEvals = filteredEvals.filter(e => e.status === 'EVALUATED' && e.score > 0);
+    /* ── FY-scoped deadline extensions (matches same FY filter as monthly/quarterly) ── */
+    const filteredExtensions = deadlineExtensions
+        .filter(e => {
+            // Convert (year, month) int fields to a "YYYY-MM" string for monthToFY()
+            const fy = monthToFY(`${e.year}-${String(e.month).padStart(2, '0')}`);
+            return fy === filterYear;
+        })
+        // Client-side sort DESC — defensive: API sends newest-first but we don't rely on it
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    /* ── Stats ── */
+    // NOTE: Sequelize returns DECIMAL columns as strings, so we must parseFloat()
+    // before any arithmetic. Without it, (0 + "9.00") = "09.00" (string concat)
+    // and the subsequent division produces NaN.
+    const evaluatedEvals = filteredEvals.filter(e => e.status === 'EVALUATED' && parseFloat(e.score) > 0);
     const avgScore = evaluatedEvals.length > 0
-        ? Number((evaluatedEvals.reduce((s, e) => s + e.score, 0) / evaluatedEvals.length).toFixed(1))
+        ? Number((evaluatedEvals.reduce((s, e) => s + parseFloat(e.score), 0) / evaluatedEvals.length).toFixed(1))
         : '—';
 
     /* ── KPI derived ── */
-    const bestEval  = evaluatedEvals.length > 0 ? evaluatedEvals.reduce((b, e) => e.score > b.score ? e : b, evaluatedEvals[0]) : null;
-    const worstEval = evaluatedEvals.length > 0 ? evaluatedEvals.reduce((w, e) => e.score < w.score ? e : w, evaluatedEvals[0]) : null;
+    const bestEval  = evaluatedEvals.length > 0 ? evaluatedEvals.reduce((b, e) => parseFloat(e.score) > parseFloat(b.score) ? e : b, evaluatedEvals[0]) : null;
+    const worstEval = evaluatedEvals.length > 0 ? evaluatedEvals.reduce((w, e) => parseFloat(e.score) < parseFloat(w.score) ? e : w, evaluatedEvals[0]) : null;
     const completionRate = filteredMonths.length > 0
         ? Math.round((filteredMonths.filter(m => m.isEval).length / filteredMonths.length) * 100) : 0;
     const lastEval = evaluatedEvals.length > 0
         ? [...evaluatedEvals].sort((a, b) => b.month.localeCompare(a.month))[0] : null;
     const sortedEvalsByMonth = [...evaluatedEvals].sort((a, b) => a.month.localeCompare(b.month));
     const scoreTrend = sortedEvalsByMonth.length >= 2
-        ? sortedEvalsByMonth[sortedEvalsByMonth.length - 1].score - sortedEvalsByMonth[sortedEvalsByMonth.length - 2].score
+        ? parseFloat(sortedEvalsByMonth[sortedEvalsByMonth.length - 1].score) - parseFloat(sortedEvalsByMonth[sortedEvalsByMonth.length - 2].score)
         : null;
 
     /* ── Insight pills ── */
@@ -399,17 +416,17 @@ const availableYears = Array.from(fySet).sort((a, b) =>
         else
             insights.push({ icon: <FiActivity />, variant: 'neutral', text: `Score remained stable at ${Number(curr.score)}/10 — consistent performance` });
     }
-    if (worstEval && worstEval.score < 5)
+    if (worstEval && parseFloat(worstEval.score) < 5)
         insights.push({ icon: <FiAlertTriangle />, variant: 'warning', text: `Lowest score in ${formatMonth(worstEval.month)} (${Number(worstEval.score)}/10) — may need follow-up` });
-    if (bestEval && bestEval.score >= 8)
-        insights.push({ icon: <FiStar />, variant: 'positive', text: `Best performance in ${formatMonth(bestEval.month)} with ${Number(bestEval.score)}/10 — ${getScoreLabel(bestEval.score)} rating` });
+    if (bestEval && parseFloat(bestEval.score) >= 8)
+        insights.push({ icon: <FiStar />, variant: 'positive', text: `Best performance in ${formatMonth(bestEval.month)} with ${Number(bestEval.score)}/10 — ${getScoreLabel(parseFloat(bestEval.score))} rating` });
     if (completionRate === 100 && filteredMonths.length > 0)
         insights.push({ icon: <FiThumbsUp />, variant: 'positive', text: `100% evaluation completion for FY ${filterYear} — all plans reviewed` });
     else if (completionRate < 50 && filteredMonths.length > 1)
         insights.push({ icon: <FiInfo />, variant: 'warning', text: `Only ${completionRate}% evaluated in FY ${filterYear} — ${filteredMonths.filter(m => !m.isEval).length} pending review` });
     if (evaluatedEvals.length >= 3) {
         const last3 = [...evaluatedEvals].sort((a, b) => b.month.localeCompare(a.month)).slice(0, 3);
-        if (last3.every(e => Math.abs(e.score - parseFloat(avgScore)) <= 1.5))
+        if (last3.every(e => Math.abs(parseFloat(e.score) - parseFloat(avgScore)) <= 1.5))
             insights.push({ icon: <FiCheckCircle />, variant: 'positive', text: `Consistent scores across the last 3 months — reliable performance pattern` });
     }
 
@@ -422,17 +439,18 @@ const availableYears = Array.from(fySet).sort((a, b) =>
 
     /* ── Tabs ── */
     const tabs = [
-        { key: 'overview',  label: 'Analytics',      icon: <FiBarChart2 /> },
-        { key: 'monthly',   label: 'Monthly Reviews', icon: <FiCalendar />, count: filteredMonths.length },
-        { key: 'quarterly', label: 'Quarterly',       icon: <FiTarget />,   count: filteredQuarterly.length },
-        { key: 'yearly',    label: 'Yearly',          icon: <FiAward />,    count: filteredYearlyPlans.length + filteredYearlyReports.length },
+        { key: 'overview',    label: 'Analytics',         icon: <FiBarChart2 /> },
+        { key: 'monthly',     label: 'Monthly Reviews',   icon: <FiCalendar />, count: filteredMonths.length },
+        { key: 'quarterly',   label: 'Quarterly',         icon: <FiTarget />,   count: filteredQuarterly.length },
+        { key: 'yearly',      label: 'Yearly',            icon: <FiAward />,    count: filteredYearlyPlans.length + filteredYearlyReports.length },
+        { key: 'extensions',  label: 'Extension History', icon: <FiClock />,    count: filteredExtensions.length },
     ];
 
     /* ── Status badge helper — UNCHANGED ── */
     const getStatusBadge = plan => {
         if (plan.status === 'REJECTED') return <span className="red-badge red-badge--rejected">Rejected by RA</span>;
         if (plan.isEval)                return <span className="red-badge red-badge--evaluated">Evaluated</span>;
-        if (plan.hasAchievement)        return <span className="red-badge red-badge--achievement">Achievement Submitted</span>;
+        if (plan.hasAchievement)        return <span className="red-badge red-badge--achievement">Progress Submitted</span>;
         return <span className="red-badge red-badge--submitted">Plan Submitted</span>;
     };
 
@@ -482,7 +500,7 @@ const availableYears = Array.from(fySet).sort((a, b) =>
         const line2 = isEval ? 'filled' : 'empty';
 
         // Status pill
-        const stLabel = isRejected ? 'Rejected' : isEval ? 'Evaluated' : plan.hasAchievement ? 'Achievement added' : 'Plan submitted';
+        const stLabel = isRejected ? 'Rejected' : isEval ? 'Evaluated' : plan.hasAchievement ? 'Progress added' : 'Plan submitted';
         const stCls   = isRejected ? 'sp-rejected' : isEval ? 'sp-eval' : plan.hasAchievement ? 'sp-ach' : 'sp-plan';
 
         return createPortal(
@@ -528,7 +546,7 @@ const availableYears = Array.from(fySet).sort((a, b) =>
                                     ? <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" /></svg>
                                     : <FiTrendingUp size={12} />}
                             </div>
-                            <span className={`dmod-slbl dmod-slbl--${stepperAch}`}>Achievement</span>
+                            <span className={`dmod-slbl dmod-slbl--${stepperAch}`}>Progress</span>
                         </div>
                         <div className={`dmod-sline dmod-sline--${line2}`} />
                         <div className="dmod-step">
@@ -572,7 +590,7 @@ const availableYears = Array.from(fySet).sort((a, b) =>
                                     {ach?.submittedAt && (
                                         <span className="dmod-ts-item">
                                             <FiTrendingUp size={10} />
-                                            Achievement submitted {formatDateShort(ach.submittedAt)}
+                                            Progress submitted {formatDateShort(ach.submittedAt)}
                                         </span>
                                     )}
                                 </div>
@@ -740,6 +758,52 @@ const availableYears = Array.from(fySet).sort((a, b) =>
                                 <div className="dmod-score-chip">{Number(ev.score)}/10</div>
                             )}
                         </div>
+
+                        {/* ⏱ Deadline Extension block — read-only, amber accent
+                             Renders only if there is an extension for this specific
+                             month + type combination. No edit/delete affordance. */}
+                        {(() => {
+                            const [py, pm] = (plan.month || '').split('-').map(Number);
+                            // Match on month, year, AND type to avoid cross-type false positives
+                            const planTypeKey = plan.missingType || 'plan'; // fallback
+                            const extRecords = filteredExtensions.filter(e =>
+                                e.year === py && e.month === pm
+                            );
+                            if (extRecords.length === 0) return null;
+                            return extRecords.map((ext, idx) => (
+                                <div key={ext.id || idx} className="dmod-ext-box">
+                                    <div className="dmod-ext-header">
+                                        <FiClock size={12} />
+                                        <span className="dmod-ext-title">
+                                            DEADLINE EXTENDED
+                                            <span className="dmod-ext-type-pill">
+                                                {ext.type === 'PLAN' ? 'Plan' : 'Achievement'}
+                                            </span>
+                                        </span>
+                                    </div>
+                                    <div className="dmod-ext-row">
+                                        <span className="dmod-ext-label">Original:</span>
+                                        <span className="dmod-ext-val">
+                                            {formatDateShort(ext.oldDeadline)}
+                                        </span>
+                                        <span className="dmod-ext-arrow">→</span>
+                                        <span className="dmod-ext-val dmod-ext-val--new">
+                                            {formatDateShort(ext.newDeadline)}
+                                        </span>
+                                    </div>
+                                    <div className="dmod-ext-row dmod-ext-row--meta">
+                                        <span>
+                                            By: <strong>{ext.extendedBy?.name || 'RA'}</strong> (RA)
+                                        </span>
+                                        <span className="dmod-ext-dot">·</span>
+                                        <span>{formatDateShort(ext.createdAt)}</span>
+                                    </div>
+                                    <div className="dmod-ext-reason">
+                                        &ldquo;{ext.reason}&rdquo;
+                                    </div>
+                                </div>
+                            ));
+                        })()}
 
                         {/* RA rejection reason */}
                         {isRejected && (plan.raRemarks || plan.mdRemarks) && (
@@ -996,7 +1060,18 @@ const availableYears = Array.from(fySet).sort((a, b) =>
                                                     <div className="red-month-badge">{shortMonth(plan.month)}</div>
                                                     <div>
                                                         <strong>{formatMonth(plan.month)}</strong>
-                                                        <div style={{ marginTop: 4 }}>{getStatusBadge(plan)}</div>
+                                                        <div style={{ marginTop: 4, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                                                            {getStatusBadge(plan)}
+                                                            {/* ⏱ Extended chip — non-interactive pointer only */}
+                                                            {filteredExtensions.some(e => {
+                                                                const [py, pm] = plan.month.split('-').map(Number);
+                                                                return e.year === py && e.month === pm;
+                                                            }) && (
+                                                                <span className="red-ext-badge">
+                                                                    <FiClock size={9} /> Extended
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </td>
@@ -1252,6 +1327,80 @@ const availableYears = Array.from(fySet).sort((a, b) =>
                                 </div>
                             )}
                         </>
+                    )}
+                </div>
+            )}
+            {/* ════════════ EXTENSION HISTORY TAB ════════════ */}
+            {activeTab === 'extensions' && (
+                <div className="red-ext-tab-wrap">
+                    {filteredExtensions.length === 0 ? (
+                        <div className="red-empty-center">
+                            <FiClock style={{ fontSize: '2.5rem', opacity: 0.2 }} />
+                            <p>No deadline extensions recorded for FY {filterYear}.</p>
+                        </div>
+                    ) : (
+                        <div className="red-table-card">
+                            <div className="red-ext-tab-header">
+                                <FiClock className="red-ext-tab-icon" />
+                                <span>Deadline Extension Audit Trail</span>
+                                <span className="red-insights-count">{filteredExtensions.length}</span>
+                            </div>
+                            <table className="red-table red-ext-table">
+                                <thead>
+                                    <tr>
+                                        <th>Month</th>
+                                        <th>Type</th>
+                                        <th>Original Deadline</th>
+                                        <th>New Deadline</th>
+                                        <th>Extended By</th>
+                                        <th>Reason</th>
+                                        <th>Date</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {filteredExtensions.map((ext, idx) => (
+                                        <tr key={ext.id || idx} className="red-ext-row">
+                                            <td>
+                                                <div className="red-month-cell">
+                                                    <div className="red-month-badge">
+                                                        {new Date(ext.year, ext.month - 1).toLocaleDateString('en-US', { month: 'short' })}
+                                                    </div>
+                                                    <strong>
+                                                        {new Date(ext.year, ext.month - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                                                    </strong>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <span className={`red-ext-type-chip red-ext-type-chip--${ext.type?.toLowerCase()}`}>
+                                                    {ext.type === 'PLAN' ? '📋 Plan' : '🏆 Achievement'}
+                                                </span>
+                                            </td>
+                                            <td className="red-date-cell red-ext-old-date">
+                                                {formatDateShort(ext.oldDeadline)}
+                                            </td>
+                                            <td className="red-date-cell">
+                                                <span className="red-ext-new-date">
+                                                    {formatDateShort(ext.newDeadline)}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <span className="red-ext-by">
+                                                    {ext.extendedBy?.name || '—'}
+                                                </span>
+                                            </td>
+                                            <td className="red-ext-reason-cell">
+                                                <span className="red-ext-reason-text" title={ext.reason}>
+                                                    {ext.reason}
+                                                </span>
+                                            </td>
+                                            <td className="red-date-cell">
+                                                {formatDateShort(ext.createdAt)}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
                     )}
                 </div>
             )}

@@ -271,16 +271,16 @@ const PlanCard = ({ planText, planIndex, pa, hasAchievementRecord }) => {
             {/* Achievement */}
             <div className="qd-plan-ach-section">
                 <div className="qd-plan-ach-lbl">
-                    <FiTrendingUp size={10} /> Achievement details
+                    <FiTrendingUp size={10} /> Progress details
                 </div>
                 {!hasAchievementRecord ? (
                     <div className="qd-plan-ach-no-submission">
-                        <FiClock size={11} /> No achievement submitted for this month
+                        <FiClock size={11} /> No progress submitted for this month
                     </div>
                 ) : hasAchText ? (
                     <div className="qd-plan-ach-text">{pa.achievementDetails}</div>
                 ) : (
-                    <div className="qd-plan-ach-empty">No achievement details provided</div>
+                    <div className="qd-plan-ach-empty">No progress details provided</div>
                 )}
             </div>
         </div>
@@ -510,7 +510,7 @@ const RAQuarterlyDetailPage = () => {
                                                 )}
                                                 {m.achievement?.submittedAt && (
                                                     <span className="qd-ts-item qd-ts-ach">
-                                                        <FiTrendingUp size={10} /> Achievement {formatDateShort(m.achievement.submittedAt)}
+                                                        <FiTrendingUp size={10} /> Progress {formatDateShort(m.achievement.submittedAt)}
                                                     </span>
                                                 )}
                                             </div>
@@ -521,7 +521,7 @@ const RAQuarterlyDetailPage = () => {
                                             <div className="qd-tl-plans">
                                                 <div className="qd-tl-plans-label">
                                                     <FiFileText size={11} />
-                                                    Plans &amp; achievements
+                                                    Plans &amp; progress
                                                     <span className="qd-plans-count">
                                                         {planItems.length} plan{planItems.length !== 1 ? 's' : ''}
                                                     </span>
@@ -540,7 +540,7 @@ const RAQuarterlyDetailPage = () => {
 
                                                 {(m.achievement?.achievementDetails && !getEffectivePlanAch(m.achievement, planItems.length)) && (
                                                     <div className="qd-legacy-ach-box" style={{ marginTop: '10px' }}>
-                                                        <div className="qd-legacy-ach-badge">Legacy Achievement</div>
+                                                        <div className="qd-legacy-ach-badge">Legacy progress</div>
                                                         <div className="qd-legacy-ach-text">{m.achievement.achievementDetails}</div>
                                                     </div>
                                                 )}
@@ -552,7 +552,7 @@ const RAQuarterlyDetailPage = () => {
                                                         <div className="qd-extras-card">
                                                             <div className="qd-extras-header">
                                                                 <FiStar size={12} />
-                                                                <span>Additional achievements</span>
+                                                                <span>Additional work with progress update</span>
                                                                 <span className="qd-extras-count">{items.length} extra</span>
                                                             </div>
                                                             <div className="qd-extras-body">
@@ -570,7 +570,7 @@ const RAQuarterlyDetailPage = () => {
                                         ) : (
                                             m.achievement?.achievementDetails && (
                                                 <div className="qd-tl-plans">
-                                                    <div className="qd-tl-plans-label"><FiTrendingUp size={11} /> Achievement</div>
+                                                    <div className="qd-tl-plans-label"><FiTrendingUp size={11} /> Progress</div>
                                                     <div className="qd-legacy-ach-box">
                                                         <div className="qd-legacy-ach-badge">Legacy format</div>
                                                         <div className="qd-legacy-ach-text">{m.achievement.achievementDetails}</div>

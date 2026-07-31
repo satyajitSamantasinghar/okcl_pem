@@ -20,6 +20,7 @@ const YearlyAppraisalReport         = require("./YearlyAppraisalReport")(sequeli
 const YearlyAppraisalKraAssessment  = require("./YearlyAppraisalKraAssessment")(sequelize);
 const AppraisalQuarterlyEvaluation  = require("./AppraisalQuarterlyEvaluation")(sequelize);
 const EmployeeRAHistory             = require("./EmployeeRAHistory")(sequelize);
+const DeadlineExtension             = require("./DeadlineExtension")(sequelize);
 
 // ─────────────────────────────────────────────────────────────
 //  ASSOCIATIONS
@@ -168,6 +169,12 @@ EmployeeRAHistory.belongsTo(User, { as: "assignedByUser", foreignKey: "assignedB
 User.hasMany(EmployeeRAHistory, { as: "raHistoryAsEmployee", foreignKey: "employeeId" });
 User.hasMany(EmployeeRAHistory, { as: "raHistoryAsRA",       foreignKey: "raId" });
 
+/* ── DeadlineExtension ↔ User (employee, extendedBy) ── */
+DeadlineExtension.belongsTo(User, { as: "employee",   foreignKey: "employeeId" });
+DeadlineExtension.belongsTo(User, { as: "extendedBy", foreignKey: "extendedById" });
+User.hasMany(DeadlineExtension, { as: "deadlineExtensionsAsEmployee", foreignKey: "employeeId" });
+User.hasMany(DeadlineExtension, { as: "deadlineExtensionsGranted",    foreignKey: "extendedById" });
+
 // ─────────────────────────────────────────────────────────────
 //  Export everything so controllers can do:
 //  const { User, MonthlyPlan, ... } = require('../models');
@@ -191,4 +198,5 @@ module.exports = {
   YearlyAppraisalKraAssessment,
   AppraisalQuarterlyEvaluation,
   EmployeeRAHistory,
+  DeadlineExtension,
 };

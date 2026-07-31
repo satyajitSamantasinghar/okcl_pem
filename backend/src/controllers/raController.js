@@ -34,10 +34,16 @@ const {
   AuditLog,
   Notification,
   EmployeeRAHistory,
+  DeadlineExtension,
 } = require("../models");
 
 const { Op } = require("sequelize");
 const { getQuarterMonthStrings } = require("../utils/fiscalUtils");
+
+// Deadline extension helpers — single source of truth
+const { parseDeadlineConfig, normalizeRole, getExtensionCeiling } = require("./configController");
+const { getEffectiveDeadline, getExtensionHistory } = require("../utils/deadlineResolver");
+const { GO_LIVE, buildDeadlineDate } = require("../utils/dateHelpers");
 
 /* helper — mirrors the old in-file function */
 function getQuarterMonths(quarter) {
@@ -238,15 +244,17 @@ exports.getMyEmployees = async (req, res) => {
       employeeIds = [...new Set(historyRows.map(h => h.employeeId))];
     }
 
-    // Fetch full employee records — either the history-derived set or all current
+    // Fetch full employee records — either the history-derived set or all current.
+    // 'role' is included so the frontend can resolve each person's deadline against
+    // their own role config (e.g. an RA reportee has planDay=27, not 26).
     const employees = employeeIds !== null
       ? await User.findAll({
         where: { id: { [Op.in]: employeeIds }, isActive: true },
-        attributes: ["id", "name", "employeeCode", "department", "email", "createdAt"],
+        attributes: ["id", "name", "employeeCode", "department", "email", "role", "createdAt"],
       })
       : await User.findAll({
         where: { reportingAuthorityId: raId, isActive: true },
-        attributes: ["id", "name", "employeeCode", "department", "email", "createdAt"],
+        attributes: ["id", "name", "employeeCode", "department", "email", "role", "createdAt"],
       });
 
     const result = await Promise.all(
@@ -263,7 +271,11 @@ exports.getMyEmployees = async (req, res) => {
 
         return {
           id: emp.id, name: emp.name, employeeCode: emp.employeeCode,
-          department: emp.department, email: emp.email, joinedAt: emp.createdAt,
+          department: emp.department, email: emp.email,
+          // 'role' is included so the frontend can apply the correct role-scoped
+          // deadline config per team member (EMPLOYEE vs RA deadlines differ).
+          role: emp.role,
+          joinedAt: emp.createdAt,
           totalPlans, totalEvaluated, totalAchievements, currentMonth,
           currentMonthPlanSubmitted: !!currentMonthPlan,
           currentMonthAchievementSubmitted: !!currentMonthAchievement,
@@ -297,16 +309,27 @@ exports.getEmployeeDetail = async (req, res) => {
       return res.status(403).json({ message: "You are not authorized to view this employee's details" });
     }
 
-    const [monthlyPlans, monthlyAchievements, monthlyEvaluations, quarterlyEvaluations, yearlyPlans, yearlyReports] = await Promise.all([
+    const [
+      monthlyPlans, monthlyAchievements, monthlyEvaluations,
+      quarterlyEvaluations, yearlyPlans, yearlyReports, deadlineExtensions,
+    ] = await Promise.all([
       MonthlyPlan.findAll({ where: { employeeId: id }, include: [{ model: MonthlyPlanItem, as: "planItems", order: [["itemOrder", "ASC"]] }], order: [["month", "DESC"]] }),
       MonthlyAchievement.findAll({ where: { employeeId: id }, include: [{ model: MonthlyPlan, as: "monthlyPlan", attributes: ["id", "month", "planDetails"] }, { model: MonthlyAchievementItem, as: "planAchievements" }], order: [["submittedAt", "DESC"]] }),
       MonthlyEvaluation.findAll({ where: { employeeId: id }, include: [{ model: User, as: "ra", attributes: ["id", "name"] }], order: [["month", "DESC"]] }),
       QuarterlyEvaluation.findAll({ where: { employeeId: id }, include: [{ model: User, as: "ra", attributes: ["id", "name"] }], order: [["createdAt", "DESC"]] }),
       YearlyPlan.findAll({ where: { employeeId: id }, include: [{ model: YearlyPlanKra, as: "kras", order: [["kraIndex", "ASC"]] }], order: [["submittedAt", "DESC"]] }),
       YearlyAppraisalReport.findAll({ where: { employeeId: id }, include: [{ model: YearlyAppraisalKraAssessment, as: "kraAssessments" }], order: [["submittedAt", "DESC"]] }),
+      // Deadline extension audit log — read-only, ordered newest-first.
+      // Access control: already enforced above (reportingAuthorityId check);
+      // HRD/MD can read the same data via their own controllers without changes.
+      DeadlineExtension.findAll({
+        where:   { employeeId: id },
+        include: [{ model: User, as: "extendedBy", attributes: ["id", "name"] }],
+        order:   [["createdAt", "DESC"]],
+      }),
     ]);
 
-    res.json({ employee, monthlyPlans, monthlyAchievements, monthlyEvaluations, quarterlyEvaluations, yearlyPlans, yearlyReports });
+    res.json({ employee, monthlyPlans, monthlyAchievements, monthlyEvaluations, quarterlyEvaluations, yearlyPlans, yearlyReports, deadlineExtensions });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -1186,33 +1209,702 @@ exports.rejectMonthlyPlan = async (req, res) => {
 exports.extendDeadline = async (req, res) => {
   try {
     const raId = req.user.userId;
-    const { employeeId, month, year, type, newDeadline, reason, notifyEmployee } = req.body;
+    const { employeeId, month, year, type, newDeadline, oldDeadline, reason, notifyEmployee } = req.body;
 
-    if (!employeeId || !month || !year || !type || !newDeadline || !reason) return res.status(400).json({ message: "Missing required fields." });
-    if (!["plan", "achievement"].includes(type)) return res.status(400).json({ message: "type must be 'plan' or 'achievement'" });
-    if (reason.trim().length < 10) return res.status(400).json({ message: "Reason must be at least 10 characters" });
-
-    const employee = await User.findOne({ where: { id: employeeId, reportingAuthorityId: raId } });
-    if (!employee) return res.status(403).json({ message: "Employee not found under your authority" });
-
-    const monthStr = `${year}-${String(month).padStart(2, "0")}`;
-    const extendedDeadlineDate = new Date(newDeadline);
-    if (extendedDeadlineDate < new Date()) return res.status(400).json({ message: "New deadline cannot be in the past" });
-
-    await AuditLog.create({ userId: raId, action: "EXTEND_DEADLINE", entityType: "MONTHLY_PLAN", entityId: String(employeeId), ipAddress: req.ip });
-
-    if (notifyEmployee) {
-      const typeLabel = type === "plan" ? "Monthly Plan" : "Achievement";
-      await Notification.create({
-        userId: employeeId, type: "GENERAL",
-        title: `${typeLabel} Deadline Extended`,
-        message: `Your Reporting Authority has extended your ${typeLabel} submission deadline for ${monthStr} to ${extendedDeadlineDate.toLocaleDateString("en-US", { day: "numeric", month: "long", year: "numeric" })}. Reason: "${reason.trim()}"`,
-        entityType: "MONTHLY_PLAN", entityId: String(employeeId),
-      });
+    // ── Input validation (runs BEFORE the transaction opens) ──────────────────
+    if (!employeeId || !month || !year || !type || !newDeadline || !reason) {
+      return res.status(400).json({ message: "Missing required fields." });
+    }
+    if (!["plan", "achievement"].includes(type)) {
+      return res.status(400).json({ message: "type must be 'plan' or 'achievement'" });
+    }
+    if (reason.trim().length < 10) {
+      return res.status(400).json({ message: "Reason must be at least 10 characters" });
     }
 
-    res.json({ message: `Deadline extended successfully for ${employee.name}.`, employee: { id: employee.id, name: employee.name }, newDeadline: extendedDeadlineDate.toISOString(), type, month: monthStr });
+    // ── Authorization: RA may only extend deadlines for their own reportees ───
+    // Two-step check — mirrors the same logic as getDeadlineManagement and
+    // getExtendDeadlineContext so that history-based assignments are honoured.
+    let employee = await User.findOne({ where: { id: employeeId, reportingAuthorityId: raId } });
+    if (!employee) {
+      const monthNum0  = parseInt(month, 10);
+      const yearNum0   = parseInt(year,  10);
+      const startOfMonth0 = new Date(yearNum0, monthNum0 - 1, 1, 0, 0, 0, 0);
+      const endOfMonth0   = new Date(yearNum0, monthNum0, 0, 23, 59, 59, 999);
+      const historyMatch0 = await EmployeeRAHistory.findOne({
+        where: {
+          raId,
+          employeeId,
+          effectiveFrom: { [Op.lte]: endOfMonth0 },
+          [Op.or]: [
+            { effectiveTo: null },
+            { effectiveTo: { [Op.gte]: startOfMonth0 } },
+          ],
+        },
+        attributes: ["employeeId"],
+      });
+      if (!historyMatch0) {
+        return res.status(403).json({ message: "Employee not found under your authority" });
+      }
+      employee = await User.findOne({ where: { id: employeeId } });
+      if (!employee) {
+        return res.status(403).json({ message: "Employee not found under your authority" });
+      }
+    }
+
+    const monthNum              = parseInt(month, 10);
+    const yearNum               = parseInt(year, 10);
+    const monthStr              = `${yearNum}-${String(monthNum).padStart(2, "0")}`;
+    const extendedDeadlineDate  = new Date(newDeadline);
+    if (isNaN(extendedDeadlineDate.getTime())) {
+      return res.status(400).json({ message: "Invalid newDeadline date value." });
+    }
+    if (extendedDeadlineDate < new Date()) {
+      return res.status(400).json({ message: "New deadline cannot be in the past" });
+    }
+
+    // Normalize type to uppercase for the ENUM column
+    const typeEnum = type.toUpperCase(); // "plan" → "PLAN", "achievement" → "ACHIEVEMENT"
+
+    // ── SERVER-SIDE CEILING CHECK (Section 4, rule 1) ──────────────────────────
+    // The employee's own role determines the ceiling (an RA reportee gets the
+    // RA ceiling, a regular employee gets the EMPLOYEE ceiling).
+    const ceiling = getExtensionCeiling(employee.role, typeEnum, monthNum, yearNum);
+    if (extendedDeadlineDate > ceiling) {
+      const ceilingLabel = ceiling.toLocaleDateString("en-US", {
+        day: "numeric", month: "long", year: "numeric"
+      });
+      const typeLabel = typeEnum === "PLAN" ? "Plan" : "Achievement";
+      return res.status(400).json({
+        message: `${typeLabel} deadline can only be extended up to ${ceilingLabel}.`
+      });
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // ── DERIVE oldDeadline FROM RESOLVER (Section 4, rule 1) ─────────────────
+    // Do NOT trust req.body.oldDeadline for what gets persisted — the client
+    // may be out of sync after a 2nd extension. The authoritative oldDeadline
+    // is whatever the current effective deadline is (which equals the previous
+    // extension's newDeadline, or the base deadline if never extended).
+    //
+    // We still accept oldDeadline in the request body for backward compatibility
+    // with existing frontend payload shape — we just ignore its value for DB.
+    const baseDeadlineForType = typeEnum === "PLAN"
+      ? buildDeadlineDate(yearNum, monthNum, require("./configController").parseDeadlineConfig(normalizeRole(employee.role)).planDay, 0, true)
+      : (() => {
+          const cfg = require("./configController").parseDeadlineConfig(normalizeRole(employee.role));
+          return buildDeadlineDate(yearNum, monthNum, cfg.achievementDay, cfg.achievementDeadlineMonthOffset, true);
+        })();
+
+    const { effectiveDeadline: currentEffective } = await getEffectiveDeadline({
+      employeeId,
+      month:        monthNum,
+      year:         yearNum,
+      type:         typeEnum,
+      baseDeadline: baseDeadlineForType,
+    });
+
+    // Format as DATEONLY string ("YYYY-MM-DD") for the DB column
+    const resolvedOldDeadlineDate = currentEffective;
+    const resolvedOldDeadline = resolvedOldDeadlineDate.toISOString().split("T")[0];
+    // ─────────────────────────────────────────────────────────────────────────
+
+    const typeLabel = type === "plan" ? "Monthly Plan" : "Achievement";
+
+    // ── Transactional writes — all succeed or all roll back ───────────────────
+    const result = await sequelize.transaction(async (t) => {
+      // 1. Structured domain record (the queryable audit trail)
+      const ext = await DeadlineExtension.create(
+        {
+          employeeId,
+          extendedById:     raId,
+          month:            monthNum,
+          year:             yearNum,
+          type:             typeEnum,
+          oldDeadline:      resolvedOldDeadline,
+          newDeadline:      extendedDeadlineDate.toISOString().split("T")[0],
+          reason:           reason.trim(),
+          notifiedEmployee: !!notifyEmployee,
+          auditLogId:       null, // back-filled after AuditLog creation
+        },
+        { transaction: t }
+      );
+
+      // 2. Generic immutable audit trail
+      const auditEntry = await AuditLog.create(
+        {
+          userId:     raId,
+          action:     "EXTEND_DEADLINE",
+          entityType: "DEADLINE_EXTENSION",
+          entityId:   String(ext.id),
+          ipAddress:  req.ip,
+        },
+        { transaction: t }
+      );
+
+      // 3. Back-fill cross-reference
+      await ext.update({ auditLogId: auditEntry.id }, { transaction: t });
+
+      // 4. Optional in-system notification to the employee
+      if (notifyEmployee) {
+        await Notification.create(
+          {
+            userId:     employeeId,
+            type:       "GENERAL",
+            title:      `${typeLabel} Deadline Extended`,
+            message:    `Your Reporting Authority has extended your ${typeLabel} submission deadline for ${monthStr} to ${extendedDeadlineDate.toLocaleDateString("en-US", { day: "numeric", month: "long", year: "numeric" })}. Reason: "${reason.trim()}"`,
+            entityType: "DEADLINE_EXTENSION",
+            entityId:   String(ext.id),
+          },
+          { transaction: t }
+        );
+      }
+
+      return ext;
+    });
+
+    res.json({
+      message:     `Deadline extended successfully for ${employee.name}.`,
+      employee:    { id: employee.id, name: employee.name },
+      newDeadline: extendedDeadlineDate.toISOString(),
+      type,
+      month:       monthStr,
+      extensionId: result.id,
+    });
   } catch (error) {
     res.status(500).json({ message: "Failed to extend deadline", error: error.message });
+  }
+};
+
+/* ─── GET MISSED DEADLINES (cross-month aggregate) ────────────────────────────
+   GET /api/ra/missed-deadlines
+
+   For every employee under this RA, for every month from GO_LIVE through
+   the current month, determines if plan or achievement is missing AND past
+   its effective deadline (base or extended).  Not scoped to a single month
+   — this is the source of truth for the dashboard's cross-month card.
+
+   Response:
+   {
+     totalCount,
+     byMonth: [{ month, label, count }],   // most-recent-first
+     items:   [{ employeeId, employeeName, ... }]
+   }
+────────────────────────────────────────────────────────────────────────────── */
+exports.getMissedDeadlines = async (req, res) => {
+  try {
+    const raId = req.user.userId;
+    const now  = new Date();
+
+    // ── 1. Resolve current employees under this RA ────────────────────────────
+    const nowStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    const nowEnd   = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+    const historyRows = await EmployeeRAHistory.findAll({
+      where: {
+        raId,
+        effectiveFrom: { [Op.lte]: nowEnd },
+        [Op.or]: [
+          { effectiveTo: null },
+          { effectiveTo: { [Op.gte]: nowStart } },
+        ],
+      },
+      attributes: ["employeeId"],
+    });
+    const employeeIds = [...new Set(historyRows.map(h => h.employeeId))];
+
+    if (employeeIds.length === 0) {
+      return res.json({ totalCount: 0, byMonth: [], items: [] });
+    }
+
+    // Fetch employee details
+    const employees = await User.findAll({
+      where: { id: { [Op.in]: employeeIds }, isActive: true },
+      attributes: ["id", "name", "employeeCode", "department", "role"],
+    });
+    const employeeMap = {};
+    employees.forEach(e => { employeeMap[e.id] = e; });
+
+    // ── 2. Build month range: GO_LIVE → current month ─────────────────────────
+    const months = []; // [{ year, month, label, str }]
+    let cursor = { year: GO_LIVE.year, month: GO_LIVE.month };
+    while (
+      cursor.year < now.getFullYear() ||
+      (cursor.year === now.getFullYear() && cursor.month <= now.getMonth() + 1)
+    ) {
+      const str = `${cursor.year}-${String(cursor.month).padStart(2, "0")}`;
+      const label = new Date(cursor.year, cursor.month - 1, 1)
+        .toLocaleDateString("en-US", { month: "long", year: "numeric" });
+      months.push({ year: cursor.year, month: cursor.month, label, str });
+
+      // Advance to next month
+      let nm = cursor.month + 1;
+      let ny = cursor.year;
+      if (nm > 12) { nm = 1; ny++; }
+      cursor = { year: ny, month: nm };
+    }
+
+    // ── 3. For each employee × month, check plan and achievement ──────────────
+    const items = [];
+
+    // Batch-load all plans and achievements for these employees across all months
+    const allMonthStrs = months.map(m => m.str);
+
+    const allPlans = employeeIds.length > 0 ? await MonthlyPlan.findAll({
+      where: {
+        employeeId: { [Op.in]: employeeIds },
+        month: { [Op.in]: allMonthStrs },
+        status: { [Op.ne]: "DRAFT" },
+      },
+      attributes: ["id", "employeeId", "month", "submittedAt"],
+    }) : [];
+
+    // Build lookup: planKey ("empId:month") → plan
+    const planMap = {};
+    allPlans.forEach(p => { planMap[`${p.employeeId}:${p.month}`] = p; });
+
+    // Achievement lookup: plan id → true
+    const planIds = allPlans.map(p => p.id);
+    const allAchievements = planIds.length > 0 ? await MonthlyAchievement.findAll({
+      where: { monthlyPlanId: { [Op.in]: planIds } },
+      attributes: ["monthlyPlanId"],
+    }) : [];
+    const achievedPlanIds = new Set(allAchievements.map(a => String(a.monthlyPlanId)));
+
+    for (const emp of employees) {
+      const empRole = emp.role || "EMPLOYEE";
+      const config  = parseDeadlineConfig(normalizeRole(empRole));
+
+      for (const mObj of months) {
+        // Skip future months
+        if (
+          mObj.year > now.getFullYear() ||
+          (mObj.year === now.getFullYear() && mObj.month > now.getMonth() + 1)
+        ) continue;
+
+        const planKey = `${emp.id}:${mObj.str}`;
+        const plan = planMap[planKey] || null;
+        const hasAchievement = plan ? achievedPlanIds.has(String(plan.id)) : false;
+
+        // ── PLAN: missing and past effective deadline? ───────────────────────
+        if (!plan) {
+          const basePlanDeadline = buildDeadlineDate(
+            mObj.year, mObj.month, config.planDay, 0, true
+          );
+          const { effectiveDeadline: eff, isExtended, extensionCount, lastExtension } =
+            await getEffectiveDeadline({
+              employeeId: emp.id,
+              month: mObj.month,
+              year: mObj.year,
+              type: "PLAN",
+              baseDeadline: basePlanDeadline,
+            });
+
+          if (now > eff) {
+            // Compute how long the RA can still grant an extension (ceiling = last day of plan month)
+            const ceiling = getExtensionCeiling(emp.role || "EMPLOYEE", "PLAN", mObj.month, mObj.year);
+            const isStillExtendable = now <= ceiling;
+            items.push({
+              employeeId:               emp.id,
+              employeeName:             emp.name,
+              employeeCode:             emp.employeeCode,
+              department:               emp.department,
+              month:                    mObj.str,
+              year:                     mObj.year,
+              type:                     "PLAN",
+              baseDeadline:             basePlanDeadline.toISOString().split("T")[0],
+              effectiveDeadline:        eff.toISOString().split("T")[0],
+              isExtended,
+              extensionCount,
+              lastExtension,
+              extensionWindowClosesAt:  ceiling.toISOString().split("T")[0],
+              isStillExtendable,
+            });
+          }
+        }
+
+        // ── ACHIEVEMENT: plan exists but achievement missing, past deadline? ──
+        if (plan && !hasAchievement) {
+          const baseAchDeadline = buildDeadlineDate(
+            mObj.year, mObj.month, config.achievementDay, config.achievementDeadlineMonthOffset, true
+          );
+          const { effectiveDeadline: eff, isExtended, extensionCount, lastExtension } =
+            await getEffectiveDeadline({
+              employeeId: emp.id,
+              month: mObj.month,
+              year: mObj.year,
+              type: "ACHIEVEMENT",
+              baseDeadline: baseAchDeadline,
+            });
+
+          if (now > eff) {
+            const ceiling = getExtensionCeiling(emp.role || "EMPLOYEE", "ACHIEVEMENT", mObj.month, mObj.year);
+            const isStillExtendable = now <= ceiling;
+            items.push({
+              employeeId:               emp.id,
+              employeeName:             emp.name,
+              employeeCode:             emp.employeeCode,
+              department:               emp.department,
+              month:                    mObj.str,
+              year:                     mObj.year,
+              type:                     "ACHIEVEMENT",
+              baseDeadline:             baseAchDeadline.toISOString().split("T")[0],
+              effectiveDeadline:        eff.toISOString().split("T")[0],
+              isExtended,
+              extensionCount,
+              lastExtension,
+              extensionWindowClosesAt:  ceiling.toISOString().split("T")[0],
+              isStillExtendable,
+            });
+          }
+        }
+      }
+    }
+
+    // ── 4. Split into actionable vs permanently expired ────────────────────
+    const actionableItems = items.filter(i => i.isStillExtendable);
+    const expiredItems    = items.filter(i => !i.isStillExtendable);
+
+    // Actionable: soonest-to-expire first so the RA sees the most urgent items at top
+    actionableItems.sort((a, b) => {
+      if (a.extensionWindowClosesAt !== b.extensionWindowClosesAt)
+        return a.extensionWindowClosesAt.localeCompare(b.extensionWindowClosesAt);
+      return (a.employeeName || "").localeCompare(b.employeeName || "");
+    });
+
+    // Expired: most-recently-expired first (the RA may want to understand what just slipped)
+    expiredItems.sort((a, b) => {
+      if (b.extensionWindowClosesAt !== a.extensionWindowClosesAt)
+        return b.extensionWindowClosesAt.localeCompare(a.extensionWindowClosesAt);
+      return (a.employeeName || "").localeCompare(b.employeeName || "");
+    });
+
+    // ── 5. byMonth summary — actionable items only ────────────────────────
+    const monthCounts = {};
+    const monthLabels = {};
+    actionableItems.forEach(item => {
+      monthCounts[item.month] = (monthCounts[item.month] || 0) + 1;
+      if (!monthLabels[item.month]) {
+        const [y, m] = item.month.split("-").map(Number);
+        monthLabels[item.month] = new Date(y, m - 1, 1)
+          .toLocaleDateString("en-US", { month: "long", year: "numeric" });
+      }
+    });
+    const byMonth = Object.entries(monthCounts)
+      .sort(([a], [b]) => b.localeCompare(a)) // most-recent first
+      .map(([month, count]) => ({ month, label: monthLabels[month], count }));
+
+    const includeExpired = req.query.includeExpired === "true";
+
+    const response = {
+      totalCount:   actionableItems.length,
+      expiredCount: expiredItems.length,
+      byMonth,
+      items:        actionableItems,
+    };
+    if (includeExpired) response.expiredItems = expiredItems;
+
+    res.json(response);
+  } catch (error) {
+    res.status(500).json({ message: "Failed to load missed deadlines", error: error.message });
+  }
+};
+
+/* ─── GET DEADLINE MANAGEMENT (full roster for one month) ─────────────────────
+   GET /api/ra/deadline-management?month=YYYY-MM
+
+   Returns all employees for the given month (defaults to current month)
+   with both plan and achievement columns including submission status,
+   effective deadlines, and extension info.
+────────────────────────────────────────────────────────────────────────────── */
+exports.getDeadlineManagement = async (req, res) => {
+  try {
+    const raId = req.user.userId;
+    const now  = new Date();
+
+    // Parse or default to current month
+    let targetMonth, targetYear;
+    if (req.query.month) {
+      const [y, m] = req.query.month.split("-").map(Number);
+      targetYear  = y;
+      targetMonth = m;
+    } else {
+      targetYear  = now.getFullYear();
+      targetMonth = now.getMonth() + 1;
+    }
+    const monthStr = `${targetYear}-${String(targetMonth).padStart(2, "0")}`;
+    const label = new Date(targetYear, targetMonth - 1, 1)
+      .toLocaleDateString("en-US", { month: "long", year: "numeric" });
+
+    // ── Resolve employees for this month via EmployeeRAHistory ────────────────
+    const startOfMonth = new Date(targetYear, targetMonth - 1, 1, 0, 0, 0, 0);
+    const endOfMonth   = new Date(targetYear, targetMonth, 0, 23, 59, 59, 999);
+
+    const historyRows = await EmployeeRAHistory.findAll({
+      where: {
+        raId,
+        effectiveFrom: { [Op.lte]: endOfMonth },
+        [Op.or]: [
+          { effectiveTo: null },
+          { effectiveTo: { [Op.gte]: startOfMonth } },
+        ],
+      },
+      attributes: ["employeeId"],
+    });
+    const employeeIds = [...new Set(historyRows.map(h => h.employeeId))];
+
+    if (employeeIds.length === 0) {
+      return res.json({ month: monthStr, year: targetYear, label, employees: [] });
+    }
+
+    const employees = await User.findAll({
+      where: { id: { [Op.in]: employeeIds }, isActive: true },
+      attributes: ["id", "name", "employeeCode", "department", "role"],
+      order: [["name", "ASC"]],
+    });
+
+    // Batch load plans, achievements, and evaluation statuses for this month.
+    // MonthlyPlan.status is set to 'PENDING' on submission and is never updated
+    // by the evaluation flow — the authoritative post-submission status lives in
+    // MonthlyEvaluation.status. We reconcile both to surface the correct label.
+    const plans = await MonthlyPlan.findAll({
+      where: {
+        employeeId: { [Op.in]: employeeIds },
+        month: monthStr,
+        status: { [Op.ne]: "DRAFT" },
+      },
+      attributes: ["id", "employeeId", "month", "submittedAt", "status"],
+    });
+    const planMap = {};
+    plans.forEach(p => { planMap[String(p.employeeId)] = p; });
+
+    const planIds = plans.map(p => p.id);
+
+    const achievements = planIds.length > 0 ? await MonthlyAchievement.findAll({
+      where: { monthlyPlanId: { [Op.in]: planIds } },
+      attributes: ["monthlyPlanId", "submittedAt", "status"],
+    }) : [];
+    const achievementMap = {};
+    achievements.forEach(a => { achievementMap[String(a.monthlyPlanId)] = a; });
+
+    // Batch fetch evaluation status per plan so we can surface EVALUATED / REJECTED
+    // even though MonthlyPlan.status stays PENDING throughout the evaluation lifecycle.
+    const evaluations = planIds.length > 0 ? await MonthlyEvaluation.findAll({
+      where: { monthlyPlanId: { [Op.in]: planIds } },
+      attributes: ["monthlyPlanId", "status", "evaluatedAt"],
+    }) : [];
+    const evaluationMap = {};
+    evaluations.forEach(e => { evaluationMap[String(e.monthlyPlanId)] = e; });
+
+    // Build per-employee rows
+    const employeeRows = await Promise.all(employees.map(async (emp) => {
+      const empRole  = emp.role || "EMPLOYEE";
+      const config   = parseDeadlineConfig(normalizeRole(empRole));
+      const empPlan  = planMap[String(emp.id)] || null;
+      const empAch   = empPlan ? (achievementMap[String(empPlan.id)] || null) : null;
+      const empEval  = empPlan ? (evaluationMap[String(empPlan.id)] || null) : null;
+
+      // Derive the true plan status.
+      // MonthlyPlan.status is set to PENDING on submission and never updated by
+      // the RA evaluation flow. MonthlyEvaluation.status is the authoritative
+      // source once the RA has acted. Precedence:
+      //   1. No plan at all            → MISSING
+      //   2. Plan + eval = EVALUATED   → EVALUATED
+      //   3. Plan + eval = REJECTED (RA sent back for revision) → REJECTED
+      //   4. Plan exists, no eval yet  → MonthlyPlan.status (PENDING / SUBMITTED)
+      const effectivePlanStatus = !empPlan
+        ? "MISSING"
+        : empEval?.status === "EVALUATED"
+          ? "EVALUATED"
+          : empEval?.status === "REJECTED"
+            ? "REJECTED"
+            : empPlan.status;
+
+      // Plan column
+      const basePlanDeadline = buildDeadlineDate(targetYear, targetMonth, config.planDay, 0, true);
+      const planExt = await getEffectiveDeadline({
+        employeeId: emp.id, month: targetMonth, year: targetYear,
+        type: "PLAN", baseDeadline: basePlanDeadline,
+      });
+      const planCeiling = getExtensionCeiling(empRole, "PLAN", targetMonth, targetYear);
+
+      // Achievement column
+      const baseAchDeadline = buildDeadlineDate(
+        targetYear, targetMonth, config.achievementDay, config.achievementDeadlineMonthOffset, true
+      );
+      const achExt = await getEffectiveDeadline({
+        employeeId: emp.id, month: targetMonth, year: targetYear,
+        type: "ACHIEVEMENT", baseDeadline: baseAchDeadline,
+      });
+      const achCeiling = getExtensionCeiling(empRole, "ACHIEVEMENT", targetMonth, targetYear);
+
+      const nowForCeiling = new Date();
+
+      return {
+        employeeId:   emp.id,
+        employeeName: emp.name,
+        employeeCode: emp.employeeCode,
+        department:   emp.department,
+        plan: {
+          status:                  effectivePlanStatus,
+          baseDeadline:            basePlanDeadline.toISOString().split("T")[0],
+          effectiveDeadline:       planExt.effectiveDeadline.toISOString().split("T")[0],
+          isExtended:              planExt.isExtended,
+          extensionCount:          planExt.extensionCount,
+          submittedAt:             empPlan ? empPlan.submittedAt : null,
+          extensionWindowClosesAt: planCeiling.toISOString().split("T")[0],
+          isStillExtendable:       nowForCeiling <= planCeiling,
+        },
+        achievement: {
+          status:                  empAch ? empAch.status : (empPlan ? "MISSING" : "N/A"),
+          baseDeadline:            baseAchDeadline.toISOString().split("T")[0],
+          effectiveDeadline:       achExt.effectiveDeadline.toISOString().split("T")[0],
+          isExtended:              achExt.isExtended,
+          extensionCount:          achExt.extensionCount,
+          submittedAt:             empAch ? empAch.submittedAt : null,
+          extensionWindowClosesAt: achCeiling.toISOString().split("T")[0],
+          isStillExtendable:       nowForCeiling <= achCeiling,
+        },
+      };
+    }));
+
+    res.json({ month: monthStr, year: targetYear, label, employees: employeeRows });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to load deadline management", error: error.message });
+  }
+};
+
+/* ─── GET EXTEND DEADLINE CONTEXT (single endpoint for modal + history) ───────
+   GET /api/ra/extend-deadline/context
+   Query params: employeeId, month (1-12), year, type (PLAN|ACHIEVEMENT)
+
+   Returns everything the UI needs to open the extend modal or show the
+   audit-trail history view — no duplicate logic between them.
+────────────────────────────────────────────────────────────────────────────── */
+exports.getExtendDeadlineContext = async (req, res) => {
+  try {
+    const raId = req.user.userId;
+    const { employeeId, month, year, type } = req.query;
+
+    if (!employeeId || !month || !year || !type) {
+      return res.status(400).json({ message: "employeeId, month, year, and type are required." });
+    }
+
+    const monthNum = parseInt(month, 10);
+    const yearNum  = parseInt(year, 10);
+    const typeUpper = type.toUpperCase();
+
+    if (!["PLAN", "ACHIEVEMENT"].includes(typeUpper)) {
+      return res.status(400).json({ message: "type must be PLAN or ACHIEVEMENT" });
+    }
+
+    // Authorization: employee must be under this RA for the given month.
+    //
+    // We use a two-step check that mirrors the same logic as getDeadlineManagement:
+    //   1. Fast path — current reportingAuthorityId snapshot (most common case).
+    //   2. Fallback   — EmployeeRAHistory for the given month (covers historical
+    //      assignments where the employee has since moved to a different RA, or was
+    //      added via admin setup without updating the User record).
+    //
+    // Previously only step 1 was performed. Employees whose plan/achievement was
+    // still MISSING were frequently found via EmployeeRAHistory in the byMonth
+    // roster but failed here with 403, causing the modal to show an error instead
+    // of the deadline date. Submitted employees passed step 1 because their record
+    // was created when reportingAuthorityId was already set correctly.
+    let employee = await User.findOne({
+      where: { id: employeeId, reportingAuthorityId: raId },
+      attributes: ["id", "name", "employeeCode", "department", "role"],
+    });
+
+    if (!employee) {
+      // Fallback: check via EmployeeRAHistory for the specified month/year
+      const startOfMonth = new Date(yearNum, monthNum - 1, 1, 0, 0, 0, 0);
+      const endOfMonth   = new Date(yearNum, monthNum, 0, 23, 59, 59, 999);
+      const historyMatch = await EmployeeRAHistory.findOne({
+        where: {
+          raId,
+          employeeId,
+          effectiveFrom: { [Op.lte]: endOfMonth },
+          [Op.or]: [
+            { effectiveTo: null },
+            { effectiveTo: { [Op.gte]: startOfMonth } },
+          ],
+        },
+        attributes: ["employeeId"],
+      });
+
+      if (!historyMatch) {
+        return res.status(403).json({ message: "Employee not found under your authority" });
+      }
+
+      // History confirms authority — fetch the employee record without the RA filter
+      employee = await User.findOne({
+        where: { id: employeeId },
+        attributes: ["id", "name", "employeeCode", "department", "role"],
+      });
+      if (!employee) {
+        return res.status(403).json({ message: "Employee not found under your authority" });
+      }
+    }
+
+    const empRole = employee.role || "EMPLOYEE";
+    const config  = parseDeadlineConfig(normalizeRole(empRole));
+
+    // Compute base deadline
+    const baseDeadline = typeUpper === "PLAN"
+      ? buildDeadlineDate(yearNum, monthNum, config.planDay, 0, true)
+      : buildDeadlineDate(yearNum, monthNum, config.achievementDay, config.achievementDeadlineMonthOffset, true);
+
+    // Effective deadline (may be extended)
+    const { effectiveDeadline, isExtended, extensionCount } = await getEffectiveDeadline({
+      employeeId, month: monthNum, year: yearNum, type: typeUpper, baseDeadline,
+    });
+
+    // Ceiling for date-picker max
+    const ceiling = getExtensionCeiling(empRole, typeUpper, monthNum, yearNum);
+
+    // Extension history for the audit trail
+    const extensionHistory = await getExtensionHistory({
+      employeeId, month: monthNum, year: yearNum, type: typeUpper,
+    });
+
+    // Also include sibling achievement effective deadline when type=PLAN
+    // (used by the conflict warning in the modal)
+    let siblingAchievementDeadline = null;
+    if (typeUpper === "PLAN") {
+      const baseAch = buildDeadlineDate(
+        yearNum, monthNum, config.achievementDay, config.achievementDeadlineMonthOffset, true
+      );
+      const achExt = await getEffectiveDeadline({
+        employeeId, month: monthNum, year: yearNum,
+        type: "ACHIEVEMENT", baseDeadline: baseAch,
+      });
+      siblingAchievementDeadline = achExt.effectiveDeadline.toISOString().split("T")[0];
+    }
+
+    const now = new Date();
+    const monthStr = `${yearNum}-${String(monthNum).padStart(2, "0")}`;
+
+    res.json({
+      employee: {
+        id:           employee.id,
+        name:         employee.name,
+        employeeCode: employee.employeeCode,
+        department:   employee.department,
+      },
+      type:              typeUpper,
+      month:             monthStr,
+      year:              yearNum,
+      baseDeadline:      baseDeadline.toISOString().split("T")[0],
+      effectiveDeadline: effectiveDeadline.toISOString().split("T")[0],
+      isExtended,
+      extensionCount,
+      minDate:           now.toISOString().split("T")[0],
+      maxDate:           ceiling.toISOString().split("T")[0],
+      siblingAchievementDeadline,
+      extensionHistory,
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to load extension context", error: error.message });
   }
 };

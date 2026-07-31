@@ -277,20 +277,50 @@ function ProgressBar({ value, height = 6, color }) {
 const ENFORCE_DEADLINES = import.meta.env.VITE_ENFORCE_DEADLINES !== 'false';
 
 const MonthlyPlanPage = () => {
-    // CENTRALIZED DEADLINE CONFIG — plan & achievement days from .env via API
-    const { planDay, achievementStartDay, achievementDay, getPlanDeadline, getAchievementDeadline, resolvedAchievementDay } = useDeadlines();
+    // CENTRALIZED DEADLINE CONFIG — plan & achievement days from .env via API.
+    // Month-offset-aware helpers (isAfterAchievementStart, isWithinAchievementWindow)
+    // are used for all window gate-checks so RA cross-month windows are handled correctly.
+    const {
+        planDay,
+        achievementStartDay,
+        achievementStartMonthOffset,
+        achievementDay,
+        achievementDeadlineMonthOffset,
+        getPlanDeadline,
+        getAchievementDeadline,
+        resolvedAchievementDay,
+        isAfterAchievementStart,
+        isWithinAchievementWindow,
+    } = useDeadlines();
 
-    // CENTRALIZED DEADLINE: achievement window is bounded on both sides —
-    // opens on achievementStartDay, closes on achievementDay ('last' = last
-    // calendar day of the month). Drives the proactive UI lock states below,
-    // so employees see the window state before opening the modal, not after.
+    // ── Effective (extension-aware) deadline state ──────────────────────────
+    // Fetched asynchronously from GET /employee/my-deadline-context so the
+    // button and form guard always reflect RA-granted extensions.
+    //
+    // effectivePlanDeadline:   Date | null — null while loading (shows base deadline fallback)
+    // effectivePlanLoading:    bool — true while the initial fetch is in-flight
+    // effectivePlanIsExtended: bool — whether an RA extension exists for the current month
+    const [effectivePlanDeadline, setEffectivePlanDeadline]     = useState(null);
+    const [effectivePlanLoading, setEffectivePlanLoading]       = useState(true);
+    const [effectivePlanIsExtended, setEffectivePlanIsExtended] = useState(false);
+
+    // Per-plan-month achievement deadline cache: { [monthStr]: { date: Date, isExtended } }
+    const [effectiveAchCache, setEffectiveAchCache] = useState({});
+
+
+    // CENTRALIZED DEADLINE: achievement window status for the current month.
+    // Uses the month-offset-aware helpers from DeadlineContext so the status
+    // is correct for both EMPLOYEE (same-month window) and RA (cross-month window).
     const achievementWindowStatus = useMemo(() => {
         if (!ENFORCE_DEADLINES) return 'open';
-        const day = new Date().getDate();
-        if (day < achievementStartDay) return 'not_open';
-        if (achievementDay !== 'last' && day > achievementDay) return 'closed';
+        const currentMonthStr = (() => {
+            const now = new Date();
+            return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        })();
+        if (!isAfterAchievementStart(currentMonthStr)) return 'not_open';
+        if (!isWithinAchievementWindow(currentMonthStr)) return 'closed';
         return 'open';
-    }, [achievementStartDay, achievementDay]);
+    }, [isAfterAchievementStart, isWithinAchievementWindow]);
 
     const [plans, setPlans] = useState([]);
     const [achievements, setAchievements] = useState([]);
@@ -417,13 +447,49 @@ const MonthlyPlanPage = () => {
         [plans, currentMonthDefault]
     );
 
+    // ── Fetch effective PLAN deadline for current month on mount ─────────────
+    // This is the single async call that makes the Submit button extension-aware.
+    // We re-fetch whenever currentMonthDefault changes (i.e. on month rollover)
+    // and store the result in state so planCtaState (a useMemo) can read it
+    // synchronously.
+    useEffect(() => {
+        if (!ENFORCE_DEADLINES) {
+            setEffectivePlanLoading(false);
+            return;
+        }
+        let cancelled = false;
+        setEffectivePlanLoading(true);
+        const [y, m] = currentMonthDefault.split('-').map(Number);
+        api.get('/employee/my-deadline-context', { params: { month: m, year: y, type: 'PLAN' } })
+            .then(res => {
+                if (cancelled) return;
+                // Parse "YYYY-MM-DD" end-of-day
+                const [dy, dm, dd] = res.data.effectiveDeadline.split('-').map(Number);
+                setEffectivePlanDeadline(new Date(dy, dm - 1, dd, 23, 59, 59, 999));
+                setEffectivePlanIsExtended(!!res.data.isExtended);
+            })
+            .catch(() => {
+                if (cancelled) return;
+                // Fallback to config-based deadline — extension info unavailable but
+                // the backend will still enforce correctly on the actual POST.
+                setEffectivePlanDeadline(getPlanDeadline(currentMonthDefault));
+            })
+            .finally(() => {
+                if (!cancelled) setEffectivePlanLoading(false);
+            });
+        return () => { cancelled = true; };
+    }, [currentMonthDefault]); // eslint-disable-line react-hooks/exhaustive-deps
+
     const planCtaState = useMemo(() => {
         if (!ENFORCE_DEADLINES) {
-            // Dev mode: always allow free-form create (any month, any time).
             return { mode: 'create', label: 'Submit Monthly Plan', disabled: false };
         }
 
-        const deadlinePassed = new Date().getDate() > planDay;
+        // Use the async-fetched effective deadline (may be extended by RA).
+        // While loading, fall back to config deadline so the UI never flickers
+        // open briefly and then immediately locks.
+        const deadline = effectivePlanDeadline ?? getPlanDeadline(currentMonthDefault);
+        const deadlinePassed = deadline ? new Date() > deadline : false;
 
         if (!currentMonthPlan) {
             return deadlinePassed
@@ -432,8 +498,6 @@ const MonthlyPlanPage = () => {
         }
 
         if (currentMonthPlan.status === 'DRAFT') {
-            // Route into the SAME pre-filled editor used for rejections —
-            // never re-open the blank create form over an existing draft.
             return { mode: 'continue-draft', label: 'Continue Draft', disabled: false, plan: currentMonthPlan };
         }
 
@@ -441,15 +505,13 @@ const MonthlyPlanPage = () => {
             return { mode: 'resubmit', label: 'Resubmit Plan', disabled: false, plan: currentMonthPlan };
         }
 
-        // PENDING (or any other already-submitted state) — nothing left to do
-        // here; the CTA should say so rather than inviting a second attempt.
         return {
             mode: 'submitted',
             label: `Plan Submitted — ${formatMonth(currentMonthDefault)}`,
             disabled: true,
             plan: currentMonthPlan,
         };
-    }, [currentMonthPlan, planDay, currentMonthDefault]);
+    }, [currentMonthPlan, effectivePlanDeadline, getPlanDeadline, currentMonthDefault]);
 
     const handlePlanCtaClick = () => {
         if (planCtaState.mode === 'create') { setShowPlanForm(true); return; }
@@ -534,9 +596,11 @@ const MonthlyPlanPage = () => {
                 toast.error(`You can only submit a monthly plan for the current month (${currentMonthStr}).`);
                 return;
             }
-            // CENTRALIZED DEADLINE: use planDay from .env via DeadlineContext
-            if (today.getDate() > planDay) {
-                toast.error(`Monthly plan submission deadline has passed (${planDay}th of the month).`);
+            // Use the async-fetched effective deadline (respects RA-granted extensions).
+            // Fall back to config-based deadline if still loading or fetch failed.
+            const deadline = effectivePlanDeadline ?? getPlanDeadline(currentMonthStr);
+            if (deadline && today > deadline) {
+                toast.error(`Monthly plan submission deadline has passed. Your deadline was ${deadline.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}.`);
                 return;
             }
         }
@@ -632,7 +696,7 @@ const MonthlyPlanPage = () => {
                 additionalAchievement: additionalStr, achievementDetails: legacyDetails,
                 status: asDraft ? 'DRAFT' : 'SUBMITTED',
             });
-            toast.success(asDraft ? 'Draft saved!' : 'Achievement submitted!');
+            toast.success(asDraft ? 'Draft saved!' : 'Monthly Progress submitted!');
             setAchModal(null); setAchItems([]); setAdditionalAchItems([{ text: '', progress: 0 }]);
             fetchData();
         } catch (err) {
@@ -640,42 +704,71 @@ const MonthlyPlanPage = () => {
         } finally { setSubmitting(false); }
     };
 
-    const handleAchSubmit = (asDraft) => {
+    const handleAchSubmit = async (asDraft) => {
         // INDUSTRY STANDARD: If the plan was resubmitted after RA rejection
         // (version > 1), skip all deadline checks. The employee is not at fault
         // for the delay — RA rejection creates a new submission window.
         const isPostRejectionResubmit = (achModal?.version || 1) > 1;
 
         if (!isPostRejectionResubmit && import.meta.env.VITE_ENFORCE_DEADLINES !== 'false') {
-            const today = new Date();
-            const currentMonthStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-            if (achModal.month !== currentMonthStr) {
-                toast.error(`You can only submit a monthly achievement for the current month (${currentMonthStr}).`);
+            const planMonthStr = achModal.month; // "YYYY-MM" of the plan record
+            const [py, pm] = planMonthStr.split('-').map(Number);
+
+            // ── Window OPEN check (base config, not extensible) ───────────────
+            if (!isAfterAchievementStart(planMonthStr)) {
+                toast.error(`Monthly Progress submission for ${formatMonth(planMonthStr)} opens on the ${achievementStartDay}${ordinalSuffix(achievementStartDay)}${achievementStartMonthOffset > 0 ? ` of the ${achievementStartMonthOffset === 1 ? 'following' : `month ${achievementStartMonthOffset} months later`}` : ' of that month'}.`);
                 return;
             }
-            // CENTRALIZED DEADLINE: achievement window is bounded on both sides —
-            // opens on achievementStartDay, closes on achievementDay ('last' = last
-            // calendar day of the month, so no upper-bound check is needed then).
-            const todayDate = today.getDate();
-            if (todayDate < achievementStartDay) {
-                toast.error(`Monthly achievement submission opens on the ${achievementStartDay}${ordinalSuffix(achievementStartDay)} of the month.`);
-                return;
-            }
-            if (achievementDay !== 'last' && todayDate > achievementDay) {
-                toast.error(`Monthly achievement submission deadline has passed (${achievementDay}${ordinalSuffix(achievementDay)} of the month).`);
-                return;
+
+            // ── Window CLOSE check — effective (extension-aware) deadline ─────
+            // Check the cache first (populated by a previous call or preload).
+            // On cache miss, fetch synchronously before deciding.
+            const cached = effectiveAchCache[planMonthStr];
+            if (cached) {
+                if (new Date() > cached.date) {
+                    const deadlineDay = achievementDay === 'last' ? 'last day' : `${achievementDay}${ordinalSuffix(achievementDay)}`;
+                    const monthLabel = achievementDeadlineMonthOffset === 0 ? 'of that month' : achievementDeadlineMonthOffset === 1 ? 'of the following month' : `of the month ${achievementDeadlineMonthOffset} months later`;
+                    toast.error(`Monthly Progress submission deadline for ${formatMonth(planMonthStr)} has passed${cached.isExtended ? ' (including your extended deadline)' : ` (${deadlineDay} ${monthLabel})`}.`);
+                    return;
+                }
+                // Within effective window — fall through to submit
+            } else {
+                // No cache — fetch now (one-time per plan month)
+                setSubmitting(true);
+                try {
+                    const res = await api.get('/employee/my-deadline-context', { params: { month: pm, year: py, type: 'ACHIEVEMENT' } });
+                    const [dy, dm, dd] = res.data.effectiveDeadline.split('-').map(Number);
+                    const effDate = new Date(dy, dm - 1, dd, 23, 59, 59, 999);
+                    // Store in cache so repeated clicks are instant
+                    setEffectiveAchCache(prev => ({
+                        ...prev,
+                        [planMonthStr]: { date: effDate, isExtended: !!res.data.isExtended },
+                    }));
+                    if (new Date() > effDate) {
+                        const deadlineDay = achievementDay === 'last' ? 'last day' : `${achievementDay}${ordinalSuffix(achievementDay)}`;
+                        const monthLabel = achievementDeadlineMonthOffset === 0 ? 'of that month' : achievementDeadlineMonthOffset === 1 ? 'of the following month' : `of the month ${achievementDeadlineMonthOffset} months later`;
+                        toast.error(`Monthly Progress submission deadline for ${formatMonth(planMonthStr)} has passed${res.data.isExtended ? ' (including your extended deadline)' : ` (${deadlineDay} ${monthLabel})`}.`);
+                        setSubmitting(false);
+                        return;
+                    }
+                } catch {
+                    // Fetch failed — fall through to backend enforcement
+                    // (the server will reject if truly past deadline)
+                }
+                setSubmitting(false);
             }
         }
+
 
         if (!asDraft) {
             const missingIndex = achItems.findIndex(a => !(a.achievementDetails || '').trim());
             if (missingIndex !== -1) {
-                toast.error(`Plan ${missingIndex + 1} achievement is pending. Please write it before submitting.`);
+                toast.error(`Plan ${missingIndex + 1} Progress is pending. Please write it before submitting.`);
                 return;
             }
         } else {
             const hasAny = achItems.some(a => (a.achievementDetails || '').trim()) || additionalAchItems.some(a => (a.text || '').trim());
-            if (!hasAny) { toast.error('Please describe at least one achievement to save as draft'); return; }
+            if (!hasAny) { toast.error('Please describe at least one progress to save as draft'); return; }
         }
 
         // Drafts are low-stakes and freely editable — save immediately, no confirmation needed.
@@ -689,9 +782,9 @@ const MonthlyPlanPage = () => {
         const monthLabel = formatMonth(achModal.month);
 
         setConfirmDialog({
-            title: 'Submit Achievement?',
-            message: `You're about to submit your achievement for ${monthLabel} at ${overallProgress}% overall progress. Once submitted, it will be sent to your Reporting Authority for evaluation.`,
-            confirmLabel: 'Yes, Submit Achievement',
+            title: 'Submit Progress?',
+            message: `You're about to submit your monthly progress for ${monthLabel} at ${overallProgress}% overall progress. Once submitted, it will be sent to your Reporting Authority for evaluation.`,
+            confirmLabel: 'Yes, Submit Progress',
             onConfirm: () => submitAchievementRequest(false),
         });
     };
@@ -738,7 +831,7 @@ const MonthlyPlanPage = () => {
                         <div className="mp-ach-item-plan-info">
                             <div className="mp-ach-item-plan-num">
                                 <span className="mp-plan-seq-num mp-plan-seq-num--amber mp-plan-seq-num--sm">{index + 1}</span>
-                                Extra Achievement {index + 1}
+                                Extra Monthly Progress {index + 1}
                             </div>
                         </div>
                         {(additionalAchItems.length > 1 || item.text) && (
@@ -771,12 +864,12 @@ const MonthlyPlanPage = () => {
                         </div>
                     </div>
                     <div className="mp-ach-item-textarea-wrap">
-                        <label className="mp-ach-ctrl-label" style={{ color: '#854F0B' }}>ACHIEVEMENT DETAILS</label>
+                        <label className="mp-ach-ctrl-label" style={{ color: '#854F0B' }}>MONTHLY PROGRESS DETAILS</label>
                         <textarea
                             className={`mp-plan-box-textarea mp-plan-box-textarea--amber${item.text ? ' filled-amber' : ''}`}
                             value={item.text}
                             onChange={e => updateAdditionalItem(index, 'text', e.target.value)}
-                            placeholder={`Describe extra achievement ${index + 1}...`}
+                            placeholder={`Describe extra monthly progress ${index + 1}...`}
                             rows={3}
                             style={{ background: 'transparent' }}
                         />
@@ -806,7 +899,7 @@ const MonthlyPlanPage = () => {
                         <div>
                             <h2>{formatMonth(achModal.month)}</h2>
                             <p className="mp-ach-subtitle">
-                                {isDraft ? 'Continue editing your draft' : `Submit achievements for ${planItemsList.length} plan${planItemsList.length > 1 ? 's' : ''}`}
+                                {isDraft ? 'Continue editing your draft' : `Submit Monthly Progress for ${planItemsList.length} plan${planItemsList.length > 1 ? 's' : ''}`}
                             </p>
                         </div>
                         <button className="mp-modal-close" onClick={() => setAchModal(null)}><FiX /></button>
@@ -824,7 +917,7 @@ const MonthlyPlanPage = () => {
                     </div>
                     <div className="mp-ach-items-container">
                         <div className="mp-ach-section-title">
-                            <FiFileText /> Plan Achievements
+                            <FiFileText /> Plan Progress
                             <span className="mp-ach-section-count">{planItemsList.length} plan{planItemsList.length > 1 ? 's' : ''}</span>
                         </div>
                         {planItemsList.map((planText, idx) => {
@@ -870,12 +963,12 @@ const MonthlyPlanPage = () => {
                                         </div>
                                     </div>
                                     <div className="mp-ach-item-textarea-wrap">
-                                        <label className="mp-ach-ctrl-label">ACHIEVEMENT DETAILS</label>
+                                        <label className="mp-ach-ctrl-label">MONTHLY PROGRESS DETAILS</label>
                                         <textarea
                                             className={`mp-ach-item-textarea${item.achievementDetails ? ' filled' : ''}`}
                                             value={item.achievementDetails}
                                             onChange={e => updateAchItem(idx, 'achievementDetails', e.target.value)}
-                                            placeholder={`Describe what you achieved for Plan ${idx + 1}...`}
+                                            placeholder={`Describe what you have done in Plan ${idx + 1}...`}
                                             rows={3}
                                         />
                                     </div>
@@ -885,10 +978,10 @@ const MonthlyPlanPage = () => {
                         <div className="mp-ach-additional-section">
                             <div className="mp-ach-additional-header">
                                 <span className="mp-ach-additional-icon"><FiStar /></span>
-                                <span className="mp-ach-additional-title">Additional Achievements</span>
+                                <span className="mp-ach-additional-title">Additional Monthly Works with Progress</span>
                                 <span className="mp-ach-additional-badge">Optional</span>
                             </div>
-                            <p className="mp-ach-additional-hint">Achievements outside your planned work. Click <strong>+</strong> to add more.</p>
+                            <p className="mp-ach-additional-hint">Additional Monthly works outside your planned work. Click <strong>+</strong> to add more.</p>
                             <div className="mp-plan-boxes">
                                 {additionalAchItems.map((item, idx) => renderAdditionalBox(item, idx))}
                             </div>
@@ -899,7 +992,7 @@ const MonthlyPlanPage = () => {
                             <FiSave /> Save as Draft
                         </button>
                         <button className="btn btn-primary" disabled={submitting} onClick={() => handleAchSubmit(false)}>
-                            <FiSend /> {submitting ? 'Submitting...' : 'Submit Achievement'}
+                            <FiSend /> {submitting ? 'Submitting...' : 'Submit Monthly Progress'}
                         </button>
                         <button className="btn btn-secondary" onClick={() => setAchModal(null)}>Cancel</button>
                     </div>
@@ -1006,16 +1099,19 @@ const MonthlyPlanPage = () => {
 
                         {/* ── STEPPER — full-width below header ── */}
                         <div className="dmod-stepper">
+                            {/* Step 1: Plan */}
                             <div className="dmod-step">
                                 <StepNode state={s1} />
                                 <span className={`dmod-step-lbl dmod-step-lbl--${s1}`}>Plan</span>
                             </div>
 
+                            {/* Line connector between Plan and Achievement */}
                             <div className={`dmod-connector ${conn1Filled ? 'dmod-connector--filled' : ''}`} />
 
+                            {/* Step 2: Achievement */}
                             <div className="dmod-step">
                                 <StepNode state={s2} />
-                                <span className={`dmod-step-lbl dmod-step-lbl--${s2}`}>Achievement</span>
+                                <span className={`dmod-step-lbl dmod-step-lbl--${s2}`}>Progress</span>
                             </div>
 
                             <div className={`dmod-connector ${conn2Filled ? 'dmod-connector--filled' : ''}`} />
@@ -1049,7 +1145,7 @@ const MonthlyPlanPage = () => {
                                     <p className="dmod-ov-sub-note">Submitted {formatDate(selectedPlan.submittedAt)}</p>
                                 </div>
                                 <div className="dmod-ov-card">
-                                    <p className="dmod-ov-label">Overall Achievement</p>
+                                    <p className="dmod-ov-label">Overall Progress</p>
                                     <div className="dmod-ov-ach-row">
                                         <div>
                                             <p className="dmod-ov-pct" style={{ color: achOverall >= 70 ? '#16A34A' : achOverall >= 40 ? '#D97706' : '#94A3B8' }}>
@@ -1085,7 +1181,7 @@ const MonthlyPlanPage = () => {
                         {/* Plans & Achievements */}
                         <div className="dmod-section">
                             <div className="dmod-sec-hdr">
-                                <span className="dmod-sec-title"><FiFileText size={13} style={{ marginRight: 6 }} />Plans &amp; Achievements</span>
+                                <span className="dmod-sec-title"><FiFileText size={13} style={{ marginRight: 6 }} />Plans &amp; Progress</span>
                                 <span className="dmod-sec-badge">{planItemsList.length} plan{planItemsList.length !== 1 ? 's' : ''}</span>
                             </div>
                             <div className="dmod-plan-cards">
@@ -1109,7 +1205,7 @@ const MonthlyPlanPage = () => {
                                                     {achIsSubmitted && (
                                                         pa.achievementDetails
                                                             ? <p className="dmod-plan-ach-text">{pa.achievementDetails}</p>
-                                                            : <p className="dmod-plan-ach-empty">No achievement details</p>
+                                                            : <p className="dmod-plan-ach-empty">No Monthly progress details</p>
                                                     )}
                                                 </div>
                                             </div>
@@ -1131,7 +1227,7 @@ const MonthlyPlanPage = () => {
                         {(!ach || ach.status === 'DRAFT') && (
                             <div className="dmod-no-ach">
                                 <div className="dmod-no-ach-icon-wrap"><FiTrendingUp size={15} /></div>
-                                <p>{ach?.status === 'DRAFT' ? 'Achievement draft saved — not yet submitted.' : 'No achievement submitted for this month yet.'}</p>
+                                <p>{ach?.status === 'DRAFT' ? 'Progress draft saved — not yet submitted.' : 'No Monthly progress submitted for this month yet.'}</p>
                             </div>
                         )}
 
@@ -1139,7 +1235,7 @@ const MonthlyPlanPage = () => {
                         {achIsSubmitted && !hasStructuredAch && ach.achievementDetails && (
                             <div className="dmod-section">
                                 <div className="dmod-sec-hdr">
-                                    <span className="dmod-sec-title"><FiTrendingUp size={13} style={{ marginRight: 6 }} />Achievement Details</span>
+                                    <span className="dmod-sec-title"><FiTrendingUp size={13} style={{ marginRight: 6 }} />Progress Details</span>
                                 </div>
                                 <p className="dmod-plan-ach-text" style={{ margin: 0 }}>{ach.achievementDetails}</p>
                             </div>
@@ -1149,7 +1245,7 @@ const MonthlyPlanPage = () => {
                         {additionalItems.length > 0 && (
                             <div className="dmod-section">
                                 <div className="dmod-sec-hdr">
-                                    <span className="dmod-sec-title"><FiStar size={13} style={{ marginRight: 6 }} />Additional Achievements</span>
+                                    <span className="dmod-sec-title"><FiStar size={13} style={{ marginRight: 6 }} />Additional Monthly Work with Progress</span>
                                     <span className="dmod-sec-badge">{additionalItems.length} extra</span>
                                 </div>
                                 <div className="dmod-extra-list">
@@ -1249,8 +1345,8 @@ const MonthlyPlanPage = () => {
     return (
         <div className="fade-in">
             <div className="page-header">
-                <h1>Monthly Plan & Achievement</h1>
-                <p>Submit work plans, track achievements, and view RA evaluations — all in one place</p>
+                <h1>Monthly Plan & Progress</h1>
+                <p>Submit work plans, track progress, and view RA evaluations — all in one place</p>
             </div>
 
             {/* Stats */}
@@ -1261,7 +1357,7 @@ const MonthlyPlanPage = () => {
                 </div>
                 <div className="mp-stat">
                     <div className="mp-stat-icon green"><FiTrendingUp /></div>
-                    <div><div className="mp-stat-value">{stats.withAch}</div><div className="mp-stat-label">Achievements</div></div>
+                    <div><div className="mp-stat-value">{stats.withAch}</div><div className="mp-stat-label">Monthly progress</div></div>
                 </div>
                 {stats.drafts > 0 && (
                     <div className="mp-stat">
@@ -1355,7 +1451,7 @@ const MonthlyPlanPage = () => {
                         <div className="mp-form-step-indicator">
                             <div className="mp-form-step active"><span className="mp-form-step-dot">1</span><span>Submit Monthly Plan</span></div>
                             <FiChevronRight className="mp-form-step-arrow" />
-                            <div className="mp-form-step muted"><span className="mp-form-step-dot muted">2</span><span>Submit Achievement</span></div>
+                            <div className="mp-form-step muted"><span className="mp-form-step-dot muted">2</span><span>Submit Monthly Progress</span></div>
                         </div>
 
                         {planDeadlinePassed ? (
@@ -1516,7 +1612,7 @@ const MonthlyPlanPage = () => {
                                     )}
                                 </div>
                                 <div className={`mp-section achievement ${ach && !isDraftAch ? 'filled' : 'empty'}`}>
-                                    <div className="mp-section-label"><FiTrendingUp /> Achievement</div>
+                                    <div className="mp-section-label"><FiTrendingUp /> Monthly Progress</div>
                                     {ach && !isDraftAch ? (
                                         <>
                                             {effectivePlanAch ? (
@@ -1538,15 +1634,15 @@ const MonthlyPlanPage = () => {
                                             <button className="mp-add-ach-btn" onClick={() => openAchModal(plan)}><FiEdit3 /> Continue Editing</button>
                                         </div>
                                     ) : isPlanDraft ? (
-                                        <div className="mp-ach-locked"><FiAlertCircle className="mp-ach-locked-icon" /><span>Submit your plan first to unlock achievement entry</span></div>
+                                        <div className="mp-ach-locked"><FiAlertCircle className="mp-ach-locked-icon" /><span>Submit your plan first to unlock progress entry</span></div>
                                     ) : isRejected ? (
-                                        <div className="mp-ach-locked"><FiAlertCircle className="mp-ach-locked-icon" /><span>Resubmit your plan to unlock achievement entry</span></div>
+                                        <div className="mp-ach-locked"><FiAlertCircle className="mp-ach-locked-icon" /><span>Resubmit your plan to unlock progress entry</span></div>
                                     ) : plan.month === currentMonthDefault && achievementWindowStatus === 'not_open' ? (
-                                        <div className="mp-ach-locked"><FiAlertCircle className="mp-ach-locked-icon" /><span>Achievement submission opens on the {achievementStartDay}{ordinalSuffix(achievementStartDay)} of the month</span></div>
+                                        <div className="mp-ach-locked"><FiAlertCircle className="mp-ach-locked-icon" /><span>Monthly progress submission opens on the {achievementStartDay}{ordinalSuffix(achievementStartDay)} of the month</span></div>
                                     ) : plan.month === currentMonthDefault && achievementWindowStatus === 'closed' ? (
-                                        <div className="mp-ach-locked"><FiAlertCircle className="mp-ach-locked-icon" /><span>Achievement submission window has closed for this month</span></div>
+                                        <div className="mp-ach-locked"><FiAlertCircle className="mp-ach-locked-icon" /><span>Monthly progress submission window has closed for this month</span></div>
                                     ) : (
-                                        <button className="mp-add-ach-btn" onClick={() => openAchModal(plan)}><FiPlus /> Add Achievement</button>
+                                        <button className="mp-add-ach-btn" onClick={() => openAchModal(plan)}><FiPlus /> Add Monthly Progress</button>
                                     )}
                                 </div>
                                 {isEval && (

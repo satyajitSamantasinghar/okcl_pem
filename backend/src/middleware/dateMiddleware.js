@@ -5,12 +5,29 @@ const { Op } = require("sequelize");
 // FISCAL YEAR FIX — shared fiscal utility is canonical source for FY logic
 const { getCurrentFiscalYear } = require("../utils/fiscalUtils");
 
-// CENTRALIZED DEADLINE CONFIG — reads MONTHLY_PLAN_DEADLINE_DAY,
-// MONTHLY_ACHIEVEMENT_START_DAY, and MONTHLY_ACHIEVEMENT_DEADLINE_DAY from
-// .env. Single source of truth shared with the frontend via
-// GET /api/config/deadlines. The achievement window is bounded on both
-// sides: it opens on achievementStartDay and closes on achievementDay.
-const { parseDeadlineConfig } = require("../controllers/configController");
+// CENTRALIZED DEADLINE CONFIG — single source of truth shared with the
+// frontend via GET /api/config/deadlines. Deadlines are resolved PER ROLE
+// (EMPLOYEE vs RA) so an RA's own plan/achievement — submitted via
+// "Employee Mode" (asEmployee=true / selfView=true) — is held to the RA's
+// deadlines, not the regular employee's, regardless of which dashboard the
+// submission came from. The achievement window is bounded on both sides
+// and MAY roll over into a later calendar month (see computeAchievementWindow).
+const { parseDeadlineConfig, normalizeRole } = require("../controllers/configController");
+
+// SHARED DATE HELPERS — extracted from this file into a shared module so
+// configController, deadlineResolver, and raController can all import them
+// without reimplementing or duplicating the logic.
+const {
+  getOrdinalSuffix,
+  describeDeadline,
+  addCalendarMonths,
+  getLastDayOfMonth,
+  buildDeadlineDate,
+} = require("../utils/dateHelpers");
+
+// DEADLINE RESOLVER — single source of truth for "what deadline actually
+// applies right now", integrating DeadlineExtension rows from the DB.
+const { getEffectiveDeadline } = require("../utils/deadlineResolver");
 
 /* ════════════════════════════════════════════════════════════════════
    HELPER — delegates to shared fiscalUtils for consistency.
@@ -22,15 +39,28 @@ function getCurrentFinancialYear() {
 }
 
 /* ════════════════════════════════════════════════════════════════════
-   HELPER — Returns ordinal suffix for a day number.
-   e.g. 1 → "st", 2 → "nd", 3 → "rd", 10 → "th"
+   HELPER — computes the concrete [windowStart, windowEnd] Date range
+   for a monthly achievement, anchored to the RECORD'S OWN month
+   ("YYYY-MM") rather than to "the current calendar month" — this is
+   what makes the window month-flexible: it can open in the record's
+   month and close in a LATER month (per achievementDeadlineMonthOffset),
+   and correctly stays closed for old records once their own window has
+   elapsed, with no separate "is this month too old" check needed.
 ════════════════════════════════════════════════════════════════════ */
-function getOrdinalSuffix(n) {
-  const s = ['th', 'st', 'nd', 'rd'];
-  const v = n % 100;
-  return s[(v - 20) % 10] || s[v] || s[0];
-}
+function computeAchievementWindow(planMonth, config) {
+  const [yearStr, monthStr] = planMonth.split("-");
+  const year = parseInt(yearStr, 10);
+  const month = parseInt(monthStr, 10);
 
+  const windowStart = buildDeadlineDate(
+    year, month, config.achievementStartDay, config.achievementStartMonthOffset, false
+  );
+  const windowEnd = buildDeadlineDate(
+    year, month, config.achievementDay, config.achievementDeadlineMonthOffset, true
+  );
+
+  return { windowStart, windowEnd };
+}
 
 /* ════════════════════════════════════════════════════════════════════
    HELPER — Parse a "YYYY-YY" financial year string.
@@ -51,11 +81,29 @@ function parseFinancialYear(fy) {
 
 /* ════════════════════════════════════════════════════════════════════
    MONTHLY PLAN SUBMISSION
+
+   Deadline day is resolved PER ROLE (req.user.role): an RA submitting
+   their own plan via Employee Mode is checked against
+   MONTHLY_PLAN_DEADLINE_DAY_RA, a regular employee against
+   MONTHLY_PLAN_DEADLINE_DAY_EMPLOYEE. Plans remain scoped to the
+   current calendar month only (no month-rollover for plan submission —
+   only the achievement window is flexible, per spec).
+
+   EXTENSION INTEGRATION: after computing the base deadline from
+   config.planDay, we call getEffectiveDeadline to see if an RA has
+   granted a deadline extension for this employee's plan. If so, the
+   returned effectiveDeadline replaces the raw config day for the
+   "has the deadline passed?" check. The "must be the current month"
+   check runs AFTER the extension check — an active extension must be
+   able to unlock a month that would otherwise be rejected as
+   "not the current month."
 ════════════════════════════════════════════════════════════════════ */
 exports.allowMonthlyPlanSubmission = async (req, res, next) => {
   try {
+    const role = normalizeRole(req.user && req.user.role);
+    const config = parseDeadlineConfig(role);
+
     const today = new Date();
-    const day = today.getDate();
     const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
     const submittedMonth = req.body.month; // expected format: "YYYY-MM"
 
@@ -64,11 +112,12 @@ exports.allowMonthlyPlanSubmission = async (req, res, next) => {
     }
 
     // ── INDUSTRY STANDARD: Rejection Resubmission Bypass ─────────────────────
-    // When an RA rejects a plan, they create a new submission obligation for
-    // the employee. The employee MUST be allowed to resubmit regardless of
+    // When an RA (or MD) rejects a plan, they create a new submission obligation
+    // for the submitter. The submitter MUST be allowed to resubmit regardless of
     // whether the original month's deadline has passed — even if the month is
-    // in the past. RA can reject a plan weeks or months after submission.
-    // Detection: an existing REJECTED plan document for this employee + month.
+    // in the past. A rejection can happen weeks or months after submission.
+    // Detection: an existing REJECTED plan document for this user + month.
+    // Role-agnostic by design — applies equally to employees and RAs.
     //
     // PERN CHANGE: Mongoose .findOne({...}) → Sequelize .findOne({ where: {...} })
     const existingRejected = await MonthlyPlan.findOne({
@@ -85,6 +134,31 @@ exports.allowMonthlyPlanSubmission = async (req, res, next) => {
     }
     // ─────────────────────────────────────────────────────────────────────────
 
+    // ── EXTENSION CHECK: resolve effective deadline before the current-month guard ──
+    // An active extension must be able to unlock a month that has already passed
+    // (the "not current month" check below would reject it otherwise).
+    const [submittedYear, submittedMonthNum] = submittedMonth.split("-").map(Number);
+
+    // Base deadline: day config.planDay of the submitted month (end of day)
+    const basePlanDeadline = buildDeadlineDate(
+      submittedYear, submittedMonthNum, config.planDay, 0, true
+    );
+
+    const { effectiveDeadline, isExtended } = await getEffectiveDeadline({
+      employeeId: req.user.userId,
+      month: submittedMonthNum,
+      year: submittedYear,
+      type: "PLAN",
+      baseDeadline: basePlanDeadline,
+    });
+
+    // If there's an active extension and we're within the extended window,
+    // bypass the "must be current month" check and allow submission.
+    if (isExtended && today <= effectiveDeadline) {
+      return next();
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     // ── Normal deadline enforcement for fresh first submissions ───────────────
     if (submittedMonth !== currentMonth) {
       return res.status(403).json({
@@ -92,11 +166,11 @@ exports.allowMonthlyPlanSubmission = async (req, res, next) => {
       });
     }
 
-    // ── CENTRALIZED DEADLINE: read plan deadline day from .env ────────────────
-    const { planDay } = parseDeadlineConfig();
-    if (day > planDay) {
+    // ── ROLE-AWARE DEADLINE: use effectiveDeadline (may be extended) ──────────
+    if (today > effectiveDeadline) {
+      const roleLabel = role === "RA" ? "As a Reporting Authority, your plans" : "Plans";
       return res.status(403).json({
-        message: `Monthly plan submission deadline has passed. Plans must be submitted by the ${planDay}${getOrdinalSuffix(planDay)} of the month.`
+        message: `Monthly plan submission deadline has passed. ${roleLabel} must be submitted by the ${config.planDay}${getOrdinalSuffix(config.planDay)} of the month.`
       });
     }
     // ─────────────────────────────────────────────────────────────────────────
@@ -110,12 +184,23 @@ exports.allowMonthlyPlanSubmission = async (req, res, next) => {
 
 /* ════════════════════════════════════════════════════════════════════
    MONTHLY ACHIEVEMENT SUBMISSION
+
+   Deadline window is resolved PER ROLE and is MONTH-FLEXIBLE: it is
+   anchored to the linked plan's own month (plan.month), not to "the
+   current calendar month" — so achievementDeadlineMonthOffset can push
+   the closing date into a LATER calendar month (e.g. a July record can
+   stay open through the 3rd of August for RAs) while still correctly
+   closing for genuinely old records once their own window elapses.
+
+   EXTENSION INTEGRATION: after computeAchievementWindow produces
+   windowEnd, we call getEffectiveDeadline to see if an RA has granted
+   a deadline extension. If so, the returned effectiveDeadline replaces
+   the raw windowEnd for the "has it closed?" check. windowStart is
+   untouched — extensions only ever push the closing edge later, never
+   the opening edge earlier.
 ════════════════════════════════════════════════════════════════════ */
 exports.allowMonthlyAchievementSubmission = async (req, res, next) => {
   try {
-    const today = new Date();
-    const day = today.getDate();
-    const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
     const { monthlyPlanId } = req.body;
 
     if (!monthlyPlanId) {
@@ -125,48 +210,55 @@ exports.allowMonthlyAchievementSubmission = async (req, res, next) => {
     // PERN CHANGE: Mongoose .findById(id).select("month version status")
     //              → Sequelize .findByPk(id, { attributes: [...] })
     const plan = await MonthlyPlan.findByPk(monthlyPlanId, {
-      attributes: ["id", "month", "version", "status"],
+      attributes: ["id", "month", "version", "status", "employeeId"],
     });
     if (!plan) {
       return res.status(404).json({ message: "Monthly plan not found." });
     }
 
     // ── INDUSTRY STANDARD: Rejection Resubmission Bypass ─────────────────────
-    // If this plan was resubmitted after RA rejection (version > 1), the normal
-    // achievement window does NOT apply.
+    // If this plan was resubmitted after RA/MD rejection (version > 1), the
+    // normal achievement window does NOT apply. Role-agnostic by design.
     if (plan.version > 1) {
       // Bypass ALL date checks — post-rejection resubmission flow.
       return next();
     }
     // ─────────────────────────────────────────────────────────────────────────
 
-    // ── Normal deadline enforcement for fresh first-time achievements ─────────
-    if (plan.month !== currentMonth) {
+    // ── ROLE-AWARE, MONTH-FLEXIBLE DEADLINE WINDOW ────────────────────────────
+    const role = normalizeRole(req.user && req.user.role);
+    const config = parseDeadlineConfig(role);
+    const { windowStart, windowEnd } = computeAchievementWindow(plan.month, config);
+    const now = new Date();
+
+    if (now < windowStart) {
       return res.status(403).json({
-        message: `You can only submit a monthly achievement for the current month (${currentMonth}). The linked plan is for: ${plan.month}`
+        message: `Monthly achievement submission for ${plan.month} opens on ${describeDeadline(config.achievementStartDay, config.achievementStartMonthOffset)}.`
       });
     }
 
-    // ── CENTRALIZED DEADLINE: read achievement window from .env ────────────────
-    // The window is bounded on BOTH sides:
-    //   • OPENS  on achievementStartDay
-    //   • CLOSES on achievementDay (or the real last day of the month, for "last")
-    const { achievementStartDay, achievementDay } = parseDeadlineConfig();
+    // ── EXTENSION CHECK: replace windowEnd with effectiveDeadline if extended ──
+    const [yearStr, monthStr] = plan.month.split("-");
+    const planYear = parseInt(yearStr, 10);
+    const planMonthNum = parseInt(monthStr, 10);
 
-    if (day < achievementStartDay) {
+    // Use plan.employeeId as the employee for whom to check extensions.
+    // This is correct: the extension was granted to the plan owner, not the caller.
+    const employeeIdForCheck = plan.employeeId || req.user.userId;
+
+    const { effectiveDeadline } = await getEffectiveDeadline({
+      employeeId: employeeIdForCheck,
+      month: planMonthNum,
+      year: planYear,
+      type: "ACHIEVEMENT",
+      baseDeadline: windowEnd,
+    });
+
+    if (now > effectiveDeadline) {
       return res.status(403).json({
-        message: `Monthly achievement submission opens on the ${achievementStartDay}${getOrdinalSuffix(achievementStartDay)} of the month.`
+        message: `Monthly achievement submission deadline for ${plan.month} has passed. Achievements must be submitted by ${describeDeadline(config.achievementDay, config.achievementDeadlineMonthOffset)}.`
       });
     }
-
-    if (achievementDay !== 'last' && day > achievementDay) {
-      return res.status(403).json({
-        message: `Monthly achievement submission deadline has passed. Achievements must be submitted by the ${achievementDay}${getOrdinalSuffix(achievementDay)} of the month.`
-      });
-    }
-    // When achievementDay === 'last', no explicit upper-bound check is needed:
-    // the `plan.month !== currentMonth` check above already makes it
-    // impossible for `day` to exceed the real last day of the current month.
     // ─────────────────────────────────────────────────────────────────────────
 
     next();

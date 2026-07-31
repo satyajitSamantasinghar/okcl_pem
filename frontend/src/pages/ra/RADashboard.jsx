@@ -136,8 +136,14 @@ const lbScoreConfig = (score) => {
 const RADashboard = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
-    // CENTRALIZED DEADLINE CONFIG — plan & achievement days from .env via API
-    const { getPlanDeadline, getAchievementDeadline } = useDeadlines();
+    // CENTRALIZED DEADLINE CONFIG — plan & achievement days from .env via API.
+    // getPlanDeadlineForRole / getAchievementDeadlineForRole are used per team member
+    // with each person's own role, so an RA reportee (e.g. Sushant das) gets the
+    // RA deadline (27th), not the EMPLOYEE deadline (26th).
+    const {
+        getPlanDeadlineForRole,
+        getAchievementDeadlineForRole,
+    } = useDeadlines();
 
     const [stats, setStats] = useState({
         totalEmployees: 0,
@@ -166,6 +172,10 @@ const RADashboard = () => {
     /* ── Deadline Extension modal state ── */
     const [isExtendModalOpen, setIsExtendModalOpen] = useState(false);
     const [selectedEmployeeForExtension, setSelectedEmployeeForExtension] = useState(null);
+
+    /* ── Cross-month missed deadlines (fetched once on mount, independent of selectedMonth) ── */
+    const [missedDeadlinesData, setMissedDeadlinesData] = useState(null);
+    const [missedDeadlinesLoading, setMissedDeadlinesLoading] = useState(true);
 
     /* ── Hover-reveal state for leaderboard rows ── */
     const [hoveredRowId, setHoveredRowId] = useState(null);
@@ -206,6 +216,22 @@ const RADashboard = () => {
             }
         };
         fetchTrend();
+    }, []);
+
+    /* ── Cross-month missed deadlines fetch (once on mount, not tied to selectedMonth) ── */
+    useEffect(() => {
+        const fetchMissed = async () => {
+            setMissedDeadlinesLoading(true);
+            try {
+                const res = await api.get('/ra/missed-deadlines');
+                setMissedDeadlinesData(res.data);
+            } catch {
+                setMissedDeadlinesData(null);
+            } finally {
+                setMissedDeadlinesLoading(false);
+            }
+        };
+        fetchMissed();
     }, []);
 
     /* ── Timeline / activity fetch ── */
@@ -258,9 +284,9 @@ const RADashboard = () => {
                     });
                     if (monthlyAchievement?.submittedAt) {
                         nextActivities.push({
-                            id: `achievement-${employee.id}`,
+                            id: `progress-${employee.id}`,
                             user: employee.name,
-                            action: 'uploaded the monthly achievement',
+                            action: 'uploaded the monthly progress',
                             time: formatActivityTimestamp(monthlyAchievement.submittedAt),
                             sortTime: new Date(monthlyAchievement.submittedAt).getTime(),
                             icon: <FiTrendingUp />,
@@ -350,18 +376,15 @@ const RADashboard = () => {
     }, [employeesList, stats.lists]);
 
     /* ── Missed deadline employees — derived from existing data ── */
-    /* An employee is "missed" if:
-       (a) today > plan deadline (centralized config day) AND no plan submitted, OR
-       (b) plan submitted BUT today > achievement deadline (centralized config day) AND no achievement */
+    /* An employee is "missed" if their OWN-role deadline has passed and they
+       haven't submitted. Each person's deadline is resolved from their own
+       emp.role (EMPLOYEE or RA), so a team member who is themselves an RA
+       (e.g. Sushant das, role=RA) gets the RA deadline (27th), not the
+       EMPLOYEE deadline (26th), and won't appear as "missed" if their window
+       is still open. */
     const missedEmployees = useMemo(() => {
         const today = new Date();
-        const [selYear, selMonth] = (selectedMonth || '').split('-').map(Number);
-        if (!selYear || !selMonth) return [];
-
-        // CENTRALIZED DEADLINE CONFIG — days driven by .env via DeadlineContext
-        const planDeadline = getPlanDeadline(selectedMonth);
-        const achDeadline  = getAchievementDeadline(selectedMonth);
-        if (!planDeadline || !achDeadline) return [];
+        if (!selectedMonth) return [];
 
         const submittedSet = new Set((stats.lists?.submitted || []).map(id => id?.toString()));
         const achievementsSet = new Set((stats.lists?.achievements || []).map(id => id?.toString()));
@@ -371,18 +394,28 @@ const RADashboard = () => {
                 const empId = emp.id?.toString();
                 const submitted = submittedSet.has(empId);
                 const hasAchievement = achievementsSet.has(empId);
-                // (a) missed plan
-                if (!submitted && today > planDeadline) {
-                    return { ...emp, missingType: 'plan', originalDeadline: planDeadline };
+
+                // Resolve deadlines per this specific person's role.
+                // emp.role comes from the API and is now included in the response.
+                // Falls back to 'EMPLOYEE' for any unrecognised role (HRD, MD, etc.).
+                const memberRole = emp.role || 'EMPLOYEE';
+                const memberPlanDeadline = getPlanDeadlineForRole(selectedMonth, memberRole);
+                const memberAchDeadline  = getAchievementDeadlineForRole(selectedMonth, memberRole);
+
+                if (!memberPlanDeadline || !memberAchDeadline) return null;
+
+                // (a) missed plan — deadline per their own role
+                if (!submitted && today > memberPlanDeadline) {
+                    return { ...emp, missingType: 'plan', originalDeadline: memberPlanDeadline };
                 }
-                // (b) missed achievement
-                if (submitted && !hasAchievement && today > achDeadline) {
-                    return { ...emp, missingType: 'achievement', originalDeadline: achDeadline };
+                // (b) missed progress — achievement deadline per their own role
+                if (submitted && !hasAchievement && today > memberAchDeadline) {
+                    return { ...emp, missingType: 'progress', originalDeadline: memberAchDeadline };
                 }
                 return null;
             })
             .filter(Boolean);
-    }, [employeesList, stats.lists, selectedMonth, getPlanDeadline, getAchievementDeadline]);
+    }, [employeesList, stats.lists, selectedMonth, getPlanDeadlineForRole, getAchievementDeadlineForRole]);
 
 
     /* ── Helper: open extend modal ── */
@@ -468,7 +501,7 @@ const RADashboard = () => {
         insights.push({ icon: 'ℹ️', text: `Only ${stats.evaluatedThisMonth} evaluation${stats.evaluatedThisMonth !== 1 ? 's' : ''} completed. ${stats.pendingEvaluation} still need review.`, variant: 'info' });
     }
     if (achievementsRate < 50 && stats.plansSubmittedThisMonth > 0) {
-        insights.push({ icon: '📋', text: `${100 - achievementsRate}% of submitted plans are missing achievement uploads`, variant: 'warn' });
+        insights.push({ icon: '📋', text: `${100 - achievementsRate}% of submitted plans are missing progress uploads`, variant: 'warn' });
     }
     if (evaluationRate === 100 && stats.plansSubmittedThisMonth > 0) {
         insights.push({ icon: '🎉', text: 'All submitted plans have been evaluated. Great job!', variant: 'success' });
@@ -591,12 +624,12 @@ const RADashboard = () => {
                 <div className="ra-smart-card">
                     <div className="ra-sc-header">
                         <div className="ra-sc-icon green"><FiTrendingUp /></div>
-                        <button className="ra-sc-view-btn" onClick={() => openModal('Achievements Uploaded', 'ACHIEVEMENTS')}>
-                            <FiEye /> View Achievements
+                        <button className="ra-sc-view-btn" onClick={() => openModal('Monthly Progress Uploaded', 'ACHIEVEMENTS')}>
+                            <FiEye /> View progress
                         </button>
                     </div>
                     <div className="ra-sc-body">
-                        <h3>Achievements</h3>
+                        <h3>Monthly Progress</h3>
                         <div className="ra-sc-value">
                             {stats.achievementsThisMonth}
                             <span className="ra-sc-ratio">/ {stats.plansSubmittedThisMonth}</span>
@@ -605,7 +638,7 @@ const RADashboard = () => {
                             <div className={`ra-sc-progress-fill ${progressColor(achievementsRate)}`}
                                 style={{ width: `${achievementsRate}%` }} />
                         </div>
-                        <p>{achievementsRate}% of plans have achievements</p>
+                        <p>{achievementsRate}% of plans have progress uploaded</p>
                     </div>
                 </div>
 
@@ -698,7 +731,7 @@ const RADashboard = () => {
             )}
 
             {/* ── 4. Quick Insights ── */}
-            {(insights.length > 0 || missedEmployees.length > 0) && (
+            {(insights.length > 0 || (missedDeadlinesData && missedDeadlinesData.totalCount > 0)) && (
                 <div className="ra-insights-section">
                     <div className="ra-insights-header">
                         <FiInfo className="ra-insights-header-icon" />
@@ -708,52 +741,49 @@ const RADashboard = () => {
                         {insights.map((item, index) => (
                             <InsightCard key={index} icon={item.icon} text={item.text} variant={item.variant} />
                         ))}
-                        {/* 4th card — Missed Deadline alert */}
-                        {missedEmployees.length > 0 && (
-                            <div className="ra-insight-item ra-insight-missed"
-                                style={{
-                                    background: '#FEF2F2',
-                                    borderLeft: '3px solid #EF4444',
-                                    border: '1px solid #FECACA',
-                                    borderLeftWidth: '3px',
-                                    color: '#991B1B',
-                                    borderRadius: '8px',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'space-between',
-                                    gap: '12px',
-                                    padding: '8px 14px',
-                                    flex: '1',
-                                    minWidth: '280px',
-                                }}
-                            >
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
-                                    <span style={{ fontSize: '1rem', flexShrink: 0 }}>🔴</span>
-                                    <span style={{ fontSize: '0.8rem', fontWeight: 500, lineHeight: 1.4 }}>
-                                        <strong>{missedEmployees.length}</strong> employee{missedEmployees.length !== 1 ? 's' : ''} missed the plan/achievement deadline for <strong>{formatMonth(selectedMonth)}</strong>
-                                    </span>
+                        {/* Missed Deadline card — driven by server's cross-month aggregate */}
+                        {!missedDeadlinesLoading && missedDeadlinesData && missedDeadlinesData.totalCount > 0 && (() => {
+                            const { totalCount, byMonth } = missedDeadlinesData;
+                            const multiMonth = byMonth && byMonth.length > 1;
+                            const singleMonth = byMonth && byMonth.length === 1;
+                            return (
+                                <div className="ra-insight-missed">
+                                    <div className="ra-insight-missed-body">
+                                        <div className="ra-insight-missed-summary">
+                                            <span style={{ fontSize: '1rem', flexShrink: 0 }}>🔴</span>
+                                            <span>
+                                                {multiMonth
+                                                    ? <><strong>{totalCount}</strong> submission{totalCount !== 1 ? 's' : ''} are overdue across your team</>
+                                                    : singleMonth
+                                                        ? <><strong>{totalCount}</strong> employee{totalCount !== 1 ? 's' : ''} missed the plan/progress deadline for <strong>{byMonth[0].label}</strong></>
+                                                        : <><strong>{totalCount}</strong> overdue submission{totalCount !== 1 ? 's' : ''}</>
+                                                }
+                                            </span>
+                                        </div>
+                                        {multiMonth && (
+                                            <div className="ra-insight-missed-months">
+                                                {byMonth.slice(0, 3).map(bm => (
+                                                    <span key={bm.month} className="ra-insight-missed-chip">
+                                                        {bm.label}: <strong>{bm.count}</strong>
+                                                    </span>
+                                                ))}
+                                                {byMonth.length > 3 && (
+                                                    <span className="ra-insight-missed-chip">
+                                                        +{byMonth.length - 3} more
+                                                    </span>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <button
+                                        className="ra-insight-missed-action"
+                                        onClick={() => navigate('/ra/deadline-management')}
+                                    >
+                                        Manage Extensions →
+                                    </button>
                                 </div>
-                                <button
-                                    onClick={() => navigate('/ra/monthly-evaluation?filter=missed')}
-                                    style={{
-                                        background: 'transparent',
-                                        border: 'none',
-                                        color: '#EF4444',
-                                        fontWeight: 500,
-                                        fontSize: '0.8rem',
-                                        cursor: 'pointer',
-                                        whiteSpace: 'nowrap',
-                                        padding: '2px 0',
-                                        textDecoration: 'none',
-                                        flexShrink: 0,
-                                    }}
-                                    onMouseEnter={e => e.currentTarget.style.textDecoration = 'underline'}
-                                    onMouseLeave={e => e.currentTarget.style.textDecoration = 'none'}
-                                >
-                                    Manage Extensions →
-                                </button>
-                            </div>
-                        )}
+                            );
+                        })()}
                     </div>
                 </div>
             )}
@@ -768,7 +798,7 @@ const RADashboard = () => {
                     <div className="ra-at-icon"><FiClipboard /></div>
                     <div className="ra-at-content">
                         <h3>Monthly Evaluation</h3>
-                        <p>Review plans &amp; achievements</p>
+                        <p>Review plans &amp; progress</p>
                     </div>
                     <ArrowRightIcon className="ra-at-arrow" />
                 </Link>
@@ -799,7 +829,7 @@ const RADashboard = () => {
             <div>
                 <div className="ra-section-header">
                     <h2>6-Month Activity Trend</h2>
-                    <p>Plans submitted, achievements &amp; evaluations across the last 6 months</p>
+                    <p>Plans submitted, progress &amp; evaluations across the last 6 months</p>
                 </div>
                 <div className="ra-trend-fullwidth-card">
                     {trendLoading ? (
@@ -814,8 +844,8 @@ const RADashboard = () => {
                             {/* Summary pills above chart */}
                             <div className="ra-trend-summary">
                                 {['plans', 'achievements', 'evaluations'].map((key, i) => {
-                                    const colors = ['#3B82F6', '#10B981', '#F97316'];
-                                    const labels = ['Total plans', 'Total achievements', 'Total evaluations'];
+                                    const colors = ['#3B82F6','#F97316', '#10B981'];
+                                    const labels = ['Total plans', 'Total Monthly progress', 'Total evaluations'];
                                     const total = monthlyTrendData.reduce((s, d) => s + (d[key] || 0), 0);
                                     return (
                                         <div key={key} className="ra-trend-pill">
@@ -867,10 +897,12 @@ const RADashboard = () => {
                                             iconType="square"
                                             iconSize={9}
                                             wrapperStyle={{ fontSize: '12px', paddingBottom: '8px' }}
+                                            
+                                            
                                         />
                                         <Bar dataKey="plans" name="Plans" fill="#3B82F6" radius={[4, 4, 0, 0]} maxBarSize={22} />
-                                        <Bar dataKey="achievements" name="Achievements" fill="#10B981" radius={[4, 4, 0, 0]} maxBarSize={22} />
-                                        <Bar dataKey="evaluations" name="Evaluations" fill="#F97316" radius={[4, 4, 0, 0]} maxBarSize={22} />
+                                        <Bar dataKey="achievements" name="Progress" fill="#F97316" radius={[4, 4, 0, 0]} maxBarSize={22} />
+                                        <Bar dataKey="evaluations" name="Evaluations" fill="#10B981" radius={[4, 4, 0, 0]} maxBarSize={22} />
                                     </BarChart>
                                 </ResponsiveContainer>
                             </div>
@@ -928,7 +960,7 @@ const RADashboard = () => {
                             <div className="ra-lb-header">
                                 <div>
                                     <h4>Employee Submission Status</h4>
-                                    <p className="ra-chart-note">Plan → Achievement → Evaluation for {formatMonth(selectedMonth)}</p>
+                                    <p className="ra-chart-note">Plan → Progress → Evaluation for {formatMonth(selectedMonth)}</p>
                                 </div>
                                 <div className="ra-lb-legend">
                                     <span className="ra-lb-leg-item ra-lb-leg-done">Done</span>
@@ -947,7 +979,7 @@ const RADashboard = () => {
                                             <div
                                                 key={emp.id}
                                                 className={`ra-lb-row ${cfg.bgCls}`}
-                                                onClick={() => navigate(`/ra/employee/${emp.id}`)}
+                                                onClick={() => navigate(`/ra/monthly-evaluation`)}
                                                 title={`View ${emp.name}'s details`}
                                                 onMouseEnter={() => setHoveredRowId(emp.id)}
                                                 onMouseLeave={() => setHoveredRowId(null)}
@@ -997,7 +1029,7 @@ const RADashboard = () => {
                                                                     border: '1px solid #FECACA',
                                                                 } : {}}
                                                             >
-                                                                {missedInfo?.missingType === 'achievement' && emp.submitted && !emp.hasAchievement ? '⚠ Ach.' : 'Ach.'}
+                                                                {missedInfo?.missingType === 'achievement' && emp.submitted && !emp.hasAchievement ? '⚠ Prog' : 'Prog'}
                                                             </span>
                                                             <span className={`ra-lb-step ${emp.evaluated ? 'ra-lb-step-done' : emp.submitted ? 'ra-lb-step-miss' : 'ra-lb-step-na'}`}>
                                                                 Eval.

@@ -147,4 +147,16 @@ router.get(
   employeeController.getYearlyAppraisalReports
 );
 
+/* ─── Self-scoped deadline context ───────────────────────────────────────────
+   Returns the effective (possibly extended) deadline for the current user's
+   own plan or achievement. No employeeId param needed — always req.user.userId.
+   Used by MonthlyPlanPage to gate the Submit button and form submission.
+─────────────────────────────────────────────────────────────────────────── */
+router.get(
+  "/my-deadline-context",
+  verifyToken,
+  authorizeRoles("EMPLOYEE", "RA"),
+  employeeController.getMyDeadlineContext
+);
+
 module.exports = router;

@@ -1,0 +1,729 @@
+/* ══════════════════════════════════════════════════════════════════
+   ExtendDeadlineManagement.css
+   Class prefix: edmp-
+   Matches the RA module visual language (orange accent, card style)
+══════════════════════════════════════════════════════════════════ */
+
+/* ── Page wrapper ── */
+.edmp-page {
+  padding: 18px 28px 28px;
+  max-width: 1200px;
+  margin: 0 auto;
+  font-family: 'Inter', 'Segoe UI', sans-serif;
+  animation: edmpFadeIn 0.25s ease;
+}
+
+@keyframes edmpFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Header ── */
+.edmp-header {
+  margin-bottom: 16px;
+}
+
+.edmp-title {
+  font-size: 1.32rem;
+  font-weight: 800;
+  color: #111827;
+  margin: 0 0 3px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  line-height: 1.25;
+}
+
+.edmp-title-icon {
+  color: #F97316;
+  font-size: 1.18rem;
+}
+
+.edmp-subtitle {
+  font-size: 0.84rem;
+  color: #6B7280;
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* ── Tabs ── */
+.edmp-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid #E5E7EB;
+  margin-bottom: 18px;
+}
+
+.edmp-tab {
+  padding: 9px 20px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #6B7280;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  margin-bottom: -2px;
+  transition: color 0.15s, border-color 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: inherit;
+}
+
+.edmp-tab:hover {
+  color: #374151;
+}
+
+.edmp-tab.active {
+  color: #F97316;
+  border-bottom-color: #F97316;
+}
+
+.edmp-tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  background: #FEE2E2;
+  color: #B91C1C;
+}
+
+.edmp-tab.active .edmp-tab-badge {
+  background: #F97316;
+  color: #fff;
+}
+
+/* ── Month selector (By Month tab) ── */
+.edmp-month-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.edmp-month-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #374151;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.edmp-month-input {
+  padding: 8px 12px;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-family: inherit;
+  color: #111827;
+  background: #fff;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.edmp-month-input:focus {
+  border-color: #F97316;
+  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.12);
+}
+
+/* ── Summary stat pills ── */
+.edmp-summary-pills {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.edmp-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border: 1px solid;
+}
+
+.edmp-pill-red {
+  background: #FEF2F2;
+  color: #B91C1C;
+  border-color: #FECACA;
+}
+
+.edmp-pill-orange {
+  background: #FFF7ED;
+  color: #92400E;
+  border-color: #FED7AA;
+}
+
+.edmp-pill-green {
+  background: #F0FDF4;
+  color: #166534;
+  border-color: #BBF7D0;
+}
+
+.edmp-pill-blue {
+  background: #EFF6FF;
+  color: #1D4ED8;
+  border-color: #BFDBFE;
+}
+
+/* ── Table card (outer frame — keeps rounded corners + shadow) ── */
+.edmp-table-card {
+  background: #fff;
+  border: 1px solid #E5E7EB;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+
+/* ── Scroll viewport — handles horizontal overflow independently
+     of the card so the border-radius above is never clipped ── */
+.edmp-table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── Table ── */
+.edmp-table {
+  width: 100%;
+  min-width: 920px;
+  /* gives every column room instead of squeezing/clipping content */
+  border-collapse: collapse;
+  font-size: 0.83rem;
+}
+
+.edmp-table thead {
+  background: #F9FAFB;
+  border-bottom: 1px solid #E5E7EB;
+}
+
+.edmp-table th {
+  padding: 11px 16px;
+  text-align: left;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #6B7280;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.edmp-table td {
+  padding: 12px 16px;
+  color: #374151;
+  border-bottom: 1px solid #F3F4F6;
+  vertical-align: middle;
+}
+
+.edmp-table tr:last-child td {
+  border-bottom: none;
+}
+
+.edmp-table tbody tr {
+  transition: background 0.12s;
+  cursor: pointer;
+}
+
+.edmp-table tbody tr:hover {
+  background: #FFF7ED;
+}
+
+/* Freeze the Employee column while the rest of the table scrolls
+   horizontally — standard pattern for wide data tables. */
+.edmp-table th:first-child,
+.edmp-table td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  box-shadow: 4px 0 6px -4px rgba(0, 0, 0, 0.08);
+}
+
+.edmp-table thead th:first-child {
+  background: #F9FAFB;
+  z-index: 2;
+}
+
+.edmp-table tbody td:first-child {
+  background: #fff;
+}
+
+.edmp-table tbody tr:hover td:first-child {
+  background: #FFF7ED;
+}
+
+/* ── Employee cell ── */
+.edmp-emp-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.edmp-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #F97316, #EA580C);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+
+.edmp-emp-name {
+  font-weight: 600;
+  color: #111827;
+  font-size: 0.85rem;
+}
+
+.edmp-emp-meta {
+  font-size: 0.72rem;
+  color: #6B7280;
+  margin-top: 1px;
+}
+
+/* ── Type badge ── */
+.edmp-type-plan {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: #EFF6FF;
+  color: #1D4ED8;
+  border: 1px solid #BFDBFE;
+}
+
+.edmp-type-achievement {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: #F5F3FF;
+  color: #6D28D9;
+  border: 1px solid #DDD6FE;
+}
+
+/* ── Deadline cells ── */
+.edmp-deadline {
+  font-size: 0.82rem;
+  color: #374151;
+  font-variant-numeric: tabular-nums;
+}
+
+.edmp-deadline-extended {
+  font-size: 0.82rem;
+  color: #92400E;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.edmp-overdue-label {
+  font-size: 0.7rem;
+  color: #B91C1C;
+  background: #FEF2F2;
+  border: 1px solid #FECACA;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* ── Extension count badge ── */
+.edmp-ext-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: #FFF7ED;
+  color: #92400E;
+  border: 1px solid #FED7AA;
+}
+
+.edmp-ext-none {
+  font-size: 0.75rem;
+  color: #9CA3AF;
+}
+
+/* ── Action button ── */
+.edmp-action-btn {
+  padding: 5px 12px;
+  background: #F97316;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s, transform 0.1s;
+  white-space: nowrap;
+}
+
+.edmp-action-btn:hover {
+  background: #EA580C;
+  transform: translateY(-1px);
+}
+
+.edmp-action-btn.secondary {
+  background: transparent;
+  border: 1px solid #E5E7EB;
+  color: #374151;
+}
+
+.edmp-action-btn.secondary:hover {
+  background: #F9FAFB;
+  border-color: #D1D5DB;
+}
+
+/* ── Empty state ── */
+.edmp-empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: #9CA3AF;
+}
+
+.edmp-empty-icon {
+  font-size: 2.5rem;
+  margin-bottom: 12px;
+  display: block;
+}
+
+.edmp-empty-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #374151;
+  margin-bottom: 6px;
+}
+
+.edmp-empty-sub {
+  font-size: 0.82rem;
+  color: #9CA3AF;
+}
+
+/* ── Loading state ── */
+.edmp-loading {
+  text-align: center;
+  padding: 60px 20px;
+  color: #6B7280;
+  font-size: 0.88rem;
+}
+
+.edmp-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid #E5E7EB;
+  border-top-color: #F97316;
+  border-radius: 50%;
+  animation: edmpSpin 0.65s linear infinite;
+  display: inline-block;
+  margin-bottom: 10px;
+}
+
+@keyframes edmpSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ── By Month double columns ── */
+.edmp-col-sub {
+  font-size: 0.72rem;
+  color: #9CA3AF;
+  display: block;
+  margin-top: 2px;
+}
+
+.edmp-submitted-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: #F0FDF4;
+  color: #166534;
+  border: 1px solid #BBF7D0;
+}
+
+.edmp-missing-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: #FEF2F2;
+  color: #B91C1C;
+  border: 1px solid #FECACA;
+}
+
+.edmp-rejected-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: #FFF7ED;
+  color: #C2410C;
+  border: 1px solid #FED7AA;
+}
+
+/* Evaluated — RA has scored the plan (indigo, premium feel) */
+.edmp-evaluated-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: #EEF2FF;
+  color: #3730A3;
+  border: 1px solid #C7D2FE;
+}
+
+.edmp-na-chip {
+  font-size: 0.72rem;
+  color: #9CA3AF;
+}
+
+/* ── History modal overlay ── */
+.edmp-hist-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1400;
+  padding: 20px;
+}
+
+.edmp-hist-modal {
+  width: 100%;
+  max-width: 520px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.22);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: edmpSlideUp 0.22s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  max-height: 88vh;
+}
+
+@keyframes edmpSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.97);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.edmp-hist-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #F3F4F6;
+  flex-shrink: 0;
+}
+
+.edmp-hist-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #111827;
+  margin: 0;
+}
+
+.edmp-hist-close {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: #6B7280;
+  font-size: 1.1rem;
+  padding: 4px;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+
+.edmp-hist-close:hover {
+  background: #F3F4F6;
+}
+
+.edmp-hist-body {
+  overflow-y: auto;
+  flex: 1;
+  padding: 20px;
+}
+
+.edmp-hist-footer {
+  padding: 14px 20px;
+  border-top: 1px solid #F3F4F6;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  background: #FAFAFA;
+  flex-shrink: 0;
+}
+
+/* ── Timeline list ── */
+.edmp-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.edmp-timeline-item {
+  padding: 12px 14px;
+  background: #F9FAFB;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  font-size: 0.8rem;
+}
+
+.edmp-timeline-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 5px;
+}
+
+.edmp-timeline-dates {
+  font-weight: 700;
+  color: #111827;
+}
+
+.edmp-timeline-by {
+  font-size: 0.72rem;
+  color: #6B7280;
+  flex-shrink: 0;
+}
+
+.edmp-timeline-reason {
+  color: #6B7280;
+  font-style: italic;
+  line-height: 1.4;
+}
+
+/* ── Window closed badge (read-only, replaces Extend button) ── */
+.edmp-window-closed {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: #F3F4F6;
+  color: #6B7280;
+  border: 1px solid #E5E7EB;
+  white-space: nowrap;
+  cursor: default;
+  user-select: none;
+}
+
+.edmp-window-closed-date {
+  font-size: 0.66rem;
+  font-weight: 400;
+  color: #9CA3AF;
+  margin-left: 2px;
+}
+
+/* ── Expired section (collapsed read-only list) ── */
+.edmp-expired-section {
+  margin-top: 16px;
+  border-top: 1px solid #F3F4F6;
+  padding-top: 12px;
+}
+
+.edmp-expired-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.8rem;
+  color: #6B7280;
+  padding: 4px 0;
+  line-height: 1.4;
+}
+
+.edmp-expired-toggle:hover {
+  color: #374151;
+}
+
+.edmp-expired-toggle-hint {
+  margin-left: auto;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #9CA3AF;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Muted variant — used for the expired items table */
+.edmp-table-muted tbody tr {
+  opacity: 0.72;
+}
+
+.edmp-table-muted tbody tr:hover {
+  opacity: 1;
+  background: #F9FAFB;
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .edmp-page {
+    padding: 16px;
+  }
+
+  /* Horizontal scroll + the sticky Employee column (above) handle
+     narrow viewports now, so columns no longer need to be hidden —
+     that was cutting off the Actions column users need to tap. */
+  .edmp-table {
+    min-width: 760px;
+  }
+}

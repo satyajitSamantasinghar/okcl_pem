@@ -5330,3 +5330,210 @@
 }
 
 /* ============================================================
+   DEADLINE EXTENSION AUDIT TRAIL — CSS
+   Naming: .red-ext-* for page elements, .dmod-ext-* for modal.
+   Amber / orange accent — consistent with the existing
+   RA-extension colour convention in this file.
+   ============================================================ */
+
+/* ─── ⏱ Inline "Extended" chip in Monthly Reviews table ─────────── */
+.red-ext-badge {
+    display:         inline-flex;
+    align-items:     center;
+    gap:             4px;
+    padding:         2px 8px;
+    border-radius:   9999px;
+    font-size:       11px;
+    font-weight:     600;
+    background:      #FFFBEB;
+    color:           #92400E;
+    border:          1px solid #FDE68A;
+    white-space:     nowrap;
+    flex-shrink:     0;
+    /* Non-interactive — no cursor pointer, no hover */
+    pointer-events:  none;
+    user-select:     none;
+}
+
+/* ─── Extension History tab wrapper ─────────────────────────────── */
+.red-ext-tab-wrap {
+    display:        flex;
+    flex-direction: column;
+    gap:            16px;
+}
+
+/* ─── Header row inside the extension table card ────────────────── */
+.red-ext-tab-header {
+    display:      flex;
+    align-items:  center;
+    gap:          8px;
+    padding:      14px 18px 12px;
+    border-bottom: 1px solid var(--border-default, #E5E7EB);
+    font-size:    13px;
+    font-weight:  700;
+    color:        var(--text-primary, #111827);
+}
+.red-ext-tab-icon {
+    color: #D97706;
+    flex-shrink: 0;
+}
+
+/* ─── Extension table: inherits .red-table base styles ──────────── */
+.red-ext-table {
+    /* The table itself already inherits all .red-table rules.
+       Only add overrides here. */
+}
+
+/* Extension table rows have a left-accent on hover */
+.red-ext-row {
+    border-left: 3px solid transparent;
+    transition:  border-color 0.15s ease;
+}
+.red-ext-row:hover {
+    border-left-color: #F59E0B;
+    background:        #FFFBEB !important;
+}
+
+/* ─── Type chips: Plan vs Achievement ───────────────────────────── */
+.red-ext-type-chip {
+    display:       inline-flex;
+    align-items:   center;
+    gap:           4px;
+    padding:       3px 10px;
+    border-radius: 9999px;
+    font-size:     11px;
+    font-weight:   600;
+    white-space:   nowrap;
+}
+.red-ext-type-chip--plan {
+    background: #EFF6FF;
+    color:      #1D4ED8;
+    border:     1px solid #BFDBFE;
+}
+.red-ext-type-chip--achievement {
+    background: #F5F3FF;
+    color:      #6D28D9;
+    border:     1px solid #DDD6FE;
+}
+
+/* ─── Old deadline (strikethrough style) ────────────────────────── */
+.red-ext-old-date {
+    color:           var(--text-muted, #9CA3AF) !important;
+    text-decoration: line-through;
+}
+
+/* ─── New deadline (highlighted) ────────────────────────────────── */
+.red-ext-new-date {
+    font-weight: 600;
+    color:       #D97706;
+}
+
+/* ─── Extended By name ──────────────────────────────────────────── */
+.red-ext-by {
+    font-size:   12px;
+    font-weight: 600;
+    color:       var(--text-primary, #111827);
+}
+
+/* ─── Reason cell — truncate long text, show full on hover ──────── */
+.red-ext-reason-cell {
+    max-width: 260px;
+}
+.red-ext-reason-text {
+    display:       block;
+    white-space:   nowrap;
+    overflow:      hidden;
+    text-overflow: ellipsis;
+    font-size:     12px;
+    color:         var(--text-secondary, #374151);
+    cursor:        default;
+}
+
+/* ─── Deep Inspection Modal — Deadline Extension block ──────────── */
+/* Positioned between .dmod-ra-box and the rejection banner.
+   Amber left border, read-only, no interactive controls. */
+.dmod-ext-box {
+    margin-top:    10px;
+    padding:       12px 14px;
+    background:    #FFFBEB;
+    border:        1px solid #FDE68A;
+    border-left:   4px solid #F59E0B;
+    border-radius: 8px;
+    display:       flex;
+    flex-direction: column;
+    gap:           6px;
+}
+
+.dmod-ext-header {
+    display:     flex;
+    align-items: center;
+    gap:         6px;
+    color:       #92400E;
+}
+.dmod-ext-title {
+    font-size:   11px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color:       #92400E;
+    display:     flex;
+    align-items: center;
+    gap:         6px;
+}
+.dmod-ext-type-pill {
+    font-size:     10px;
+    font-weight:   600;
+    text-transform: none;
+    letter-spacing: 0;
+    padding:       1px 7px;
+    border-radius: 9999px;
+    background:    #FEF3C7;
+    color:         #92400E;
+    border:        1px solid #FDE68A;
+}
+
+.dmod-ext-row {
+    display:     flex;
+    align-items: center;
+    gap:         6px;
+    font-size:   12px;
+    flex-wrap:   wrap;
+}
+.dmod-ext-label {
+    font-size:   11px;
+    font-weight: 600;
+    color:       #92400E;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    flex-shrink: 0;
+}
+.dmod-ext-val {
+    font-size:   12px;
+    font-weight: 500;
+    color:       #6B7280;
+}
+.dmod-ext-val--new {
+    font-weight: 700;
+    color:       #D97706;
+}
+.dmod-ext-arrow {
+    color:       #D97706;
+    font-size:   13px;
+    font-weight: 700;
+}
+.dmod-ext-row--meta {
+    color:       #92400E;
+    font-size:   11px;
+    opacity:     0.85;
+}
+.dmod-ext-dot {
+    opacity: 0.5;
+}
+.dmod-ext-reason {
+    font-size:   12px;
+    font-style:  italic;
+    color:       #78350F;
+    line-height: 1.5;
+    padding-top: 2px;
+    border-top:  1px solid #FDE68A;
+}

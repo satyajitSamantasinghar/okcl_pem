@@ -143,10 +143,10 @@ const EmployeeDashboard = () => {
                             actions.push({
                                 id: `submit_ach_${plan.id}`,
                                 type: 'primary',
-                                title: `Submit Monthly Achievement`,
-                                desc: `Pending achievement submission for ${monthDisplay}.`,
+                                title: `Submit Monthly Progress`,
+                                desc: `Pending progress submission for ${monthDisplay}.`,
                                 link: '/employee/monthly-plan',
-                                btnText: 'Submit Target'
+                                btnText: 'Submit Progress'
                             });
                         }
                     }
@@ -226,14 +226,14 @@ const EmployeeDashboard = () => {
 
                 if (needsAchievementDeadline && windowNotYetOpen && achStartDiff >= 0) {
                     dls.push({
-                        title: `Achievement Window Opens (${currMonthDisplay})`,
+                        title: `Monthly Progress Window Opens (${currMonthDisplay})`,
                         date: achStart,
                         days: achStartDiff,
                         critical: false
                     });
                 } else if (needsAchievementDeadline && achDiff >= -10) {
                     dls.push({
-                        title: `Monthly Achievement (${currMonthDisplay})`,
+                        title: `Monthly Progress(${currMonthDisplay})`,
                         date: achDeadline,
                         days: achDiff,
                         critical: achDiff <= 3
@@ -282,8 +282,8 @@ const EmployeeDashboard = () => {
                     icon: <FiCalendar />
                 }));
                 achievements.forEach(a => activities.push({
-                    type: 'Achievement ' + a.status,
-                    desc: `Monthly Achievement submitted`,
+                    type: 'Monthly Progress ' + a.status,
+                    desc: `Monthly Progress submitted`,
                     date: new Date(a.submittedAt || a.createdAt || Date.now()),
                     icon: <FiTarget />
                 }));
@@ -399,7 +399,7 @@ const EmployeeDashboard = () => {
                 <div className="emp-dash-stat-card">
                     <div className="emp-dash-stat-icon green"><FiTrendingUp /></div>
                     <div className="emp-dash-stat-info">
-                        <h4>Monthly Achievements</h4>
+                        <h4>Monthly Progress</h4>
                         <div className="emp-dash-stat-val">{stats.monthlyAchievements}</div>
                     </div>
                 </div>
@@ -424,7 +424,7 @@ const EmployeeDashboard = () => {
                 <Link to="/employee/monthly-plan" className="emp-dash-link-card">
                     <div className="emp-dash-link-icon orange"><FiCalendar /></div>
                     <h3>Monthly Plan</h3>
-                    <p>Submit and view your monthly work plans and achievements</p>
+                    <p>Submit and view your monthly work plans and progress</p>
                     <span className="emp-dash-link-cta">Go to Monthly Plan <FiChevronRight /></span>
                 </Link>
                 <Link to="/employee/quarterly-evaluation" className="emp-dash-link-card">

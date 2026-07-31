@@ -592,8 +592,10 @@
 }
 
 .ra-insights-list {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    align-items: start;
+    /* prevents shorter cards from being stretched to match taller siblings */
     gap: 9px;
 }
 
@@ -605,8 +607,6 @@
     border-radius: var(--rad-radius-sm);
     font-size: 0.8rem;
     font-weight: 500;
-    flex: 1;
-    min-width: 230px;
     transition: transform var(--rad-transition);
 }
 
@@ -635,6 +635,78 @@
 .ra-insight-icon {
     font-size: 0.95rem;
     flex-shrink: 0;
+}
+
+/* ── Missed-deadline card (was a giant inline style block) ── */
+.ra-insight-missed {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 13px;
+    background: #FEF2F2;
+    border: 1px solid #FECACA;
+    border-left: 3px solid #EF4444;
+    border-radius: var(--rad-radius-sm);
+    color: #991B1B;
+}
+
+.ra-insight-missed-body {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    flex: 1;
+}
+
+.ra-insight-missed-summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ra-insight-missed-summary span:last-child {
+    font-size: 0.8rem;
+    font-weight: 500;
+    line-height: 1.4;
+}
+
+/* Month breakdown as wrapping chips instead of a stacked list —
+   keeps the card's height in line with the other insight cards */
+.ra-insight-missed-months {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    padding-left: 24px;
+}
+
+.ra-insight-missed-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: #B91C1C;
+    background: #FEE2E2;
+    border: 1px solid #FECACA;
+    padding: 2px 8px 2px 6px;
+    border-radius: 999px;
+    white-space: nowrap;
+}
+
+.ra-insight-missed-action {
+    background: transparent;
+    border: none;
+    color: #EF4444;
+    font-weight: 500;
+    font-size: 0.8rem;
+    cursor: pointer;
+    white-space: nowrap;
+    padding: 2px 0;
+    flex-shrink: 0;
+}
+
+.ra-insight-missed-action:hover {
+    text-decoration: underline;
 }
 
 /* ══════════════════════════════════════════
@@ -1799,11 +1871,7 @@
     }
 
     .ra-insights-list {
-        flex-direction: column;
-    }
-
-    .ra-insight-item {
-        min-width: unset;
+        grid-template-columns: 1fr;
     }
 
     .ra-lb-dept {

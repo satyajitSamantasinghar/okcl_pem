@@ -29,7 +29,7 @@ function getCardStatus(emp) {
 function getStatusLabel(status) {
     if (status === 'not-submitted')        return 'Monthly Plan Not Submitted';
     if (status === 'completed')            return 'Evaluated';
-    if (status === 'achievement-missing')  return 'Achievement is Missing';
+    if (status === 'achievement-missing')  return 'Progress is Missing';
     return 'Evaluation is Pending';
 }
 
@@ -42,9 +42,9 @@ function getProgressPct(emp) {
 
 function getProgressHint(emp) {
     if (!emp.currentMonthPlanSubmitted)        return 'No monthly plan submitted for this month yet';
-    if (emp.currentMonthEvaluated)             return 'This month is fully evaluated — plan, achievement & evaluation done';
-    if (!emp.currentMonthAchievementSubmitted) return 'Plan submitted — waiting for employee to submit this month\'s achievement';
-    return 'Plan & achievement submitted — awaiting your evaluation for this month';
+    if (emp.currentMonthEvaluated)             return 'This month is fully evaluated — plan, progress & evaluation done';
+    if (!emp.currentMonthAchievementSubmitted) return 'Plan submitted — waiting for employee to submit this month\'s progress';
+    return 'Plan & progress submitted — awaiting your evaluation for this month';
 }
 
 /* ════════════════════════════════════════════════════
@@ -180,7 +180,7 @@ const RAEmployeeListPage = () => {
                             <option value="all">All Statuses</option>
                             <option value="pending">Pending Evaluation</option>
                             <option value="completed">Fully Evaluated</option>
-                            <option value="achievement-missing">Achievement Missing</option>
+                            <option value="achievement-missing">Progress Missing</option>
                             <option value="not-submitted">Not Submitted</option>
                         </select>
                     </div>

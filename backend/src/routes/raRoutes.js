@@ -134,6 +134,30 @@ router.get("/quarterly-evaluations/:id/full-detail",
   authorizeRoles("RA", "HRD", "MD"),
   raController.getQuarterlyFullDetail);
 
+/* ─── Missed Deadlines (cross-month aggregate for dashboard card) ────────────── */
+router.get(
+  "/missed-deadlines",
+  verifyToken,
+  authorizeRoles("RA", "MD"),
+  raController.getMissedDeadlines
+);
+
+/* ─── Deadline Management (full roster for one month) ──────────────────────── */
+router.get(
+  "/deadline-management",
+  verifyToken,
+  authorizeRoles("RA", "MD"),
+  raController.getDeadlineManagement
+);
+
+/* ─── Extend Deadline Context (modal + history, registered BEFORE PATCH) ──── */
+router.get(
+  "/extend-deadline/context",
+  verifyToken,
+  authorizeRoles("RA", "MD"),
+  raController.getExtendDeadlineContext
+);
+
 /* ── Extend Deadline ── */
 router.patch(
   "/extend-deadline",

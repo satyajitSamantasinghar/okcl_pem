@@ -248,7 +248,7 @@ const PlanContextPanel = ({ plan, achievement, className = '' }) => {
             {hasAch && overallProg !== null && (
                 <div className="meval-ctx-overall">
                     <div className="meval-ctx-overall-row">
-                        <span className="meval-ctx-overall-lbl">Overall Achievement</span>
+                        <span className="meval-ctx-overall-lbl">Overall Progress</span>
                         <span className="meval-ctx-overall-val">
                             {completed}/{planItems.length} plans &middot; {overallProg}%
                         </span>
@@ -258,10 +258,10 @@ const PlanContextPanel = ({ plan, achievement, className = '' }) => {
                     </div>
                     <div className="meval-ctx-ts-row">
                         {plan?.submittedAt && (
-                            <span className="meval-ctx-ts"><FiFileText size={9} /> Plan {formatDate(plan.submittedAt)}</span>
+                            <span className="meval-ctx-ts"><FiFileText size={9} /> Plan submitted on {formatDate(plan.submittedAt)}</span>
                         )}
                         {achievement?.submittedAt && (
-                            <span className="meval-ctx-ts"><FiTrendingUp size={9} /> Achievement {formatDate(achievement.submittedAt)}</span>
+                            <span className="meval-ctx-ts"><FiTrendingUp size={9} /> Progress submitted on {formatDate(achievement.submittedAt)}</span>
                         )}
                     </div>
                 </div>
@@ -330,7 +330,7 @@ const PlanContextPanel = ({ plan, achievement, className = '' }) => {
                                 </div>
                             </div>
                             <div className="meval-ctx-ach-section">
-                                <div className="meval-ctx-ach-lbl"><FiTrendingUp size={10} /> Achievement Details</div>
+                                <div className="meval-ctx-ach-lbl"><FiTrendingUp size={10} /> Progress Details</div>
                                 {pa.achievementDetails
                                     ? <div className="meval-ctx-ach-text">{pa.achievementDetails}</div>
                                     : <div className="meval-ctx-ach-empty">No details provided</div>}
@@ -345,7 +345,7 @@ const PlanContextPanel = ({ plan, achievement, className = '' }) => {
                 <div className="meval-ctx-extras">
                     <div className="meval-ctx-sec-lbl" style={{ marginTop: '16px', marginBottom: '12px' }}>
                         <FiStar size={12} />
-                        Additional Achievements
+                        Additional Work done with progress update 
                         <span className="meval-ctx-sec-count">{additionalItems.length} extra</span>
                     </div>
                     {additionalItems.map((item, i) => {
@@ -362,14 +362,14 @@ const PlanContextPanel = ({ plan, achievement, className = '' }) => {
                                     <div className="meval-ctx-plan-info">
                                         <div className="meval-ctx-plan-name-row">
                                             <span className="meval-ctx-plan-idx">{i + 1}</span>
-                                            <span className="meval-ctx-plan-name">Extra Achievement {i + 1}</span>
+                                            <span className="meval-ctx-plan-name">Extra Work with progress update {i + 1}</span>
                                             <span className={`meval-ctx-plan-badge meval-ctx-plan-badge--${statusCls}`}>{statusLabel}</span>
                                         </div>
                                     </div>
                                 </div>
                                 <div className="meval-ctx-prog-section">
                                     <div className="meval-ctx-prog-labels">
-                                        <span>Progress</span>
+                                        <span>Progress Percentage</span>
                                         <span style={{ color: tk.color, fontWeight: 700 }}>{prog}%{prog === 100 ? ' — Done' : prog > 0 ? ' — In Progress' : ' — Not Started'}</span>
                                     </div>
                                     <div className="meval-ctx-prog-track">
@@ -383,7 +383,7 @@ const PlanContextPanel = ({ plan, achievement, className = '' }) => {
                                     </div>
                                 </div>
                                 <div className="meval-ctx-ach-section">
-                                    <div className="meval-ctx-ach-lbl"><FiStar size={10} color="#BA7517" /> Achievement Details</div>
+                                    <div className="meval-ctx-ach-lbl"><FiStar size={10} color="#BA7517" />Work details with progress update</div>
                                     {text
                                         ? <div className="meval-ctx-ach-text">{text}</div>
                                         : <div className="meval-ctx-ach-empty">No details provided</div>}
@@ -398,7 +398,7 @@ const PlanContextPanel = ({ plan, achievement, className = '' }) => {
             {!hasAch && (
                 <div className="meval-ctx-no-ach">
                     <FiTrendingUp size={16} />
-                    <span>Achievement not yet submitted</span>
+                    <span>Progress Details not yet submitted</span>
                 </div>
             )}
         </div>
@@ -458,7 +458,7 @@ const DetailModal = ({ ev, detail, detailLoading, onClose, onEvaluate, onReject,
                                 ? <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" /></svg>
                                 : <FiTrendingUp size={11} />}
                         </div>
-                        <span className={`meval-step-lbl meval-step-lbl--${stepperAch}`}>Achievement</span>
+                        <span className={`meval-step-lbl meval-step-lbl--${stepperAch}`}>Progress</span>
                     </div>
                     <div className={`meval-step-line meval-step-line--${isEvaluated ? 'filled' : 'empty'}`} />
                     <div className="meval-step">
@@ -559,7 +559,7 @@ const DetailModal = ({ ev, detail, detailLoading, onClose, onEvaluate, onReject,
                                 {isEvaluated ? 'Evaluated'
                                     : (ev.monthlyPlanId?.status === 'REJECTED' || detail?.plan?.status === 'REJECTED') ? 'Plan rejected — awaiting resubmission'
                                     : hasAch ? 'Awaiting RA review'
-                                    : 'Achievement pending'}
+                                    : 'Progress pending'}
                             </span>
                             <div style={{ display: 'flex', gap: 8 }}>
                                 {/* Evaluate button: hidden when plan is REJECTED — employee must resubmit first */}
@@ -638,7 +638,7 @@ const EvaluateModal = ({ item, onClose, onSubmit, submitting }) => {
                     {/* LEFT: Context panel */}
                     <div className="meval-emodal-ctx-wrap">
                         <div className="meval-emodal-ctx-title">
-                            <FiClipboard size={13} /> Plan & Achievement Context
+                            <FiClipboard size={13} /> Plan & Progress Context
                         </div>
                         {ctxDetail ? (
                             <PlanContextPanel plan={ctxDetail.plan} achievement={ctxDetail.achievement} className="meval-emodal-ctx-inner" />
@@ -909,8 +909,13 @@ const GO_LIVE = { year: 2026, month: 5 }; // June 2026
 
 const RAMonthlyEvaluationPage = () => {
     const location = useLocation();
-    // CENTRALIZED DEADLINE CONFIG — plan & achievement days from .env via API
-    const { getPlanDeadline, getAchievementDeadline } = useDeadlines();
+    // CENTRALIZED DEADLINE CONFIG — plan & achievement days from .env via API.
+    // getPlanDeadlineForRole / getAchievementDeadlineForRole are called per team
+    // member with their own role so an RA reportee gets the RA deadline, not EMPLOYEE.
+    const {
+        getPlanDeadlineForRole,
+        getAchievementDeadlineForRole,
+    } = useDeadlines();
     const [evaluations, setEvaluations] = useState([]);
     const [employeesList, setEmployeesList] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -978,15 +983,15 @@ const RAMonthlyEvaluationPage = () => {
     }, [location.search]);
 
     /* ── Missed deadline employees derived from all employees ── */
+    /* Each team member's deadline is resolved from their OWN role (emp.role)
+       so an RA reportee (e.g. Sushant das, role=RA) gets checked against the
+       RA deadline (27th) instead of the EMPLOYEE deadline (26th). This also
+       means the Extend button is hidden when the member's own-role deadline
+       hasn't passed yet. */
     const missedEvaluations = useMemo(() => {
         const today = new Date();
         const [selYear, selMonth] = filterMonth.split('-').map(Number);
         if (!selYear || !selMonth) return [];
-
-        // CENTRALIZED DEADLINE CONFIG — days driven by .env via DeadlineContext
-        const planDeadline = getPlanDeadline(filterMonth);
-        const achDeadline  = getAchievementDeadline(filterMonth);
-        if (!planDeadline || !achDeadline) return [];
 
         const q = search.trim().toLowerCase();
 
@@ -1006,15 +1011,23 @@ const RAMonthlyEvaluationPage = () => {
             const hasPlan = submittedSet.has(empId);
             const hasAch = achievementsSet.has(empId);
 
+            // Resolve deadlines per this specific person's role.
+            // Falls back to 'EMPLOYEE' for any unrecognised role (HRD, MD, etc.).
+            const memberRole = emp.role || 'EMPLOYEE';
+            const memberPlanDeadline = getPlanDeadlineForRole(filterMonth, memberRole);
+            const memberAchDeadline  = getAchievementDeadlineForRole(filterMonth, memberRole);
+
+            if (!memberPlanDeadline || !memberAchDeadline) return null;
+
             let missingType = null;
             let originalDeadline = null;
 
-            if (!hasPlan && today > planDeadline) {
+            if (!hasPlan && today > memberPlanDeadline) {
                 missingType = 'plan';
-                originalDeadline = planDeadline;
-            } else if (hasPlan && !hasAch && today > achDeadline) {
+                originalDeadline = memberPlanDeadline;
+            } else if (hasPlan && !hasAch && today > memberAchDeadline) {
                 missingType = 'achievement';
-                originalDeadline = achDeadline;
+                originalDeadline = memberAchDeadline;
             }
 
             if (!missingType) return null;
@@ -1040,7 +1053,7 @@ const RAMonthlyEvaluationPage = () => {
                 originalDeadline
             };
         }).filter(Boolean);
-    }, [employeesList, evaluations, filterMonth, search, getPlanDeadline, getAchievementDeadline]);
+    }, [employeesList, evaluations, filterMonth, search, getPlanDeadlineForRole, getAchievementDeadlineForRole]);
 
 
     /* ── Parsed filterMonth for the modal ── */
@@ -1298,7 +1311,7 @@ const RAMonthlyEvaluationPage = () => {
                                 <div onClick={() => toggleSort('name')}>Employee <SortIcon field="name" /></div>
                                 <div onClick={() => toggleSort('month')}>Month <SortIcon field="month" /></div>
                                 <div>Plans</div>
-                                <div>Achievement</div>
+                                <div>Progress</div>
                                 <div onClick={() => toggleSort('score')}>Score <SortIcon field="score" /></div>
                                 <div onClick={() => toggleSort('status')}>Status <SortIcon field="status" /></div>
                                 <div className="meval-col-actions-head">Actions</div>
@@ -1566,7 +1579,7 @@ const RAMonthlyEvaluationPage = () => {
                                                     ? { background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE' }
                                                     : { background: '#F5F3FF', color: '#6D28D9', border: '1px solid #DDD6FE' }),
                                             }}>
-                                                {ev.missingType === 'plan' ? '📋 Plan' : '🏆 Achievement'}
+                                                {ev.missingType === 'plan' ? '📋 Plan' : '🏆 Progress'}
                                             </span>
                                         </div>
 

@@ -15,6 +15,7 @@ import {
     FiX,
     FiUser,
     FiRepeat,
+    FiClock,
 } from 'react-icons/fi';
 import './Sidebar.css';
 
@@ -32,12 +33,13 @@ const navItemsByView = {
         { path: '/employee/profile',              label: 'My Profile',           icon: <FiUser /> },
     ],
     RA: [
-        { path: '/ra',                     label: 'Dashboard',           icon: <FiHome /> },
-        { path: '/ra/employees',           label: 'My Employees',        icon: <FiUsers /> },
-        { path: '/ra/monthly-evaluation',  label: 'Monthly Evaluation',  icon: <FiClipboard /> },
-        { path: '/ra/quarterly-evaluation',label: 'Quarterly Evaluation',icon: <FiBarChart2 /> },
-        { path: '/ra/yearly-appraisal',    label: 'Yearly Appraisal',   icon: <FiAward /> },
-        { path: '/ra/profile',             label: 'My Profile',          icon: <FiUser /> },
+        { path: '/ra',                        label: 'Dashboard',            icon: <FiHome /> },
+        { path: '/ra/employees',              label: 'My Employees',         icon: <FiUsers /> },
+        { path: '/ra/monthly-evaluation',     label: 'Monthly Evaluation',   icon: <FiClipboard /> },
+        { path: '/ra/deadline-management',    label: 'Deadline Management',  icon: <FiClock /> },
+        { path: '/ra/quarterly-evaluation',   label: 'Quarterly Evaluation', icon: <FiBarChart2 /> },
+        { path: '/ra/yearly-appraisal',       label: 'Yearly Appraisal',    icon: <FiAward /> },
+        { path: '/ra/profile',                label: 'My Profile',           icon: <FiUser /> },
     ],
     // RA in "Employee View" — Dashboard links to /employee (EmployeeDashboard, allowed for RA role).
     // Plan/achievement routes stay under /ra/my-* so the JWT role "RA" always satisfies backend guards.
@@ -65,12 +67,13 @@ const navItemsByView = {
     ],
     // MD in "RA View" — same RA pages, scoped to MD's direct reportees on backend
     MD_AS_RA: [
-        { path: '/ra',                     label: 'RA Dashboard',        icon: <FiHome /> },
-        { path: '/ra/employees',           label: 'My Employees',        icon: <FiUsers /> },
-        { path: '/ra/monthly-evaluation',  label: 'Monthly Evaluation',  icon: <FiClipboard /> },
-        { path: '/ra/quarterly-evaluation',label: 'Quarterly Evaluation',icon: <FiBarChart2 /> },
-        { path: '/ra/yearly-appraisal',    label: 'Yearly Appraisal',   icon: <FiAward /> },
-        { path: '/md/profile',             label: 'My Profile',          icon: <FiUser /> },
+        { path: '/ra',                        label: 'RA Dashboard',         icon: <FiHome /> },
+        { path: '/ra/employees',              label: 'My Employees',         icon: <FiUsers /> },
+        { path: '/ra/monthly-evaluation',     label: 'Monthly Evaluation',   icon: <FiClipboard /> },
+        { path: '/ra/deadline-management',    label: 'Deadline Management',  icon: <FiClock /> },
+        { path: '/ra/quarterly-evaluation',   label: 'Quarterly Evaluation', icon: <FiBarChart2 /> },
+        { path: '/ra/yearly-appraisal',       label: 'Yearly Appraisal',    icon: <FiAward /> },
+        { path: '/md/profile',                label: 'My Profile',           icon: <FiUser /> },
     ],
 };
 

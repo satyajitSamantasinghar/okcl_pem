@@ -44,6 +44,12 @@ const {
 
 const { Op } = require("sequelize");
 
+// Deadline helpers — mirrors raController imports so we can compute effective deadlines
+const { parseDeadlineConfig, normalizeRole, getExtensionCeiling } = require("./configController");
+const { getEffectiveDeadline } = require("../utils/deadlineResolver");
+const { buildDeadlineDate } = require("../utils/dateHelpers");
+
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. SUBMIT MONTHLY PLAN
 //    CHANGE I: planItems array → MonthlyPlanItem rows in a transaction
@@ -870,5 +876,79 @@ exports.getYearlyAppraisalReports = async (req, res) => {
     res.json(reports);
   } catch (error) {
     res.status(500).json({ message: "Failed to fetch yearly appraisal reports" });
+  }
+};
+
+/* ─── GET MY DEADLINE CONTEXT ───────────────────────────────────────────────────
+   GET /api/employee/my-deadline-context
+   Query params: month (1-12), year, type (PLAN|ACHIEVEMENT)
+
+   Employee-facing counterpart of the RA's GET /ra/extend-deadline/context.
+   Always scoped to req.user.userId so any authenticated employee (or RA in
+   employee-mode) can check their OWN effective deadline without RA credentials.
+
+   Returns:
+     { type, month, year, baseDeadline, effectiveDeadline,
+       isExtended, extensionCount, maxDate, minDate }
+────────────────────────────────────────────────────────────────── */
+exports.getMyDeadlineContext = async (req, res) => {
+  try {
+    const employeeId = req.user.userId;
+    const { month, year, type } = req.query;
+
+    if (!month || !year || !type) {
+      return res.status(400).json({ message: "month, year, and type are required." });
+    }
+
+    const monthNum = parseInt(month, 10);
+    const yearNum  = parseInt(year, 10);
+    const typeUpper = type.toUpperCase();
+
+    if (!["PLAN", "ACHIEVEMENT"].includes(typeUpper)) {
+      return res.status(400).json({ message: "type must be PLAN or ACHIEVEMENT" });
+    }
+    if (isNaN(monthNum) || monthNum < 1 || monthNum > 12) {
+      return res.status(400).json({ message: "month must be 1-12" });
+    }
+    if (isNaN(yearNum) || yearNum < 2000 || yearNum > 2100) {
+      return res.status(400).json({ message: "year is invalid" });
+    }
+
+    const empRole  = normalizeRole(req.user.role);
+    const config   = parseDeadlineConfig(empRole);
+
+    // Compute base deadline for this type
+    const baseDeadline = typeUpper === "PLAN"
+      ? buildDeadlineDate(yearNum, monthNum, config.planDay, 0, true)
+      : buildDeadlineDate(yearNum, monthNum, config.achievementDay, config.achievementDeadlineMonthOffset, true);
+
+    // Check for an RA-granted extension
+    const { effectiveDeadline, isExtended, extensionCount } = await getEffectiveDeadline({
+      employeeId,
+      month: monthNum,
+      year:  yearNum,
+      type:  typeUpper,
+      baseDeadline,
+    });
+
+    // Ceiling (used by the frontend date-picker if ever shown)
+    const ceiling = getExtensionCeiling(empRole, typeUpper, monthNum, yearNum);
+    const now     = new Date();
+    const monthStr = `${yearNum}-${String(monthNum).padStart(2, "0")}`;
+
+    res.json({
+      type:              typeUpper,
+      month:             monthStr,
+      year:              yearNum,
+      baseDeadline:      baseDeadline.toISOString().split("T")[0],
+      effectiveDeadline: effectiveDeadline.toISOString().split("T")[0],
+      isExtended,
+      extensionCount,
+      isWithinDeadline:  now <= effectiveDeadline,
+      minDate:           now.toISOString().split("T")[0],
+      maxDate:           ceiling.toISOString().split("T")[0],
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to load deadline context", error: error.message });
   }
 };
