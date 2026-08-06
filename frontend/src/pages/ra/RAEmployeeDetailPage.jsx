@@ -601,7 +601,7 @@ const availableYears = Array.from(fySet).sort((a, b) =>
                         <div>
                             <div className="dmod-sec-lbl">
                                 <FiFileText size={13} />
-                                {ach && ach.status !== 'DRAFT' ? 'Plans & achievements' : 'Plan details'}
+                                {ach && ach.status !== 'DRAFT' ? 'Plans & progress' : 'Plan details'}
                                 <span className="dmod-sec-count-pill">{planItemsList.length} plan{planItemsList.length !== 1 ? 's' : ''}</span>
                             </div>
 
@@ -669,7 +669,7 @@ const availableYears = Array.from(fySet).sort((a, b) =>
                                                     </div>
                                                     <div className="dmod-ach-section">
                                                         <div className="dmod-ach-lbl">
-                                                            <FiTrendingUp size={11} /> Achievement details
+                                                            <FiTrendingUp size={11} /> Progress details
                                                         </div>
                                                         {pa.achievementDetails
                                                             ? <div className="dmod-ach-text">{pa.achievementDetails}</div>
@@ -686,7 +686,7 @@ const availableYears = Array.from(fySet).sort((a, b) =>
                             {/* Case C — achievement submitted but fully legacy text only */}
                             {ach && ach.status !== 'DRAFT' && !hasStructuredAch && ach.achievementDetails && (
                                 <div className="dmod-legacy-ach">
-                                    <div className="dmod-ach-lbl"><FiTrendingUp size={11} /> Achievement</div>
+                                    <div className="dmod-ach-lbl"><FiTrendingUp size={11} /> Progress Details</div>
                                     <div className="dmod-ach-text">{ach.achievementDetails}</div>
                                 </div>
                             )}
@@ -708,7 +708,7 @@ const availableYears = Array.from(fySet).sort((a, b) =>
                         {additionalItems.length > 0 && (
                             <div className="dmod-extras-card">
                                 <div className="dmod-extras-hdr">
-                                    <div className="dmod-extras-title"><FiStar size={13} /> Additional achievements</div>
+                                    <div className="dmod-extras-title"><FiStar size={13} /> Additional work done with progress</div>
                                     <span className="dmod-extras-badge">{additionalItems.length} extra{additionalItems.length !== 1 ? 's' : ''}</span>
                                 </div>
                                 {additionalItems.map((item, i) => {
@@ -777,7 +777,7 @@ const availableYears = Array.from(fySet).sort((a, b) =>
                                         <span className="dmod-ext-title">
                                             DEADLINE EXTENDED
                                             <span className="dmod-ext-type-pill">
-                                                {ext.type === 'PLAN' ? 'Plan' : 'Achievement'}
+                                                {ext.type === 'PLAN' ? 'Plan' : 'Progress'}
                                             </span>
                                         </span>
                                     </div>
@@ -823,7 +823,7 @@ const availableYears = Array.from(fySet).sort((a, b) =>
                     {/* ── FOOTER ── */}
                     <div className="dmod-footer">
                         <span className="dmod-ftr-state">
-                            {isEval ? 'Evaluated' : plan.hasAchievement ? 'Awaiting RA review' : 'Achievement pending'}
+                            {isEval ? 'Evaluated' : plan.hasAchievement ? 'Awaiting RA review' : 'Progress pending'}
                         </span>
                         <button className="dmod-btn-close" onClick={() => setSelectedMonthDetail(null)}>Close</button>
                     </div>
@@ -1372,7 +1372,7 @@ const availableYears = Array.from(fySet).sort((a, b) =>
                                             </td>
                                             <td>
                                                 <span className={`red-ext-type-chip red-ext-type-chip--${ext.type?.toLowerCase()}`}>
-                                                    {ext.type === 'PLAN' ? '📋 Plan' : '🏆 Achievement'}
+                                                    {ext.type === 'PLAN' ? '📋 Plan' : '🏆 Progress'}
                                                 </span>
                                             </td>
                                             <td className="red-date-cell red-ext-old-date">

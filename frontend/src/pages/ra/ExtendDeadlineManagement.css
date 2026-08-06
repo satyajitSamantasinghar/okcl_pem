@@ -464,6 +464,7 @@
   margin-top: 2px;
 }
 
+/* Submitted — employee has submitted for review (blue = in-review, industry standard) */
 .edmp-submitted-chip {
   display: inline-flex;
   align-items: center;
@@ -472,9 +473,23 @@
   border-radius: 9999px;
   font-size: 0.7rem;
   font-weight: 600;
-  background: #F0FDF4;
-  color: #166534;
-  border: 1px solid #BBF7D0;
+  background: #EFF6FF;
+  color: #1D4ED8;
+  border: 1px solid #BFDBFE;
+}
+
+/* Draft — employee has saved but not submitted yet (amber = work-in-progress) */
+.edmp-draft-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: #FFFBEB;
+  color: #92400E;
+  border: 1px solid #FDE68A;
 }
 
 .edmp-missing-chip {
@@ -503,7 +518,7 @@
   border: 1px solid #FED7AA;
 }
 
-/* Evaluated — RA has scored the plan (indigo, premium feel) */
+/* Evaluated — RA has scored the plan (green = completed, industry standard) */
 .edmp-evaluated-chip {
   display: inline-flex;
   align-items: center;
@@ -512,9 +527,9 @@
   border-radius: 9999px;
   font-size: 0.7rem;
   font-weight: 600;
-  background: #EEF2FF;
-  color: #3730A3;
-  border: 1px solid #C7D2FE;
+  background: #F0FDF4;
+  color: #166534;
+  border: 1px solid #BBF7D0;
 }
 
 .edmp-na-chip {

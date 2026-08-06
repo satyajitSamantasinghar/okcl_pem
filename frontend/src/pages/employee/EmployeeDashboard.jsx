@@ -46,6 +46,30 @@ const getRelativeTime = (dateString) => {
     return formatDate(dateString);
 };
 
+// EXTENSION AWARENESS — parses a "YYYY-MM-DD" DATEONLY string (as returned by
+// GET /employee/my-deadline-context) into a local end-of-day Date. Mirrors
+// parseDateOnlyEndOfDay() in DeadlineContext.jsx so both sides agree on what
+// "the deadline" means down to the millisecond.
+const parseDateOnlyEndOfDay = (dateStr) => {
+    if (!dateStr || typeof dateStr !== 'string') return null;
+    const [y, m, d] = dateStr.split('-').map(Number);
+    if (!y || !m || !d) return null;
+    return new Date(y, m - 1, d, 23, 59, 59, 999);
+};
+
+// ACTION CENTER — due-by chip for a given deadline Date, relative to a
+// reference Date (pass `now` from fetchData so every chip in the same pass
+// is computed against the same instant).
+const getDueChip = (deadlineDate, referenceDate) => {
+    if (!deadlineDate) return null;
+    const ref = referenceDate || new Date();
+    const diffDays = Math.floor((deadlineDate.getTime() - ref.getTime()) / (1000 * 60 * 60 * 24));
+    if (diffDays < 0) return { label: `${Math.abs(diffDays)}d overdue`, tone: 'danger' };
+    if (diffDays === 0) return { label: 'Due today', tone: 'warning' };
+    if (diffDays <= 2) return { label: `Due in ${diffDays}d`, tone: 'warning' };
+    return { label: `Due in ${diffDays}d`, tone: 'neutral' };
+};
+
 const EmployeeDashboard = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
@@ -70,7 +94,13 @@ const EmployeeDashboard = () => {
         if (isConfigLoading) return; // Wait for config to load so deadlines are correct
         const fetchData = async () => {
             try {
-                const [plansRes, achievementsRes, yearlyRes, quarterlyRes, evalsRes, appraisalRes] = await Promise.all([
+                const now = new Date();
+                const currentMonthString = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+                const [
+                    plansRes, achievementsRes, yearlyRes, quarterlyRes, evalsRes, appraisalRes,
+                    planDeadlineCtxRes, achDeadlineCtxRes
+                ] = await Promise.all([
                     api.get('/employee/monthly-plans'),
                     api.get('/employee/monthly-achievements'),
                     api.get('/employee/yearly-plans'),
@@ -81,7 +111,18 @@ const EmployeeDashboard = () => {
                     // selfView=true: return monthly evaluations where this user IS the
                     // employee being evaluated, not the RA who evaluated others.
                     api.get('/ra/monthly-evaluations', { params: { limit: 100, selfView: 'true' } }),
-                    api.get('/employee/yearly-appraisal-reports').catch(() => ({ data: [] }))
+                    api.get('/employee/yearly-appraisal-reports').catch(() => ({ data: [] })),
+                    // EXTENSION AWARENESS — own-user counterpart of the RA's
+                    // /ra/extend-deadline/context endpoint (GET /employee/my-deadline-context).
+                    // Scoped server-side to req.user.userId, so any employee can check their
+                    // OWN effective deadline without RA credentials. Falls back to null on any
+                    // error so the dashboard degrades gracefully to the BASE deadline.
+                    api.get('/employee/my-deadline-context', {
+                        params: { month: now.getMonth() + 1, year: now.getFullYear(), type: 'PLAN' }
+                    }).catch(() => null),
+                    api.get('/employee/my-deadline-context', {
+                        params: { month: now.getMonth() + 1, year: now.getFullYear(), type: 'ACHIEVEMENT' }
+                    }).catch(() => null),
                 ]);
 
                 const plans = plansRes.data || [];
@@ -89,6 +130,8 @@ const EmployeeDashboard = () => {
                 const yearly = yearlyRes.data || [];
                 const evals = evalsRes.data?.data || [];
                 const appraisals = appraisalRes.data || [];
+                const planCtx = planDeadlineCtxRes?.data || null;
+                const achCtx = achDeadlineCtxRes?.data || null;
 
                 setStats({
                     monthlyPlans: plans.length,
@@ -97,16 +140,65 @@ const EmployeeDashboard = () => {
                     quarterlyEvals: quarterlyRes.data?.totalRecords || 0,
                 });
 
-                // --- 1. Compute Action Items ---
-                const actions = [];
-                const activities = [];
-                const remarks = [];
-
-                const now = new Date();
-                const currentMonthString = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
                 // FISCAL YEAR FIX — was: getMonth() >= 3 ? year : year-1
                 // Using getFiscalYearShort() from fiscalUtils for consistency
                 const currentFinancialYear = getFiscalYearShort(now);
+
+                // --- 1. Resolve EFFECTIVE (extension-aware) deadlines for the current month ---
+                // Monthly Plan — falls back to the BASE config deadline if the context call failed.
+                const planDeadline = planCtx
+                    ? parseDateOnlyEndOfDay(planCtx.effectiveDeadline)
+                    : getPlanDeadline(currentMonthString);
+                const planIsExtended = !!planCtx?.isExtended;
+                const planOriginalDeadline = planIsExtended && planCtx?.baseDeadline
+                    ? parseDateOnlyEndOfDay(planCtx.baseDeadline)
+                    : null;
+                const planExtensionReason = planIsExtended ? (planCtx?.reason || null) : null;
+                const planExtendedAt = planIsExtended ? (planCtx?.extendedAt || null) : null;
+                // BUG FIX: Use Math.floor so that when the deadline IS today (fraction < 1 day remaining)
+                // it correctly resolves to 0 ("Today") instead of 1. Math.ceil incorrectly rounded
+                // 0.54 days → 1, hiding the "Today" display and skewing urgency checks.
+                const planDiff = planDeadline
+                    ? Math.floor((planDeadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+                    : 999;
+
+                // Achievement window: bounded on both sides —
+                // getAchievementWindowStart() = opens (BASE — window-open is never extended),
+                // effective achievement deadline = closes (extension-aware).
+                const achStart = getAchievementWindowStart(currentMonthString);
+                const achDeadline = achCtx
+                    ? parseDateOnlyEndOfDay(achCtx.effectiveDeadline)
+                    : getAchievementDeadline(currentMonthString);
+                const achIsExtended = !!achCtx?.isExtended;
+                const achOriginalDeadline = achIsExtended && achCtx?.baseDeadline
+                    ? parseDateOnlyEndOfDay(achCtx.baseDeadline)
+                    : null;
+                const achExtensionReason = achIsExtended ? (achCtx?.reason || null) : null;
+                const achExtendedAt = achIsExtended ? (achCtx?.extendedAt || null) : null;
+                const windowNotYetOpen = achStart && now < achStart;
+
+                // BUG FIX: Same Math.floor fix — deadline on last day of month with "last" config
+                // was yielding achDiff=1 all day, so the "Today" badge never appeared.
+                const achDiff = achDeadline
+                    ? Math.floor((achDeadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+                    : 999;
+                const achStartDiff = achStart
+                    ? Math.floor((achStart.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+                    : 999;
+
+                const currMonthDisplay = new Date(now.getFullYear(), now.getMonth()).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+                // Yearly Plan / Appraisal deadlines have no extension mechanism —
+                // DeadlineExtension only covers type PLAN/ACHIEVEMENT (see raController.js
+                // extendDeadline validation) — so these stay BASE-only, as before.
+                const fyStartYear = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+                const fyEndYear = fyStartYear + 1;
+                const yearlyPlanDeadline = new Date(fyStartYear, 3, 30, 23, 59, 59);
+
+                // --- 2. Compute Action Items ---
+                const actions = [];
+                const activities = [];
+                const remarks = [];
 
                 // Check Monthly Plan for current month
                 const currentPlan = plans.find(p => p.month === currentMonthString);
@@ -118,7 +210,9 @@ const EmployeeDashboard = () => {
                         title: 'Submit Monthly Plan',
                         desc: `Your plan for ${md} is missing.`,
                         link: '/employee/monthly-plan',
-                        btnText: 'Submit Now'
+                        btnText: 'Submit Now',
+                        dueChip: getDueChip(planDeadline, now),
+                        isExtended: planIsExtended,
                     });
                 }
 
@@ -126,27 +220,37 @@ const EmployeeDashboard = () => {
                 plans.forEach(plan => {
                     const monthParts = plan.month.split('-');
                     const monthDisplay = new Date(monthParts[0], parseInt(monthParts[1]) - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+                    const isCurrentMonth = plan.month === currentMonthString;
 
                     if (plan.status === 'REJECTED') {
+                        // Other-month due-by context uses the BASE deadline (synchronous,
+                        // no extra network round-trip per historical plan). The current
+                        // month reuses the already-fetched EFFECTIVE deadline above.
+                        const baseDl = isCurrentMonth ? planDeadline : getPlanDeadline(plan.month);
                         actions.push({
                             id: `resubmit_plan_${plan.id}`,
                             type: 'danger',
                             title: `Resubmit Monthly Plan`,
                             desc: `Your plan for ${monthDisplay} was rejected by your Reporting Authority (RA).`,
                             link: '/employee/monthly-plan',
-                            btnText: 'Resubmit'
+                            btnText: 'Resubmit',
+                            dueChip: getDueChip(baseDl, now),
+                            isExtended: isCurrentMonth && planIsExtended,
                         });
                     } else if (['PENDING', 'APPROVED', 'RA_EVALUATED'].includes(plan.status)) {
                         // Check if achievement submitted
                         const achievement = achievements.find(a => a.monthlyPlanId?.id === plan.id || a.monthlyPlanId === plan.id);
                         if (!achievement || achievement.status === 'DRAFT') {
+                            const achDl = isCurrentMonth ? achDeadline : getAchievementDeadline(plan.month);
                             actions.push({
                                 id: `submit_ach_${plan.id}`,
                                 type: 'primary',
                                 title: `Submit Monthly Progress`,
                                 desc: `Pending progress submission for ${monthDisplay}.`,
                                 link: '/employee/monthly-plan',
-                                btnText: 'Submit Progress'
+                                btnText: 'Submit Progress',
+                                dueChip: getDueChip(achDl, now),
+                                isExtended: isCurrentMonth && achIsExtended,
                             });
                         }
                     }
@@ -161,49 +265,26 @@ const EmployeeDashboard = () => {
                         title: 'Submit Yearly Plan',
                         desc: `Your yearly plan for FY ${currentFinancialYear} is pending.`,
                         link: '/employee/yearly-plan',
-                        btnText: 'Submit Yearly Plan'
+                        btnText: 'Submit Yearly Plan',
+                        dueChip: getDueChip(yearlyPlanDeadline, now),
                     });
                 }
 
                 setActionItems(actions);
 
-                // --- 2. Compute Deadlines ---
+                // --- 3. Compute Upcoming Deadlines (all active types, extension-aware) ---
                 const dls = [];
-                const fyStartYear = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
-                const fyEndYear = fyStartYear + 1;
-
-                // Monthly Plan Deadline: from centralized config (env MONTHLY_PLAN_DEADLINE_DAY)
-                const planDeadline = getPlanDeadline(currentMonthString);
-                // BUG FIX: Use Math.floor so that when the deadline IS today (fraction < 1 day remaining)
-                // it correctly resolves to 0 ("Today") instead of 1. Math.ceil incorrectly rounded
-                // 0.54 days → 1, hiding the "Today" display and skewing urgency checks.
-                const planDiff = planDeadline
-                    ? Math.floor((planDeadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
-                    : 999;
-
-                // Achievement window: bounded on both sides —
-                // getAchievementWindowStart() = opens, getAchievementDeadline() = closes.
-                const achStart = getAchievementWindowStart(currentMonthString);
-                const achDeadline = getAchievementDeadline(currentMonthString);
-                const windowNotYetOpen = achStart && now < achStart;
-
-                // BUG FIX: Same Math.floor fix — deadline on last day of month with "last" config
-                // was yielding achDiff=1 all day, so the "Today" badge never appeared.
-                const achDiff = achDeadline
-                    ? Math.floor((achDeadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
-                    : 999;
-                const achStartDiff = achStart
-                    ? Math.floor((achStart.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
-                    : 999;
-
-                const currMonthDisplay = new Date(now.getFullYear(), now.getMonth()).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
                 if (!currentPlan && planDiff >= -10) { // Limit showing overdue deadlines to a reasonable amount
                     dls.push({
                         title: `Monthly Plan (${currMonthDisplay})`,
                         date: planDeadline,
                         days: planDiff,
-                        critical: planDiff <= 2
+                        critical: planDiff <= 2,
+                        isExtended: planIsExtended,
+                        originalDate: planOriginalDeadline,
+                        extensionReason: planExtensionReason,
+                        extendedAt: planExtendedAt,
                     });
                 }
 
@@ -236,14 +317,17 @@ const EmployeeDashboard = () => {
                         title: `Monthly Progress(${currMonthDisplay})`,
                         date: achDeadline,
                         days: achDiff,
-                        critical: achDiff <= 3
+                        critical: achDiff <= 3,
+                        isExtended: achIsExtended,
+                        originalDate: achOriginalDeadline,
+                        extensionReason: achExtensionReason,
+                        extendedAt: achExtendedAt,
                     });
                 }
 
                 // Yearly Plan Deadline: 30 April of FY start year
-                const yearlyPlanDeadline = new Date(fyStartYear, 3, 30, 23, 59, 59);
                 const yearlyPlanDiff = Math.ceil((yearlyPlanDeadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-                
+
                 if (!currentYearly && yearlyPlanDiff >= -30) {
                     dls.push({
                         title: `Yearly Plan (FY ${currentFinancialYear})`,
@@ -274,7 +358,7 @@ const EmployeeDashboard = () => {
 
                 setDeadlines(dls.sort((a, b) => a.days - b.days));
 
-                // --- 3. Compute Recent Activity ---
+                // --- 4. Compute Recent Activity ---
                 plans.forEach(p => activities.push({
                     type: 'Plan ' + p.status,
                     desc: `Monthly Plan for ${p.month}`,
@@ -297,7 +381,7 @@ const EmployeeDashboard = () => {
                 activities.sort((a, b) => b.date - a.date);
                 setRecentActivity(activities.slice(0, 5));
 
-                // --- 4. Compute Latest Remarks ---
+                // --- 5. Compute Latest Remarks (color-coded by type; includes extension events) ---
                 try {
                     plans.forEach(p => {
                         // Show raRemarks (new rejection reason) — fall back to mdRemarks for old data
@@ -305,7 +389,7 @@ const EmployeeDashboard = () => {
                         if (rejectionRemark && typeof rejectionRemark === 'string' && rejectionRemark.trim() !== '') {
                             const monthParts = p.month ? p.month.split('-') : [];
                             const mDisp = monthParts.length === 2 ? new Date(monthParts[0], parseInt(monthParts[1]) - 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : 'Unknown Month';
-                            remarks.push({ source: 'RA', text: rejectionRemark, context: `Plan ${mDisp} (Rejection Reason)`, date: new Date(p.updatedAt || p.submittedAt || p.createdAt || Date.now()) });
+                            remarks.push({ source: 'RA', type: 'rejection', text: rejectionRemark, context: `Plan ${mDisp} (Rejection Reason)`, date: new Date(p.updatedAt || p.submittedAt || p.createdAt || Date.now()) });
                         }
                     });
 
@@ -313,16 +397,40 @@ const EmployeeDashboard = () => {
                         if (ev.remarks && typeof ev.remarks === 'string' && ev.remarks.trim() !== '') {
                             const monthParts = ev.month ? ev.month.split('-') : [];
                             const mDisp = monthParts.length === 2 ? new Date(monthParts[0], parseInt(monthParts[1]) - 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : 'Unknown Month';
-                            remarks.push({ source: 'RA', text: ev.remarks, context: `Evaluation ${mDisp}`, date: new Date(ev.updatedAt || ev.createdAt || Date.now()) });
+                            remarks.push({ source: 'RA', type: 'evaluation', text: ev.remarks, context: `Evaluation ${mDisp}`, date: new Date(ev.updatedAt || ev.createdAt || Date.now()) });
                         }
                     });
 
                     const qEvals = Array.isArray(quarterlyRes.data) ? quarterlyRes.data : (quarterlyRes.data?.data || []);
                     qEvals.forEach(q => {
-                        if (q.mdRemarks && typeof q.mdRemarks === 'string' && q.mdRemarks.trim() !== '') remarks.push({ source: 'MD', text: q.mdRemarks, context: `Q-Eval FY ${q.financialYear || ''}`, date: new Date(q.updatedAt || q.createdAt || Date.now()) });
-                        if (q.hrdRemarks && typeof q.hrdRemarks === 'string' && q.hrdRemarks.trim() !== '') remarks.push({ source: 'HRD', text: q.hrdRemarks, context: `Q-Eval FY ${q.financialYear || ''}`, date: new Date(q.updatedAt || q.createdAt || Date.now()) });
-                        if (q.raRemarks && typeof q.raRemarks === 'string' && q.raRemarks.trim() !== '') remarks.push({ source: 'RA', text: q.raRemarks, context: `Q-Eval FY ${q.financialYear || ''}`, date: new Date(q.updatedAt || q.createdAt || Date.now()) });
+                        if (q.mdRemarks && typeof q.mdRemarks === 'string' && q.mdRemarks.trim() !== '') remarks.push({ source: 'MD', type: 'evaluation', text: q.mdRemarks, context: `Q-Eval FY ${q.financialYear || ''}`, date: new Date(q.updatedAt || q.createdAt || Date.now()) });
+                        if (q.hrdRemarks && typeof q.hrdRemarks === 'string' && q.hrdRemarks.trim() !== '') remarks.push({ source: 'HRD', type: 'evaluation', text: q.hrdRemarks, context: `Q-Eval FY ${q.financialYear || ''}`, date: new Date(q.updatedAt || q.createdAt || Date.now()) });
+                        if (q.raRemarks && typeof q.raRemarks === 'string' && q.raRemarks.trim() !== '') remarks.push({ source: 'RA', type: 'evaluation', text: q.raRemarks, context: `Q-Eval FY ${q.financialYear || ''}`, date: new Date(q.updatedAt || q.createdAt || Date.now()) });
                     });
+
+                    // SURFACE EXTENSION EVENTS — the same signal that already powers the
+                    // in-system Notification row on the backend (raController.js
+                    // extendDeadline → Notification.create when notifyEmployee=true) is
+                    // rendered here as a distinct, color-coded "SYSTEM" remark so the
+                    // employee sees it in-context without hunting through other pages.
+                    if (planIsExtended && planExtendedAt) {
+                        remarks.push({
+                            source: 'RA',
+                            type: 'extension',
+                            text: planExtensionReason || 'Your Reporting Authority extended this deadline.',
+                            context: `Plan ${currMonthDisplay} — Deadline Extended`,
+                            date: new Date(planExtendedAt),
+                        });
+                    }
+                    if (achIsExtended && achExtendedAt) {
+                        remarks.push({
+                            source: 'RA',
+                            type: 'extension',
+                            text: achExtensionReason || 'Your Reporting Authority extended this deadline.',
+                            context: `Monthly Progress ${currMonthDisplay} — Deadline Extended`,
+                            date: new Date(achExtendedAt),
+                        });
+                    }
 
                     remarks.sort((a, b) => b.date.getTime() - a.date.getTime());
 
@@ -469,6 +577,18 @@ const EmployeeDashboard = () => {
                                             <div>
                                                 <h4>{item.title}</h4>
                                                 <p>{item.desc}</p>
+                                                {(item.dueChip || item.isExtended) && (
+                                                    <div className="emp-dash-action-chips">
+                                                        {item.dueChip && (
+                                                            <span className={`emp-dash-action-chip chip--${item.dueChip.tone}`}>
+                                                                {item.dueChip.label}
+                                                            </span>
+                                                        )}
+                                                        {item.isExtended && (
+                                                            <span className="emp-dash-action-chip chip--extended">Extended</span>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                         <button className={`btn ${item.type === 'danger' || item.type === 'primary' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => navigate(item.link)}>
@@ -519,10 +639,32 @@ const EmployeeDashboard = () => {
                                 <p className="emp-dash-muted">No immediate deadlines.</p>
                             ) : (
                                 deadlines.map((dl, i) => (
-                                    <div key={i} className={`emp-dash-dl-card ${dl.critical ? 'emp-dash-dl--critical' : ''}`}>
+                                    <div key={i} className={`emp-dash-dl-card ${dl.critical ? 'emp-dash-dl--critical' : ''} ${dl.isExtended ? 'emp-dash-dl--extended' : ''}`}>
                                         <div className="emp-dash-dl-info">
-                                            <strong>{dl.title}</strong>
-                                            <span>{formatDate(dl.date)}</span>
+                                            <div className="emp-dash-dl-title-row">
+                                                <strong>{dl.title}</strong>
+                                                {dl.isExtended && (
+                                                    <span
+                                                        className="emp-dash-dl-extended-badge"
+                                                        tabIndex={0}
+                                                        data-tooltip={
+                                                            dl.extensionReason
+                                                                ? `Extended on ${formatDate(dl.extendedAt)} — "${dl.extensionReason}"`
+                                                                : 'Deadline extended by your Reporting Authority'
+                                                        }
+                                                    >
+                                                        Extended
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {dl.isExtended && dl.originalDate ? (
+                                                <span>
+                                                    <span className="emp-dash-dl-original">{formatDate(dl.originalDate)}</span>{' '}
+                                                    <span className="emp-dash-dl-effective">→ {formatDate(dl.date)}</span>
+                                                </span>
+                                            ) : (
+                                                <span>{formatDate(dl.date)}</span>
+                                            )}
                                         </div>
                                         <div className={`emp-dash-dl-days ${dl.days < 0 ? 'overdue' : ''}`}>
                                             {dl.days === 0
@@ -548,7 +690,7 @@ const EmployeeDashboard = () => {
                                 <p className="emp-dash-muted">No remarks available yet.</p>
                             ) : (
                                 latestRemarks.map((rem, i) => (
-                                    <div key={i} className="emp-dash-remark-card">
+                                    <div key={i} className={`emp-dash-remark-card ${rem.type ? `remark--${rem.type}` : ''}`}>
                                         <div className="emp-dash-remark-head">
                                             <span className={`emp-dash-remark-source source-${rem.source.toLowerCase()}`}>
                                                 {rem.source}

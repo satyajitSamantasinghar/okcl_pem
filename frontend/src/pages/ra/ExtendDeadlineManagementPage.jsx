@@ -96,7 +96,7 @@ const DeadlineHistoryModal = ({ params, onClose, onExtend, canExtend }) => {
             <div className="edmp-hist-modal" onClick={e => e.stopPropagation()}>
                 <div className="edmp-hist-header">
                     <h3 className="edmp-hist-title">
-                        Extension History — {params.type === 'PLAN' ? '📋 Plan' : '🏆 Achievement'}
+                        Extension History — {params.type === 'PLAN' ? '📋 Plan' : '🏆 Progress'}
                     </h3>
                     <button className="edmp-hist-close" onClick={onClose}><FiX /></button>
                 </div>
@@ -188,12 +188,19 @@ const DeadlineHistoryModal = ({ params, onClose, onExtend, canExtend }) => {
    Muted non-clickable badge shown instead of an Extend button
    when isStillExtendable === false.
 ════════════════════════════════════════════════════════════ */
-const WindowClosedBadge = ({ closedAt }) => (
+/* `maxedOut` distinguishes two different reasons the Extend button is gone:
+     - maxedOut=false → today has passed the ceiling date (a true time-expired window)
+     - maxedOut=true  → the deadline has already been extended all the way to
+                         the ceiling; the window itself may still be "open" by
+                         date, there's just no further room to move it */
+const WindowClosedBadge = ({ closedAt, maxedOut }) => (
     <span
         className="edmp-window-closed"
-        title={`Extension window closed on ${fmtDate(closedAt)}`}
+        title={maxedOut
+            ? `Already extended to the maximum allowed date (${fmtDate(closedAt)}).`
+            : `Extension window closed on ${fmtDate(closedAt)}`}
     >
-        🔒 Window closed
+        🔒 {maxedOut ? 'Max reached' : 'Window closed'}
         {closedAt && (
             <span className="edmp-window-closed-date">on {fmtDate(closedAt)}</span>
         )}
@@ -359,7 +366,7 @@ const OutstandingTab = () => {
                                 <td>{fmtMonth(item.month)}</td>
                                 <td>
                                     <span className={item.type === 'PLAN' ? 'edmp-type-plan' : 'edmp-type-achievement'}>
-                                        {item.type === 'PLAN' ? '📋 Plan' : '🏆 Achievement'}
+                                        {item.type === 'PLAN' ? '📋 Plan' : '🏆 Progress'}
                                     </span>
                                 </td>
                                 <td>
@@ -404,7 +411,7 @@ const OutstandingTab = () => {
                                                     month: parseInt(item.month.split('-')[1], 10),
                                                     year: parseInt(item.month.split('-')[0], 10),
                                                 },
-                                                missingType: item.type === 'PLAN' ? 'plan' : 'achievement',
+                                                missingType: item.type === 'PLAN' ? 'plan' : 'progress',
                                             });
                                         }}
                                     >
@@ -445,7 +452,7 @@ const OutstandingTab = () => {
                                 month: parseInt(r.month.split('-')[1], 10),
                                 year: parseInt(r.month.split('-')[0], 10),
                             },
-                            missingType: r.type === 'PLAN' ? 'plan' : 'achievement',
+                            missingType: r.type === 'PLAN' ? 'plan' : 'Progress',
                         });
                         setHistParams(null);
                     }}
@@ -554,7 +561,7 @@ const ExpiredSection = ({ expiredCount, expiredOpen, expiredLoading, expiredItem
                                     <td style={{ color: '#6B7280' }}>{fmtMonth(item.month)}</td>
                                     <td>
                                         <span className={item.type === 'PLAN' ? 'edmp-type-plan' : 'edmp-type-achievement'}>
-                                            {item.type === 'PLAN' ? '📋 Plan' : '🏆 Achievement'}
+                                            {item.type === 'PLAN' ? '📋 Plan' : '🏆 Progress'}
                                         </span>
                                     </td>
                                     <td><span className="edmp-deadline">{fmtDate(item.baseDeadline)}</span></td>
@@ -621,7 +628,7 @@ const ByMonthTab = () => {
         setExtendTarget({
             employee: { id: emp.employeeId, name: emp.employeeName, employeeCode: emp.employeeCode, department: emp.department },
             monthYear: { month: m, year: y },
-            missingType: type === 'PLAN' ? 'plan' : 'achievement',
+            missingType: type === 'PLAN' ? 'plan' : 'Progress',
         });
     };
 
@@ -670,9 +677,9 @@ const ByMonthTab = () => {
                                 <th>Plan Status</th>
                                 <th>Plan Deadline</th>
                                 <th>Plan Extensions</th>
-                                <th>Achievement Status</th>
-                                <th>Achievement Deadline</th>
-                                <th>Ach. Extensions</th>
+                                <th>Progress Status</th>
+                                <th>Progress Deadline</th>
+                                <th>Progress Extensions</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -700,12 +707,14 @@ const ByMonthTab = () => {
                                            REJECTED  → RA sent back for revision */}
                                     <td>
                                         {emp.plan.status === 'MISSING'
-                                            ? <span className="edmp-missing-chip">✗ Missing</span>
+                                            ? <span className="edmp-missing-chip">Missing</span>
                                             : emp.plan.status === 'REJECTED'
-                                                ? <span className="edmp-rejected-chip">↩ Rejected</span>
+                                                ? <span className="edmp-rejected-chip">Rejected</span>
                                                 : emp.plan.status === 'EVALUATED'
-                                                    ? <span className="edmp-evaluated-chip">★ Evaluated</span>
-                                                    : <span className="edmp-submitted-chip">✓ {planStatusLabel(emp.plan.status)}</span>
+                                                    ? <span className="edmp-evaluated-chip">✓ Evaluated</span>
+                                                    : emp.plan.status === 'DRAFT'
+                                                        ? <span className="edmp-draft-chip">✎ Draft</span>
+                                                        : <span className="edmp-submitted-chip">↑ {planStatusLabel(emp.plan.status)}</span>
                                         }
                                     </td>
                                     {/* Plan deadline */}
@@ -735,8 +744,14 @@ const ByMonthTab = () => {
                                         {emp.achievement.status === 'N/A'
                                             ? <span className="edmp-na-chip">N/A (no plan)</span>
                                             : emp.achievement.status === 'MISSING'
-                                                ? <span className="edmp-missing-chip">✗ Missing</span>
-                                                : <span className="edmp-submitted-chip">✓ {emp.achievement.status}</span>
+                                                ? <span className="edmp-missing-chip">Missing</span>
+                                                : emp.achievement.status === 'DRAFT'
+                                                    ? <span className="edmp-draft-chip">✎ Draft</span>
+                                                    : emp.achievement.status === 'EVALUATED'
+                                                        ? <span className="edmp-evaluated-chip">✓ Evaluated</span>
+                                                        : emp.achievement.status === 'REJECTED'
+                                                            ? <span className="edmp-rejected-chip">Rejected</span>
+                                                            : <span className="edmp-submitted-chip">↑ {planStatusLabel(emp.achievement.status)}</span>
                                         }
                                     </td>
                                     {/* Achievement deadline
@@ -783,7 +798,10 @@ const ByMonthTab = () => {
                                                         Plan ⏱
                                                     </button>
                                                 ) : (
-                                                    <WindowClosedBadge closedAt={emp.plan.extensionWindowClosesAt} />
+                                                    <WindowClosedBadge
+                                                        closedAt={emp.plan.extensionWindowClosesAt}
+                                                        maxedOut={emp.plan.effectiveDeadline === emp.plan.extensionWindowClosesAt}
+                                                    />
                                                 )
                                             )}
                                             {emp.achievement.status === 'MISSING' && (
@@ -793,10 +811,13 @@ const ByMonthTab = () => {
                                                         onClick={e => { e.stopPropagation(); openExtend(emp, 'ACHIEVEMENT'); }}
                                                         title="Extend achievement deadline"
                                                     >
-                                                        Ach. ⏱
+                                                        Prog. ⏱
                                                     </button>
                                                 ) : (
-                                                    <WindowClosedBadge closedAt={emp.achievement.extensionWindowClosesAt} />
+                                                    <WindowClosedBadge
+                                                        closedAt={emp.achievement.extensionWindowClosesAt}
+                                                        maxedOut={emp.achievement.effectiveDeadline === emp.achievement.extensionWindowClosesAt}
+                                                    />
                                                 )
                                             )}
                                         </div>

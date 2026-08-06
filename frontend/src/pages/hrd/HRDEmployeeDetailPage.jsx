@@ -333,22 +333,25 @@ const HRDEmployeeDetailPage = () => {
     const filteredYearlyReports = yearlyReports.filter(y => fyMatch(y.financialYear));
     const filteredEvals = monthlyEvaluations.filter(e => monthInFY(e.month, filterYear));
 
-    /* ── Stats — UNCHANGED ── */
-    const evaluatedEvals = filteredEvals.filter(e => e.status === 'EVALUATED' && e.score > 0);
+    /* ── Stats ── */
+    // NOTE: Sequelize returns DECIMAL columns as strings, so we must parseFloat()
+    // before any arithmetic. Without it, (0 + "9.00") = "09.00" (string concat)
+    // and the subsequent division produces NaN.
+    const evaluatedEvals = filteredEvals.filter(e => e.status === 'EVALUATED' && parseFloat(e.score) > 0);
     const avgScore = evaluatedEvals.length > 0
-        ? (evaluatedEvals.reduce((s, e) => s + e.score, 0) / evaluatedEvals.length).toFixed(1)
+        ? Number((evaluatedEvals.reduce((s, e) => s + parseFloat(e.score), 0) / evaluatedEvals.length).toFixed(1))
         : '—';
 
     /* ── KPI derived ── */
-    const bestEval = evaluatedEvals.length > 0 ? evaluatedEvals.reduce((b, e) => e.score > b.score ? e : b, evaluatedEvals[0]) : null;
-    const worstEval = evaluatedEvals.length > 0 ? evaluatedEvals.reduce((w, e) => e.score < w.score ? e : w, evaluatedEvals[0]) : null;
+    const bestEval = evaluatedEvals.length > 0 ? evaluatedEvals.reduce((b, e) => parseFloat(e.score) > parseFloat(b.score) ? e : b, evaluatedEvals[0]) : null;
+    const worstEval = evaluatedEvals.length > 0 ? evaluatedEvals.reduce((w, e) => parseFloat(e.score) < parseFloat(w.score) ? e : w, evaluatedEvals[0]) : null;
     const completionRate = filteredMonths.length > 0
         ? Math.round((filteredMonths.filter(m => m.isEval).length / filteredMonths.length) * 100) : 0;
     const lastEval = evaluatedEvals.length > 0
         ? [...evaluatedEvals].sort((a, b) => b.month.localeCompare(a.month))[0] : null;
     const sortedEvalsByMonth = [...evaluatedEvals].sort((a, b) => a.month.localeCompare(b.month));
     const scoreTrend = sortedEvalsByMonth.length >= 2
-        ? sortedEvalsByMonth[sortedEvalsByMonth.length - 1].score - sortedEvalsByMonth[sortedEvalsByMonth.length - 2].score
+        ? parseFloat(sortedEvalsByMonth[sortedEvalsByMonth.length - 1].score) - parseFloat(sortedEvalsByMonth[sortedEvalsByMonth.length - 2].score)
         : null;
 
     /* ── Insight pills ── */
@@ -362,19 +365,19 @@ const HRDEmployeeDetailPage = () => {
         else if (scoreTrend < 0)
             insights.push({ icon: <FiTrendingDown />, variant: 'concern', text: `Performance dropped by −${abs} pts from ${shortMonth(prev.month)} → ${shortMonth(curr.month)}` });
         else
-            insights.push({ icon: <FiActivity />, variant: 'neutral', text: `Score remained stable at ${curr.score}/10 — consistent performance` });
+            insights.push({ icon: <FiActivity />, variant: 'neutral', text: `Score remained stable at ${Number(curr.score)}/10 — consistent performance` });
     }
-    if (worstEval && worstEval.score < 5)
-        insights.push({ icon: <FiAlertTriangle />, variant: 'warning', text: `Lowest score in ${formatMonth(worstEval.month)} (${worstEval.score}/10) — may need follow-up` });
-    if (bestEval && bestEval.score >= 8)
-        insights.push({ icon: <FiStar />, variant: 'positive', text: `Best performance in ${formatMonth(bestEval.month)} with ${bestEval.score}/10 — ${getScoreLabel(bestEval.score)} rating` });
+    if (worstEval && parseFloat(worstEval.score) < 5)
+        insights.push({ icon: <FiAlertTriangle />, variant: 'warning', text: `Lowest score in ${formatMonth(worstEval.month)} (${Number(worstEval.score)}/10) — may need follow-up` });
+    if (bestEval && parseFloat(bestEval.score) >= 8)
+        insights.push({ icon: <FiStar />, variant: 'positive', text: `Best performance in ${formatMonth(bestEval.month)} with ${Number(bestEval.score)}/10 — ${getScoreLabel(parseFloat(bestEval.score))} rating` });
     if (completionRate === 100 && filteredMonths.length > 0)
         insights.push({ icon: <FiThumbsUp />, variant: 'positive', text: `100% evaluation completion for FY ${filterYear} — all plans reviewed` });
     else if (completionRate < 50 && filteredMonths.length > 1)
         insights.push({ icon: <FiInfo />, variant: 'warning', text: `Only ${completionRate}% evaluated in FY ${filterYear} — ${filteredMonths.filter(m => !m.isEval).length} pending review` });
     if (evaluatedEvals.length >= 3) {
         const last3 = [...evaluatedEvals].sort((a, b) => b.month.localeCompare(a.month)).slice(0, 3);
-        if (last3.every(e => Math.abs(e.score - parseFloat(avgScore)) <= 1.5))
+        if (last3.every(e => Math.abs(parseFloat(e.score) - parseFloat(avgScore)) <= 1.5))
             insights.push({ icon: <FiCheckCircle />, variant: 'positive', text: `Consistent scores across the last 3 months — reliable performance pattern` });
     }
 
@@ -397,7 +400,7 @@ const HRDEmployeeDetailPage = () => {
     const getStatusBadge = plan => {
         if (plan.status === 'REJECTED') return <span className="hed-badge hed-badge--rejected">Rejected by RA</span>;
         if (plan.isEval) return <span className="hed-badge hed-badge--evaluated">Evaluated</span>;
-        if (plan.hasAchievement) return <span className="hed-badge hed-badge--achievement">Achievement Submitted</span>;
+        if (plan.hasAchievement) return <span className="hed-badge hed-badge--achievement">Progree Submitted</span>;
         return <span className="hed-badge hed-badge--submitted">Plan Submitted</span>;
     };
 
@@ -446,7 +449,7 @@ const HRDEmployeeDetailPage = () => {
         const line2 = isEval ? 'filled' : 'empty';
 
         // Status pill
-        const stLabel = isRejected ? 'Rejected' : isEval ? 'Evaluated' : plan.hasAchievement ? 'Achievement added' : 'Plan submitted';
+        const stLabel = isRejected ? 'Rejected' : isEval ? 'Evaluated' : plan.hasAchievement ? 'Progress added' : 'Plan submitted';
         const stCls = isRejected ? 'sp-rejected' : isEval ? 'sp-eval' : plan.hasAchievement ? 'sp-ach' : 'sp-plan';
 
         return createPortal(
@@ -492,7 +495,7 @@ const HRDEmployeeDetailPage = () => {
                                     ? <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" /></svg>
                                     : <FiTrendingUp size={12} />}
                             </div>
-                            <span className={`dmod-slbl dmod-slbl--${stepperAch}`}>Achievement</span>
+                            <span className={`dmod-slbl dmod-slbl--${stepperAch}`}>Progress</span>
                         </div>
                         <div className={`dmod-sline dmod-sline--${line2}`} />
                         <div className="dmod-step">
@@ -536,7 +539,7 @@ const HRDEmployeeDetailPage = () => {
                                     {ach?.submittedAt && (
                                         <span className="dmod-ts-item">
                                             <FiTrendingUp size={10} />
-                                            Achievement submitted {formatDateShort(ach.submittedAt)}
+                                            Progress submitted {formatDateShort(ach.submittedAt)}
                                         </span>
                                     )}
                                 </div>
@@ -547,7 +550,7 @@ const HRDEmployeeDetailPage = () => {
                         <div>
                             <div className="dmod-sec-lbl">
                                 <FiFileText size={13} />
-                                {ach && ach.status !== 'DRAFT' ? 'Plans & achievements' : 'Plan details'}
+                                {ach && ach.status !== 'DRAFT' ? 'Plans & Progresss' : 'Plan details'}
                                 <span className="dmod-sec-count-pill">{planItemsList.length} plan{planItemsList.length !== 1 ? 's' : ''}</span>
                             </div>
 
@@ -615,7 +618,7 @@ const HRDEmployeeDetailPage = () => {
                                                     </div>
                                                     <div className="dmod-ach-section">
                                                         <div className="dmod-ach-lbl">
-                                                            <FiTrendingUp size={11} /> Achievement details
+                                                            <FiTrendingUp size={11} /> Progress details
                                                         </div>
                                                         {pa.achievementDetails
                                                             ? <div className="dmod-ach-text">{pa.achievementDetails}</div>
@@ -632,7 +635,7 @@ const HRDEmployeeDetailPage = () => {
                             {/* Case C — achievement submitted but fully legacy text only */}
                             {ach && ach.status !== 'DRAFT' && !hasStructuredAch && ach.achievementDetails && (
                                 <div className="dmod-legacy-ach">
-                                    <div className="dmod-ach-lbl"><FiTrendingUp size={11} /> Achievement</div>
+                                    <div className="dmod-ach-lbl"><FiTrendingUp size={11} /> Progress</div>
                                     <div className="dmod-ach-text">{ach.achievementDetails}</div>
                                 </div>
                             )}
@@ -644,8 +647,8 @@ const HRDEmployeeDetailPage = () => {
                                 <div className="dmod-no-ach-icon"><FiTrendingUp size={16} /></div>
                                 <div className="dmod-no-ach-text">
                                     {ach?.status === 'DRAFT'
-                                        ? 'Achievement draft saved — not yet submitted.'
-                                        : 'Achievement not submitted yet.'}
+                                        ? 'progress draft saved — not yet submitted.'
+                                        : 'Progress not submitted yet.'}
                                 </div>
                             </div>
                         )}
@@ -654,7 +657,7 @@ const HRDEmployeeDetailPage = () => {
                         {additionalItems.length > 0 && (
                             <div className="dmod-extras-card">
                                 <div className="dmod-extras-hdr">
-                                    <div className="dmod-extras-title"><FiStar size={13} /> Additional achievements</div>
+                                    <div className="dmod-extras-title"><FiStar size={13} /> Additional work with progress</div>
                                     <span className="dmod-extras-badge">{additionalItems.length} extra{additionalItems.length !== 1 ? 's' : ''}</span>
                                 </div>
                                 {additionalItems.map((item, i) => {
@@ -723,7 +726,7 @@ const HRDEmployeeDetailPage = () => {
                     {/* ── FOOTER ── */}
                     <div className="dmod-footer">
                         <span className="dmod-ftr-state">
-                            {isEval ? 'Evaluated' : plan.hasAchievement ? 'Awaiting RA review' : 'Achievement pending'}
+                            {isEval ? 'Evaluated' : plan.hasAchievement ? 'Awaiting RA review' : 'Progress pending'}
                         </span>
                         <button className="dmod-btn-close" onClick={() => setSelectedMonthDetail(null)}>Close</button>
                     </div>
@@ -807,16 +810,16 @@ const HRDEmployeeDetailPage = () => {
                     trend={scoreTrend !== null ? (scoreTrend > 0 ? 'up' : scoreTrend < 0 ? 'down' : 'neutral') : null}
                 />
                 <KPICard label="Best Month"
-                    value={bestEval ? `${bestEval.score}/10` : '—'}
+                    value={bestEval ? `${Number(bestEval.score)}/10` : '—'}
                     sub={bestEval ? formatMonth(bestEval.month) : 'No evaluations'}
                     icon={<FiStar />} color="#22C55E" trend={bestEval ? 'up' : null}
                 />
                 <KPICard label="Worst Month"
-                    value={worstEval ? `${worstEval.score}/10` : '—'}
+                    value={worstEval ? `${Number(worstEval.score)}/10` : '—'}
                     sub={worstEval ? formatMonth(worstEval.month) : 'No evaluations'}
                     icon={<FiAlertTriangle />}
-                    color={worstEval ? getScoreColor(worstEval.score) : '#94A3B8'}
-                    trend={worstEval && worstEval.score < 5 ? 'down' : null}
+                    color={worstEval ? getScoreColor(parseFloat(worstEval.score)) : '#94A3B8'}
+                    trend={worstEval && parseFloat(worstEval.score) < 5 ? 'down' : null}
                 />
                 <KPICard label="Completion Rate"
                     value={filteredMonths.length > 0 ? `${completionRate}%` : '—'}
@@ -921,7 +924,7 @@ const HRDEmployeeDetailPage = () => {
                                         <RechartsTooltip content={<CustomTooltip />} />
                                         <Bar dataKey="averageScore" name="Avg Score" radius={[8, 8, 0, 0]} barSize={40}>
                                             {[...filteredQuarterly].reverse().map((entry, i) => (
-                                                <Cell key={`cell-${i}`} fill={getScoreColor(entry.averageScore)} />
+                                                <Cell key={`cell-${i}`} fill={getScoreColor(parseFloat(entry.averageScore))} />
                                             ))}
                                         </Bar>
                                     </BarChart>
@@ -977,8 +980,8 @@ const HRDEmployeeDetailPage = () => {
                                             <td>
                                                 {plan.isEval ? (
                                                     <span className="hed-score-chip"
-                                                        style={{ background: `${getScoreColor(plan.evaluation.score)}15`, color: getScoreColor(plan.evaluation.score) }}>
-                                                        {plan.evaluation.score}/10
+                                                        style={{ background: `${getScoreColor(parseFloat(plan.evaluation.score))}15`, color: getScoreColor(parseFloat(plan.evaluation.score)) }}>
+                                                        {Number(plan.evaluation.score)}/10
                                                     </span>
                                                 ) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
                                             </td>
@@ -1007,17 +1010,17 @@ const HRDEmployeeDetailPage = () => {
                             <p>No quarterly evaluations found for FY {filterYear}</p>
                         </div>
                     ) : filteredQuarterly.map(qe => (
-                        <div key={qe.id} className="hed-qtr-card" style={{ '--qclr': getScoreColor(qe.averageScore) }}>
+                        <div key={qe.id} className="hed-qtr-card" style={{ '--qclr': getScoreColor(parseFloat(qe.averageScore)) }}>
                             <div className="hed-qtr-inner">
                                 <div className="hed-qtr-head">
                                     <span className="hed-qtr-label"><FiBarChart2 /> {qe.quarter?.replace('-', ' ')}</span>
-                                    <span className="hed-qtr-score" style={{ color: getScoreColor(qe.averageScore) }}>
-                                        {qe.averageScore?.toFixed(1)}<span>/10</span>
+                                    <span className="hed-qtr-score" style={{ color: getScoreColor(parseFloat(qe.averageScore)) }}>
+                                        {Number(parseFloat(qe.averageScore).toFixed(1))}<span>/10</span>
                                     </span>
                                 </div>
                                 <div className="hed-qtr-bar-track">
                                     <div className="hed-qtr-bar-fill"
-                                        style={{ width: `${(qe.averageScore / 10) * 100}%`, background: getScoreColor(qe.averageScore) }} />
+                                        style={{ width: `${(parseFloat(qe.averageScore) / 10) * 100}%`, background: getScoreColor(parseFloat(qe.averageScore)) }} />
                                 </div>
                                 {qe.remarks && (
                                     <div className="hed-qtr-remarks-block">

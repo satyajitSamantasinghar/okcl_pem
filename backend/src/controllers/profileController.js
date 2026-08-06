@@ -326,7 +326,7 @@ exports.getMyActivity = async (req, res) => {
 
     const ENTITY_LABELS = {
       MONTHLY_PLAN: "Monthly Plan",
-      MONTHLY_ACHIEVEMENT: "Monthly Achievement",
+      MONTHLY_ACHIEVEMENT: "Monthly Progress",
       YEARLY_PLAN: "Yearly Plan",
       YEARLY_APPRAISAL_REPORT: "Yearly Appraisal",
     };

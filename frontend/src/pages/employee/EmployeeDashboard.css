@@ -428,6 +428,45 @@
     margin: 0;
 }
 
+/* Due-by / Extended chips under each Action Center item */
+.emp-dash-action-chips {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+}
+
+.emp-dash-action-chip {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.7rem;
+    font-weight: 800;
+    padding: 2px 9px;
+    border-radius: 100px;
+    white-space: nowrap;
+}
+
+.emp-dash-action-chip.chip--danger {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+
+.emp-dash-action-chip.chip--warning {
+    background: #fef3c7;
+    color: #b45309;
+}
+
+.emp-dash-action-chip.chip--neutral {
+    background: #e2e8f0;
+    color: #475569;
+}
+
+.emp-dash-action-chip.chip--extended {
+    background: rgba(234, 179, 8, 0.15);
+    color: #92650a;
+}
+
 /* Custom Btn overrides for action center */
 .emp-dash-action-item .btn {
     white-space: nowrap;
@@ -523,11 +562,80 @@
     border-color: #fca5a5;
 }
 
+.emp-dash-dl-card.emp-dash-dl--extended {
+    background: #fffbeb;
+    border-color: #fde68a;
+}
+
+.emp-dash-dl-title-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 2px;
+}
+
 .emp-dash-dl-info strong {
     display: block;
     font-size: 0.85rem;
     color: var(--text-primary);
-    margin-bottom: 2px;
+}
+
+/* "Extended" badge with a lightweight CSS-only tooltip (no JS state needed) */
+.emp-dash-dl-extended-badge {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.65rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 2px 8px;
+    border-radius: 100px;
+    background: rgba(234, 179, 8, 0.15);
+    color: #92650a;
+    cursor: help;
+    white-space: nowrap;
+}
+
+.emp-dash-dl-extended-badge::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    left: 0;
+    top: calc(100% + 6px);
+    z-index: 20;
+    width: max-content;
+    max-width: 240px;
+    white-space: normal;
+    background: #1e293b;
+    color: #f8fafc;
+    font-size: 0.72rem;
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: normal;
+    line-height: 1.4;
+    padding: 8px 10px;
+    border-radius: 8px;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+}
+
+.emp-dash-dl-extended-badge:hover::after,
+.emp-dash-dl-extended-badge:focus::after {
+    opacity: 1;
+}
+
+.emp-dash-dl-original {
+    color: var(--text-muted);
+    text-decoration: line-through;
+    font-size: 0.75rem;
+}
+
+.emp-dash-dl-effective {
+    color: #b45309;
+    font-weight: 800;
+    font-size: 0.75rem;
 }
 
 .emp-dash-dl-info span {
@@ -590,6 +698,24 @@
 .emp-dash-remark-source.source-hrd {
     background: #dcfce7;
     color: #15803d;
+}
+
+.emp-dash-remark-source.source-system {
+    background: rgba(234, 179, 8, 0.15);
+    color: #92650a;
+}
+
+/* Type color-coding — left border mirrors the Action Center severity pattern */
+.emp-dash-remark-card.remark--rejection {
+    border-left: 4px solid #ef4444;
+}
+
+.emp-dash-remark-card.remark--evaluation {
+    border-left: 4px solid #22c55e;
+}
+
+.emp-dash-remark-card.remark--extension {
+    border-left: 4px solid #eab308;
 }
 
 .emp-dash-remark-date {

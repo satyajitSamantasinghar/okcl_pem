@@ -73,7 +73,7 @@ const ExtendDeadlineModal = ({
     const reasonValid = reason.trim().length >= 10 && reason.trim().length <= 200;
     const deadlineValid =
         !!newDeadline && newDeadline >= minDate && (!maxDate || newDeadline <= maxDate);
-    const canConfirm = reasonValid && deadlineValid;
+    const canConfirm = reasonValid && deadlineValid && !ctx?.atCeiling;
 
     /* ── Conflict warning: plan extension >= sibling achievement deadline ── */
     const showConflict =
@@ -294,26 +294,57 @@ const ExtendDeadlineModal = ({
                                     <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, color: '#374151', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                         New Deadline <span style={{ color: '#EF4444' }}>*</span>
                                     </label>
-                                    <input
-                                        type="date"
-                                        value={newDeadline}
-                                        min={minDate}
-                                        max={maxDate || undefined}
-                                        onChange={e => setNewDeadline(e.target.value)}
-                                        style={{
-                                            width: '100%', padding: '9px 12px',
-                                            border: `1px solid ${newDeadline && !deadlineValid ? '#EF4444' : '#E5E7EB'}`,
-                                            borderRadius: '8px', fontSize: '0.85rem',
-                                            color: '#111827', background: '#fff',
-                                            fontFamily: 'inherit', outline: 'none',
-                                            cursor: 'pointer', boxSizing: 'border-box',
-                                        }}
-                                    />
+                                    {ctx?.atCeiling ? (
+                                        <div style={{
+                                            padding: '9px 12px', background: '#F9FAFB',
+                                            border: '1px dashed #D1D5DB', borderRadius: '8px',
+                                            fontSize: '0.78rem', color: '#9CA3AF', fontStyle: 'italic',
+                                            boxSizing: 'border-box',
+                                        }}>
+                                            No dates available
+                                        </div>
+                                    ) : (
+                                        <input
+                                            type="date"
+                                            value={newDeadline}
+                                            min={minDate}
+                                            max={maxDate || undefined}
+                                            onChange={e => setNewDeadline(e.target.value)}
+                                            style={{
+                                                width: '100%', padding: '9px 12px',
+                                                border: `1px solid ${newDeadline && !deadlineValid ? '#EF4444' : '#E5E7EB'}`,
+                                                borderRadius: '8px', fontSize: '0.85rem',
+                                                color: '#111827', background: '#fff',
+                                                fontFamily: 'inherit', outline: 'none',
+                                                cursor: 'pointer', boxSizing: 'border-box',
+                                            }}
+                                        />
+                                    )}
                                 </div>
                             </div>
 
+                            {/* At-ceiling notice — the deadline has already been pushed as far
+                                 as it can legally go (PLAN: end of its own month; ACHIEVEMENT:
+                                 end of the configured extension window). There is no valid new
+                                 date to pick, so we say so plainly instead of showing a date
+                                 input with an impossible min/max range. */}
+                            {ctx?.atCeiling && (
+                                <div style={{
+                                    padding: '10px 14px', background: '#FEF2F2',
+                                    border: '1px solid #FECACA', borderRadius: '8px',
+                                    color: '#B91C1C', fontSize: '0.78rem', marginBottom: '12px',
+                                    display: 'flex', alignItems: 'flex-start', gap: '8px',
+                                }}>
+                                    <span style={{ flexShrink: 0, fontSize: '0.9rem' }}>🔒</span>
+                                    <span>
+                                        This {missingType} deadline has already been extended to the maximum allowed date
+                                        ({formatDate(ctx.maxDate)}). No further extension is possible.
+                                    </span>
+                                </div>
+                            )}
+
                             {/* Conflict warning */}
-                            {showConflict && (
+                            {!ctx?.atCeiling && showConflict && (
                                 <div style={{
                                     padding: '10px 14px', background: '#FFF7ED',
                                     border: '1px solid #FED7AA', borderRadius: '8px',

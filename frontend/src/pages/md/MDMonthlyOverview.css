@@ -23,14 +23,14 @@
     display: flex;
     flex-direction: column;
     position: relative;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.02);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02);
     transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     overflow: hidden;
 }
 
 .mmo-stat-card:hover {
     transform: translateY(-4px);
-    box-shadow: 0 12px 24px rgba(0,0,0,0.06);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.06);
     border-color: transparent;
 }
 
@@ -38,22 +38,54 @@
 .mmo-stat-card::before {
     content: '';
     position: absolute;
-    top: 0; left: 0; right: 0;
+    top: 0;
+    left: 0;
+    right: 0;
     height: 4px;
     background: var(--border-default);
     transition: background 0.3s ease;
 }
 
 /* Hover Gradient Accents */
-.mmo-stat-card.sc-blue:hover::before { background: linear-gradient(90deg, #3B82F6, #60A5FA); border-color: #3B82F6; }
-.mmo-stat-card.sc-green:hover::before { background: linear-gradient(90deg, #10B981, #34D399); border-color: #10B981; }
-.mmo-stat-card.sc-purple:hover::before { background: linear-gradient(90deg, #8B5CF6, #A78BFA); border-color: #8B5CF6; }
-.mmo-stat-card.sc-red:hover::before { background: linear-gradient(90deg, #EF4444, #F87171); border-color: #EF4444; }
+.mmo-stat-card.sc-blue:hover::before {
+    background: linear-gradient(90deg, #3B82F6, #60A5FA);
+    border-color: #3B82F6;
+}
 
-.mmo-stat-card.sc-blue:hover { border-color: #BFDBFE; box-shadow: 0 10px 25px rgba(59,130,246,0.15); }
-.mmo-stat-card.sc-green:hover { border-color: #A7F3D0; box-shadow: 0 10px 25px rgba(16,185,129,0.15); }
-.mmo-stat-card.sc-purple:hover { border-color: #DDD6FE; box-shadow: 0 10px 25px rgba(139,92,246,0.15); }
-.mmo-stat-card.sc-red:hover { border-color: #FECACA; box-shadow: 0 10px 25px rgba(239,68,68,0.15); }
+.mmo-stat-card.sc-green:hover::before {
+    background: linear-gradient(90deg, #10B981, #34D399);
+    border-color: #10B981;
+}
+
+.mmo-stat-card.sc-purple:hover::before {
+    background: linear-gradient(90deg, #8B5CF6, #A78BFA);
+    border-color: #8B5CF6;
+}
+
+.mmo-stat-card.sc-red:hover::before {
+    background: linear-gradient(90deg, #EF4444, #F87171);
+    border-color: #EF4444;
+}
+
+.mmo-stat-card.sc-blue:hover {
+    border-color: #BFDBFE;
+    box-shadow: 0 10px 25px rgba(59, 130, 246, 0.15);
+}
+
+.mmo-stat-card.sc-green:hover {
+    border-color: #A7F3D0;
+    box-shadow: 0 10px 25px rgba(16, 185, 129, 0.15);
+}
+
+.mmo-stat-card.sc-purple:hover {
+    border-color: #DDD6FE;
+    box-shadow: 0 10px 25px rgba(139, 92, 246, 0.15);
+}
+
+.mmo-stat-card.sc-red:hover {
+    border-color: #FECACA;
+    box-shadow: 0 10px 25px rgba(239, 68, 68, 0.15);
+}
 
 .mmo-stat-top {
     display: flex;
@@ -77,10 +109,25 @@
     transform: scale(1.1) rotate(5deg);
 }
 
-.sc-blue .mmo-stat-icon-wrap { background: #EFF6FF; color: #3B82F6; }
-.sc-green .mmo-stat-icon-wrap { background: #ECFDF5; color: #10B981; }
-.sc-purple .mmo-stat-icon-wrap { background: #F5F3FF; color: #8B5CF6; }
-.sc-red .mmo-stat-icon-wrap { background: #FEF2F2; color: #EF4444; }
+.sc-blue .mmo-stat-icon-wrap {
+    background: #EFF6FF;
+    color: #3B82F6;
+}
+
+.sc-green .mmo-stat-icon-wrap {
+    background: #ECFDF5;
+    color: #10B981;
+}
+
+.sc-purple .mmo-stat-icon-wrap {
+    background: #F5F3FF;
+    color: #8B5CF6;
+}
+
+.sc-red .mmo-stat-icon-wrap {
+    background: #FEF2F2;
+    color: #EF4444;
+}
 
 .mmo-stat-label {
     font-size: 0.75rem;
@@ -96,6 +143,165 @@
     font-weight: 800;
     color: var(--text-primary);
     line-height: 1;
+}
+
+/* ── KPI summary cards (Monthly Overview header) ─────
+   Compact, data-driven cards. Accent color/backgrounds are set once
+   per card via the --kpi-accent* custom properties on the
+   .mmo-kpi-card--{color} modifier below, so every visual detail
+   (icon, % badge, progress fill) stays in sync automatically instead
+   of being recomputed inline for each card. */
+.mmo-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    margin-bottom: 20px;
+}
+
+@media (max-width: 900px) {
+    .mmo-kpi-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 520px) {
+    .mmo-kpi-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.mmo-kpi-card {
+    position: relative;
+    background: var(--bg-card, #fff);
+    border: 1px solid var(--border-default, #E2E8F0);
+    border-radius: 14px;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .04);
+    transition: transform .15s ease, box-shadow .15s ease;
+}
+
+.mmo-kpi-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--kpi-accent);
+}
+
+.mmo-kpi-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, .07);
+}
+
+.mmo-kpi-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.mmo-kpi-label-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.mmo-kpi-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+    flex-shrink: 0;
+    background: var(--kpi-accent-bg);
+    color: var(--kpi-accent);
+}
+
+.mmo-kpi-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mmo-kpi-pct {
+    flex-shrink: 0;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 100px;
+    background: var(--kpi-accent-bg);
+    color: var(--kpi-accent);
+    letter-spacing: 0.02em;
+}
+
+.mmo-kpi-value {
+    font-size: 1.7rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    line-height: 1;
+    letter-spacing: -0.02em;
+    margin-bottom: 8px;
+}
+
+.mmo-kpi-track {
+    width: 100%;
+    height: 4px;
+    border-radius: 4px;
+    background: var(--kpi-accent-track);
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+
+.mmo-kpi-fill {
+    height: 100%;
+    border-radius: 4px;
+    background: var(--kpi-accent);
+    transition: width .5s cubic-bezier(.4, 0, .2, 1);
+}
+
+.mmo-kpi-sub {
+    font-size: 0.6875rem;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+/* Accent tokens — kept in the same order the cards render so the
+   color language matches the rest of the page: blue = volume,
+   violet = in progress, green = complete, red = attention needed. */
+.mmo-kpi-card--blue {
+    --kpi-accent: #3B82F6;
+    --kpi-accent-bg: #EFF6FF;
+    --kpi-accent-track: #DBEAFE;
+}
+
+.mmo-kpi-card--purple {
+    --kpi-accent: #8B5CF6;
+    --kpi-accent-bg: #F5F3FF;
+    --kpi-accent-track: #EDE9FE;
+}
+
+.mmo-kpi-card--green {
+    --kpi-accent: #10B981;
+    --kpi-accent-bg: #ECFDF5;
+    --kpi-accent-track: #D1FAE5;
+}
+
+.mmo-kpi-card--red {
+    --kpi-accent: #EF4444;
+    --kpi-accent-bg: #FEF2F2;
+    --kpi-accent-track: #FEE2E2;
 }
 
 /* ── Filter bar ─────────────────────────────── */
@@ -138,7 +344,7 @@
 .mmo-search-input:focus {
     outline: none;
     border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(255,107,53,.1);
+    box-shadow: 0 0 0 3px rgba(255, 107, 53, .1);
 }
 
 .mmo-search-clear {
@@ -197,7 +403,7 @@
 .mmo-sort-btn:hover {
     border-color: var(--primary);
     color: var(--primary);
-    background: rgba(255,107,53,.04);
+    background: rgba(255, 107, 53, .04);
 }
 
 /* result meta */
@@ -261,14 +467,27 @@
     vertical-align: middle;
 }
 
-.mmo-table tbody tr:last-child td { border-bottom: none; }
+.mmo-table tbody tr:last-child td {
+    border-bottom: none;
+}
 
 .mmo-row {
     cursor: pointer;
     transition: background 0.15s;
 }
 
-.mmo-row:hover td { background: rgba(255,107,53,.03); }
+.mmo-row:hover td {
+    background: rgba(255, 107, 53, .03);
+}
+
+.mmo-row:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: -2px;
+}
+
+.mmo-row:focus-visible td:first-child {
+    border-radius: 4px 0 0 4px;
+}
 
 /* cells */
 .mmo-cell-num {
@@ -340,13 +559,27 @@
     transition: background 0.3s;
 }
 
-.mmo-pdot.done { background: #22C55E; box-shadow: 0 0 4px rgba(34,197,94,.3); }
-.mmo-pdot.evaluated { background: #A855F7; box-shadow: 0 0 4px rgba(168,85,247,.3); }
+/* All three progress stages share one "done" color so the dots read as
+   one continuous track rather than jumping to a different hue at the
+   last step. */
+.mmo-pdot.done {
+    background: #22C55E;
+    box-shadow: 0 0 4px rgba(34, 197, 94, .3);
+}
 
-.mmo-pline { width: 14px; height: 2px; background: var(--border-default); }
-.mmo-pline.done { background: #22C55E; }
+.mmo-pline {
+    width: 14px;
+    height: 2px;
+    background: var(--border-default);
+}
 
-/* status badge */
+.mmo-pline.done {
+    background: #22C55E;
+}
+
+/* status badge
+   Color language: amber = awaiting action, violet = in progress,
+   green = complete, red = rejected. */
 .mmo-status-badge {
     padding: 3px 8px;
     border-radius: 100px;
@@ -356,10 +589,25 @@
     white-space: nowrap;
 }
 
-.mmo-status-badge.submitted   { background: rgba(245,158,11,.1);   color: #D97706; }
-.mmo-status-badge.achievement { background: rgba(34,197,94,.1);    color: #16A34A; }
-.mmo-status-badge.evaluated   { background: rgba(168,85,247,.1);   color: #A855F7; }
-.mmo-status-badge.rejected    { background: rgba(239,68,68,.1);    color: #EF4444; }
+.mmo-status-badge.submitted {
+    background: rgba(245, 158, 11, .1);
+    color: #D97706;
+}
+
+.mmo-status-badge.achievement {
+    background: rgba(139, 92, 246, .12);
+    color: #7C3AED;
+}
+
+.mmo-status-badge.evaluated {
+    background: rgba(34, 197, 94, .1);
+    color: #16A34A;
+}
+
+.mmo-status-badge.rejected {
+    background: rgba(239, 68, 68, .1);
+    color: #EF4444;
+}
 
 /* score */
 .mmo-score {
@@ -370,7 +618,10 @@
     font-weight: 800;
 }
 
-.mmo-no-score { color: var(--text-muted); font-size: 0.75rem; }
+.mmo-no-score {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+}
 
 .mmo-cell-date {
     font-size: 0.6875rem;
@@ -412,7 +663,10 @@
     cursor: not-allowed;
 }
 
-.mmo-page-numbers { display: flex; gap: 4px; }
+.mmo-page-numbers {
+    display: flex;
+    gap: 4px;
+}
 
 .mmo-page-num {
     width: 32px;
@@ -439,7 +693,8 @@
 }
 
 /* ── Empty / Loading ─────────────────────────── */
-.mmo-loading, .mmo-empty {
+.mmo-loading,
+.mmo-empty {
     text-align: center;
     padding: 60px 20px;
     color: var(--text-muted);
@@ -451,14 +706,20 @@
     margin-bottom: 12px;
 }
 
-.mmo-empty h3 { color: var(--text-primary); margin-bottom: 4px; }
-.mmo-empty p  { font-size: 0.875rem; }
+.mmo-empty h3 {
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.mmo-empty p {
+    font-size: 0.875rem;
+}
 
 /* ── Overlay / Detail Modal ─────────────────── */
 .mmo-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0,0,0,.55);
+    background: rgba(0, 0, 0, .55);
     backdrop-filter: blur(4px);
     display: flex;
     align-items: center;
@@ -468,7 +729,15 @@
     animation: fadeIn .2s ease;
 }
 
-@keyframes fadeIn { from{opacity:0} to{opacity:1} }
+@keyframes fadeIn {
+    from {
+        opacity: 0
+    }
+
+    to {
+        opacity: 1
+    }
+}
 
 .mmo-detail-modal {
     background: var(--bg-card);
@@ -478,12 +747,22 @@
     max-height: 88vh;
     display: flex;
     flex-direction: column;
-    box-shadow: 0 24px 64px rgba(0,0,0,.25);
+    box-shadow: 0 24px 64px rgba(0, 0, 0, .25);
     animation: scaleIn .2s ease;
     overflow: hidden;
 }
 
-@keyframes scaleIn { from{opacity:0;transform:scale(.96)} to{opacity:1;transform:scale(1)} }
+@keyframes scaleIn {
+    from {
+        opacity: 0;
+        transform: scale(.96)
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1)
+    }
+}
 
 /* modal header */
 .mmo-modal-header {
@@ -493,7 +772,7 @@
     padding: 20px 24px;
     border-bottom: 1px solid var(--border-default);
     background-color: var(--bg-card);
-    background-image: linear-gradient(135deg,rgba(255,107,53,.04),rgba(168,85,247,.04));
+    background-image: linear-gradient(135deg, rgba(255, 107, 53, .04), rgba(168, 85, 247, .04));
     flex-shrink: 0;
     z-index: 10;
 }
@@ -524,19 +803,20 @@
     flex: 1;
 }
 
-.mmo-modal-header h2 { 
-    margin: 0 0 2px; 
-    font-size: 1.125rem; 
+.mmo-modal-header h2 {
+    margin: 0 0 2px;
+    font-size: 1.125rem;
     font-weight: 800;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 300px;
 }
-.mmo-modal-header p  { 
-    margin: 0; 
-    font-size: 0.75rem; 
-    color: var(--text-muted); 
+
+.mmo-modal-header p {
+    margin: 0;
+    font-size: 0.75rem;
+    color: var(--text-muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -552,6 +832,7 @@
     border-radius: 8px;
     transition: all 0.15s;
 }
+
 .mmo-modal-close:hover {
     background: var(--bg-muted);
     color: var(--text-primary);
@@ -579,8 +860,13 @@
     color: var(--text-muted);
 }
 
-.mmo-step.done  { color: #22C55E; }
-.mmo-step.pending { color: var(--text-muted); }
+.mmo-step.done {
+    color: #22C55E;
+}
+
+.mmo-step.pending {
+    color: var(--text-muted);
+}
 
 .mmo-step-dot {
     width: 32px;
@@ -609,7 +895,9 @@
     margin-bottom: 16px;
 }
 
-.mmo-step-line.done { background: #22C55E; }
+.mmo-step-line.done {
+    background: #22C55E;
+}
 
 /* ── Scrollable Modal Body ── */
 .mmo-modal-body {
@@ -622,7 +910,10 @@
 .mmo-detail-section {
     border-bottom: 1px solid var(--border-default);
 }
-.mmo-detail-section:last-child { border-bottom: none; }
+
+.mmo-detail-section:last-child {
+    border-bottom: none;
+}
 
 .mmo-detail-section-header {
     display: flex;
@@ -697,6 +988,7 @@
     line-height: 1;
     flex-shrink: 0;
 }
+
 .mmo-ra-score-max {
     font-size: 1rem;
     font-weight: 600;
@@ -756,8 +1048,8 @@
 
 /* ── MD Reject Block ── */
 .mmo-md-reject-block {
-    background: rgba(239,68,68,.05);
-    border: 1px solid rgba(239,68,68,.15);
+    background: rgba(239, 68, 68, .05);
+    border: 1px solid rgba(239, 68, 68, .15);
     border-left: 4px solid #EF4444;
     border-radius: 0 12px 12px 0;
     padding: 14px 16px;
@@ -805,8 +1097,8 @@
 
 /* rejection box */
 .mmo-reject-box {
-    background: rgba(239,68,68,.06);
-    border: 1px solid rgba(239,68,68,.2);
+    background: rgba(239, 68, 68, .06);
+    border: 1px solid rgba(239, 68, 68, .2);
     border-radius: var(--radius-md);
     padding: 12px;
     font-size: 0.8125rem;
@@ -816,22 +1108,43 @@
 
 /* ── Responsive ────────────────────────────── */
 @media (max-width: 900px) {
+
     .mmo-table th:nth-child(8),
-    .mmo-table td:nth-child(8) { display: none; }
+    .mmo-table td:nth-child(8) {
+        display: none;
+    }
 }
 
 @media (max-width: 768px) {
-    .mmo-stats-row { flex-direction: column; }
-    .mmo-filter-bar { flex-direction: column; }
-    .mmo-filter-controls { flex-wrap: wrap; }
-    .mmo-detail-modal { max-width: 100%; margin: 10px; }
+    .mmo-stats-row {
+        flex-direction: column;
+    }
+
+    .mmo-filter-bar {
+        flex-direction: column;
+    }
+
+    .mmo-filter-controls {
+        flex-wrap: wrap;
+    }
+
+    .mmo-detail-modal {
+        max-width: 100%;
+        margin: 10px;
+    }
+
     .mmo-table th:nth-child(5),
     .mmo-table td:nth-child(5),
     .mmo-table th:nth-child(7),
-    .mmo-table td:nth-child(7) { display: none; }
+    .mmo-table td:nth-child(7) {
+        display: none;
+    }
+
     /* hide action column too on mobile -- show in detail modal instead */
     .mmo-table th:nth-child(9),
-    .mmo-table td:nth-child(9) { display: none; }
+    .mmo-table td:nth-child(9) {
+        display: none;
+    }
 }
 
 /* ── Reject / View buttons in table ─────────────────── */
@@ -852,11 +1165,12 @@
     transition: all 0.15s;
     white-space: nowrap;
 }
+
 .mmo-view-btn:hover {
     background: var(--primary);
     border-color: var(--primary);
     color: #fff;
-    box-shadow: 0 4px 10px rgba(255,107,53,.2);
+    box-shadow: 0 4px 10px rgba(255, 107, 53, .2);
 }
 
 .mmo-reject-btn {
@@ -865,17 +1179,18 @@
     justify-content: center;
     padding: 5px 8px;
     border-radius: 6px;
-    background: rgba(239,68,68,.08);
-    border: 1px solid rgba(239,68,68,.25);
+    background: rgba(239, 68, 68, .08);
+    border: 1px solid rgba(239, 68, 68, .25);
     color: #EF4444;
     font-size: 0.8125rem;
     cursor: pointer;
     transition: all 0.15s;
 }
+
 .mmo-reject-btn:hover {
     background: #EF4444;
     color: #fff;
-    box-shadow: 0 4px 10px rgba(239,68,68,.25);
+    box-shadow: 0 4px 10px rgba(239, 68, 68, .25);
 }
 
 .mmo-rejected-tag {
@@ -895,7 +1210,9 @@
     text-transform: uppercase;
 }
 
-.mmo-row-rejected td { background: rgba(239,68,68,.025) !important; }
+.mmo-row-rejected td {
+    background: rgba(239, 68, 68, .025) !important;
+}
 
 /* reject hint in result meta */
 .mmo-reject-hint {
@@ -915,8 +1232,8 @@
     gap: 5px;
     padding: 7px 14px;
     border-radius: 8px;
-    background: rgba(239,68,68,.08);
-    border: 1px solid rgba(239,68,68,.25);
+    background: rgba(239, 68, 68, .08);
+    border: 1px solid rgba(239, 68, 68, .25);
     color: #EF4444;
     font-size: 0.75rem;
     font-weight: 700;
@@ -924,10 +1241,11 @@
     transition: all 0.15s;
     white-space: nowrap;
 }
+
 .mmo-inline-reject-btn:hover {
     background: #EF4444;
     color: #fff;
-    box-shadow: 0 4px 12px rgba(239,68,68,.25);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, .25);
 }
 
 /* ── Status Banner (inside detail modal) ──────── */
@@ -939,19 +1257,36 @@
     font-size: 0.75rem;
     font-weight: 600;
 }
-.mmo-status-banner.rejected  { background: rgba(239,68,68,.08); color: #EF4444; border-bottom: 1px solid rgba(239,68,68,.15); }
-.mmo-status-banner.evaluated { background: rgba(168,85,247,.06); color: #A855F7; border-bottom: 1px solid rgba(168,85,247,.15); }
+
+.mmo-status-banner.rejected {
+    background: rgba(239, 68, 68, .08);
+    color: #EF4444;
+    border-bottom: 1px solid rgba(239, 68, 68, .15);
+}
+
+.mmo-status-banner.evaluated {
+    background: rgba(168, 85, 247, .06);
+    color: #A855F7;
+    border-bottom: 1px solid rgba(168, 85, 247, .15);
+}
 
 /* ── Header badge ─────────────────────────────── */
-.page-header { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px; }
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
 .mmo-header-badge {
     display: flex;
     align-items: center;
     gap: 6px;
     padding: 6px 14px;
     border-radius: 100px;
-    background: rgba(255,107,53,.08);
-    border: 1px solid rgba(255,107,53,.2);
+    background: rgba(255, 107, 53, .08);
+    border: 1px solid rgba(255, 107, 53, .2);
     color: var(--primary);
     font-size: 0.6875rem;
     font-weight: 700;
@@ -967,7 +1302,7 @@
     max-height: 90vh;
     display: flex;
     flex-direction: column;
-    box-shadow: 0 24px 64px rgba(0,0,0,.25);
+    box-shadow: 0 24px 64px rgba(0, 0, 0, .25);
     animation: scaleIn .2s ease;
     overflow: hidden;
 }
@@ -977,10 +1312,11 @@
     justify-content: space-between;
     align-items: flex-start;
     padding: 18px 22px;
-    background: rgba(239,68,68,.06);
-    border-bottom: 1px solid rgba(239,68,68,.15);
+    background: rgba(239, 68, 68, .06);
+    border-bottom: 1px solid rgba(239, 68, 68, .15);
     flex-shrink: 0;
 }
+
 .mmo-reject-modal-header h3 {
     display: flex;
     align-items: center;
@@ -989,7 +1325,12 @@
     font-size: 1rem;
     color: #EF4444;
 }
-.mmo-reject-modal-header p { margin: 0; font-size: 0.6875rem; color: var(--text-muted); }
+
+.mmo-reject-modal-header p {
+    margin: 0;
+    font-size: 0.6875rem;
+    color: var(--text-muted);
+}
 
 .mmo-reject-modal-body {
     padding: 18px 22px;
@@ -1014,6 +1355,7 @@
     color: var(--text-muted);
     margin-bottom: 6px;
 }
+
 .mmo-reject-form-group textarea {
     width: 100%;
     padding: 10px 12px;
@@ -1027,10 +1369,11 @@
     transition: border-color 0.15s;
     font-family: inherit;
 }
+
 .mmo-reject-form-group textarea:focus {
     outline: none;
     border-color: #EF4444;
-    box-shadow: 0 0 0 3px rgba(239,68,68,.1);
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, .1);
 }
 
 .mmo-reject-modal-footer {
@@ -1056,11 +1399,16 @@
     cursor: pointer;
     transition: all 0.15s;
 }
+
 .mmo-reject-confirm-btn:hover:not(:disabled) {
     background: #DC2626;
-    box-shadow: 0 4px 12px rgba(239,68,68,.3);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, .3);
 }
-.mmo-reject-confirm-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.mmo-reject-confirm-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
 
 .mmo-reject-cancel-btn {
     display: flex;
@@ -1075,4 +1423,7 @@
     cursor: pointer;
     transition: all 0.15s;
 }
-.mmo-reject-cancel-btn:hover { border-color: var(--text-muted); }
+
+.mmo-reject-cancel-btn:hover {
+    border-color: var(--text-muted);
+}

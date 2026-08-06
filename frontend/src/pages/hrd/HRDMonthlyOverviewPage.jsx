@@ -188,7 +188,13 @@ const HRDMonthlyOverviewPage = () => {
     /* detail modal */
     const [selected, setSelected] = useState(null);
 
-
+    /* close the detail modal on Escape */
+    useEffect(() => {
+        if (!selected) return;
+        const onKeyDown = e => { if (e.key === 'Escape') setSelected(null); };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [selected]);
 
     /* ── fetch ── */
     const fetchPlans = useCallback(async () => {
@@ -325,12 +331,18 @@ const HRDMonthlyOverviewPage = () => {
         const line2 = isEval ? 'filled' : 'empty';
 
         // Status pill
-        const stLabel = isRejected ? 'Rejected' : isEval ? 'Evaluated' : plan.hasAchievement ? 'Achievement added' : 'Plan submitted';
+        const stLabel = isRejected ? 'Rejected' : isEval ? 'Evaluated' : plan.hasAchievement ? 'Progress added' : 'Plan submitted';
         const stCls   = isRejected ? 'sp-rejected' : isEval ? 'sp-eval' : plan.hasAchievement ? 'sp-ach' : 'sp-plan';
 
         return createPortal(
             <div className="mp-overlay" onClick={() => setSelected(null)}>
-                <div className="dmod dmod--wide" onClick={e => e.stopPropagation()}>
+                <div
+                    className="dmod dmod--wide"
+                    onClick={e => e.stopPropagation()}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="dmod-title"
+                >
 
                     {/* ── HEADER ── */}
                     <div className="dmod-hdr">
@@ -340,7 +352,7 @@ const HRDMonthlyOverviewPage = () => {
                                 <span className="dmod-mc-yr">{shortYear(plan.month)}</span>
                             </div>
                             <div>
-                                <div className="dmod-title">{formatMonth(plan.month)}</div>
+                                <div className="dmod-title" id="dmod-title">{formatMonth(plan.month)}</div>
                                 <div className="dmod-meta">
                                     <FiClock size={11} />
                                     <span>Submitted {formatDateShort(plan.submittedAt)}</span>
@@ -351,7 +363,7 @@ const HRDMonthlyOverviewPage = () => {
                                 </div>
                             </div>
                         </div>
-                        <button className="dmod-close" onClick={() => setSelected(null)}>
+                        <button className="dmod-close" onClick={() => setSelected(null)} aria-label="Close details">
                             <FiX size={16} />
                         </button>
                     </div>
@@ -371,7 +383,7 @@ const HRDMonthlyOverviewPage = () => {
                                     ? <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" /></svg>
                                     : <FiTrendingUp size={12} />}
                             </div>
-                            <span className={`dmod-slbl dmod-slbl--${stepperAch}`}>Achievement</span>
+                            <span className={`dmod-slbl dmod-slbl--${stepperAch}`}>Progress</span>
                         </div>
                         <div className={`dmod-sline dmod-sline--${line2}`} />
                         <div className="dmod-step">
@@ -420,7 +432,7 @@ const HRDMonthlyOverviewPage = () => {
                                     {ach?.submittedAt && (
                                         <span className="dmod-ts-item">
                                             <FiTrendingUp size={10} />
-                                            Achievement submitted {formatDateShort(ach.submittedAt)}
+                                            Progress submitted {formatDateShort(ach.submittedAt)}
                                         </span>
                                     )}
                                 </div>
@@ -431,7 +443,7 @@ const HRDMonthlyOverviewPage = () => {
                         <div>
                             <div className="dmod-sec-lbl">
                                 <FiFileText size={13} />
-                                {ach && ach.status !== 'DRAFT' ? 'Plans & achievements' : 'Plan details'}
+                                {ach && ach.status !== 'DRAFT' ? 'Plans & Progress' : 'Plan details'}
                                 <span className="dmod-sec-count-pill">{planItemsList.length} plan{planItemsList.length !== 1 ? 's' : ''}</span>
                             </div>
 
@@ -499,7 +511,7 @@ const HRDMonthlyOverviewPage = () => {
                                                     </div>
                                                     <div className="dmod-ach-section">
                                                         <div className="dmod-ach-lbl">
-                                                            <FiTrendingUp size={11} /> Achievement details
+                                                            <FiTrendingUp size={11} /> Progress details
                                                         </div>
                                                         {pa.achievementDetails
                                                             ? <div className="dmod-ach-text">{pa.achievementDetails}</div>
@@ -516,7 +528,7 @@ const HRDMonthlyOverviewPage = () => {
                             {/* Case C — achievement submitted but fully legacy text only */}
                             {ach && ach.status !== 'DRAFT' && !hasStructuredAch && ach.achievementDetails && (
                                 <div className="dmod-legacy-ach">
-                                    <div className="dmod-ach-lbl"><FiTrendingUp size={11} /> Achievement</div>
+                                    <div className="dmod-ach-lbl"><FiTrendingUp size={11} />Progress details</div>
                                     <div className="dmod-ach-text">{ach.achievementDetails}</div>
                                 </div>
                             )}
@@ -527,7 +539,7 @@ const HRDMonthlyOverviewPage = () => {
                             <div className="dmod-no-ach-block">
                                 <div className="dmod-no-ach-icon"><FiTrendingUp size={16} /></div>
                                 <div className="dmod-no-ach-text">
-                                    Achievement not submitted yet.
+                                    Progress not submitted yet.
                                 </div>
                             </div>
                         )}
@@ -536,7 +548,7 @@ const HRDMonthlyOverviewPage = () => {
                         {additionalItems.length > 0 && (
                             <div className="dmod-extras-card">
                                 <div className="dmod-extras-hdr">
-                                    <div className="dmod-extras-title"><FiStar size={13} /> Additional achievements</div>
+                                    <div className="dmod-extras-title"><FiStar size={13} /> Additional work with progress</div>
                                     <span className="dmod-extras-badge">{additionalItems.length} extra{additionalItems.length !== 1 ? 's' : ''}</span>
                                 </div>
                                 {additionalItems.map((item, i) => {
@@ -605,7 +617,7 @@ const HRDMonthlyOverviewPage = () => {
                     {/* ── FOOTER ── */}
                     <div className="dmod-footer">
                         <span className="dmod-ftr-state">
-                            {isEval ? 'Evaluated' : plan.hasAchievement ? 'Awaiting RA review' : 'Achievement pending'}
+                            {isEval ? 'Evaluated' : plan.hasAchievement ? 'Awaiting RA review' : 'Progress pending'}
                         </span>
                         <button className="dmod-btn-close" onClick={() => setSelected(null)}>Close</button>
                     </div>
@@ -624,131 +636,65 @@ const HRDMonthlyOverviewPage = () => {
             <div className="page-header" style={{ marginBottom: '16px' }}>
                 <div>
                     <h1>Monthly Plan Overview</h1>
-                    <p>Review all employee monthly plans, achievements, and RA evaluation scores.</p>
+                    <p>Review all employee monthly plans, progress, and RA evaluation scores.</p>
                 </div>
             </div>
 
-            {/* Stats row — Professional KPI Cards */}
+            {/* Stats row — KPI Cards
+                Color language matches the status badges below: violet = in
+                progress, green = complete, so "Evaluated" (the finished
+                state) is green and "Has Achievements" (an interim state)
+                is violet. All visual styling lives in CSS
+                (.mmo-kpi-card--*); this block only supplies the data. */}
             {(() => {
                 const total = stats.total || 1; // avoid div/0
                 const achPct  = Math.round((stats.achievement / total) * 100);
                 const evalPct = Math.round((stats.evaluated   / total) * 100);
                 const rejPct  = Math.round((stats.rejected    / total) * 100);
 
-                const cardBase = {
-                    background: '#ffffff',
-                    border: '1px solid #E2E8F0',
-                    borderRadius: '16px',
-                    padding: '20px 22px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '0',
-                    position: 'relative',
-                    overflow: 'hidden',
-                    boxShadow: '0 1px 4px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.03)',
-                    transition: 'transform 0.2s, box-shadow 0.2s',
-                    flex: '1',
-                    minWidth: '0',
-                };
-
-                const KpiCard = ({ icon, label, value, pct, accentColor, accentBg, trackColor, sublabel, glow }) => (
-                    <div style={{ ...cardBase }}
-                        onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = `0 8px 24px rgba(0,0,0,0.07), 0 0 0 1px ${accentColor}22`; }}
-                        onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.03)'; }}
-                    >
-                        {/* Top accent bar */}
-                        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '3px', background: accentColor, borderRadius: '16px 16px 0 0' }} />
-
-                        {/* Icon + label row */}
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', marginTop: '4px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <div style={{
-                                    width: '36px', height: '36px', borderRadius: '10px',
-                                    background: accentBg, color: accentColor,
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    fontSize: '1rem', flexShrink: 0,
-                                }}>
-                                    {icon}
-                                </div>
-                                <span style={{ fontSize: '0.8rem', fontWeight: '600', color: '#64748B', lineHeight: 1.2 }}>{label}</span>
-                            </div>
-                            {pct !== null && (
-                                <span style={{
-                                    fontSize: '0.7rem', fontWeight: '700', padding: '3px 8px',
-                                    borderRadius: '20px', background: accentBg, color: accentColor,
-                                    letterSpacing: '0.02em',
-                                }}>
-                                    {pct}%
-                                </span>
-                            )}
-                        </div>
-
-                        {/* Big value */}
-                        <div style={{ fontSize: '2.25rem', fontWeight: '800', color: '#0F172A', lineHeight: '1', marginBottom: '12px', letterSpacing: '-0.02em' }}>
-                            {value}
-                        </div>
-
-                        {/* Progress bar */}
-                        {pct !== null && (
-                            <div style={{ width: '100%', height: '5px', background: trackColor, borderRadius: '4px', marginBottom: '10px', overflow: 'hidden' }}>
-                                <div style={{
-                                    height: '100%', width: `${pct}%`,
-                                    background: accentColor,
-                                    borderRadius: '4px',
-                                    transition: 'width 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
-                                }} />
-                            </div>
-                        )}
-
-                        {/* Sub label */}
-                        <div style={{ fontSize: '0.72rem', color: '#94A3B8', fontWeight: '500', marginTop: 'auto' }}>
-                            {sublabel}
-                        </div>
-                    </div>
-                );
+                const kpiCards = [
+                    {
+                        key: 'total', accent: 'blue', icon: <FiFileText />,
+                        label: 'Total Submissions', value: stats.total, pct: null,
+                        sublabel: `For ${MONTHS.find(m => m.v === filterMonth)?.l || 'selected period'} ${filterYear}`,
+                    },
+                    {
+                        key: 'achievement', accent: 'purple', icon: <FiTrendingUp />,
+                        label: 'Progress submitted', value: stats.achievement, pct: achPct,
+                        sublabel: `${stats.total - stats.achievement} still pending progress`,
+                    },
+                    {
+                        key: 'evaluated', accent: 'green', icon: <FiCheckCircle />,
+                        label: 'Evaluated', value: stats.evaluated, pct: evalPct,
+                        sublabel: `${stats.total - stats.evaluated} awaiting RA evaluation`,
+                    },
+                    {
+                        key: 'rejected', accent: 'red', icon: <FiAlertCircle />,
+                        label: 'Rejected by RA', value: stats.rejected, pct: rejPct,
+                        sublabel: stats.rejected === 0 ? 'No rejections — great!' : `${stats.rejected} plan${stats.rejected !== 1 ? 's' : ''} need resubmission`,
+                    },
+                ];
 
                 return (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '20px' }}>
-                        <KpiCard
-                            icon={<FiFileText />}
-                            label="Total Submissions"
-                            value={stats.total}
-                            pct={null}
-                            accentColor="#3B82F6"
-                            accentBg="#EFF6FF"
-                            trackColor="#DBEAFE"
-                            sublabel={`For ${MONTHS.find(m => m.v === filterMonth)?.l || 'selected period'} ${filterYear}`}
-                        />
-                        <KpiCard
-                            icon={<FiTrendingUp />}
-                            label="Has Achievements"
-                            value={stats.achievement}
-                            pct={achPct}
-                            accentColor="#10B981"
-                            accentBg="#ECFDF5"
-                            trackColor="#D1FAE5"
-                            sublabel={`${stats.total - stats.achievement} still pending achievement`}
-                        />
-                        <KpiCard
-                            icon={<FiCheckCircle />}
-                            label="Evaluated"
-                            value={stats.evaluated}
-                            pct={evalPct}
-                            accentColor="#8B5CF6"
-                            accentBg="#F5F3FF"
-                            trackColor="#EDE9FE"
-                            sublabel={`${stats.total - stats.evaluated} awaiting RA evaluation`}
-                        />
-                        <KpiCard
-                            icon={<FiAlertCircle />}
-                            label="Rejected by RA"
-                            value={stats.rejected}
-                            pct={rejPct}
-                            accentColor="#EF4444"
-                            accentBg="#FEF2F2"
-                            trackColor="#FEE2E2"
-                            sublabel={stats.rejected === 0 ? 'No rejections — great!' : `${stats.rejected} plan${stats.rejected !== 1 ? 's' : ''} need resubmission`}
-                        />
+                    <div className="mmo-kpi-grid">
+                        {kpiCards.map(c => (
+                            <div key={c.key} className={`mmo-kpi-card mmo-kpi-card--${c.accent}`}>
+                                <div className="mmo-kpi-top">
+                                    <div className="mmo-kpi-label-wrap">
+                                        <span className="mmo-kpi-icon">{c.icon}</span>
+                                        <span className="mmo-kpi-label">{c.label}</span>
+                                    </div>
+                                    {c.pct !== null && <span className="mmo-kpi-pct">{c.pct}%</span>}
+                                </div>
+                                <div className="mmo-kpi-value">{c.value}</div>
+                                {c.pct !== null && (
+                                    <div className="mmo-kpi-track">
+                                        <div className="mmo-kpi-fill" style={{ width: `${c.pct}%` }} />
+                                    </div>
+                                )}
+                                <div className="mmo-kpi-sub">{c.sublabel}</div>
+                            </div>
+                        ))}
                     </div>
                 );
             })()}
@@ -764,7 +710,7 @@ const HRDMonthlyOverviewPage = () => {
                         value={searchQ}
                         onChange={e => setSearchQ(e.target.value)}
                     />
-                    {searchQ && <button className="mmo-search-clear" onClick={() => setSearchQ('')}><FiX /></button>}
+                    {searchQ && <button className="mmo-search-clear" onClick={() => setSearchQ('')} aria-label="Clear search"><FiX /></button>}
                 </div>
 
                 <div className="mmo-filter-controls">
@@ -849,7 +795,17 @@ const HRDMonthlyOverviewPage = () => {
                                     const isEval     = plan.evaluationStatus === 'EVALUATED';
                                     const isRejected = plan.status === 'REJECTED';
                                     return (
-                                        <tr key={plan.id} className={`mmo-row ${isRejected ? 'mmo-row-rejected' : ''}`} onClick={() => setSelected(plan)}>
+                                        <tr
+                                            key={plan.id}
+                                            className={`mmo-row ${isRejected ? 'mmo-row-rejected' : ''}`}
+                                            onClick={() => setSelected(plan)}
+                                            tabIndex={0}
+                                            role="button"
+                                            aria-label={`View plan details for ${plan.employee?.name || 'employee'}, ${st.label}`}
+                                            onKeyDown={e => {
+                                                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelected(plan); }
+                                            }}
+                                        >
                                             <td className="mmo-cell-num">{(page - 1) * PAGE_SIZE + idx + 1}</td>
                                             <td>
                                                 <div className="mmo-emp-cell">
@@ -870,7 +826,7 @@ const HRDMonthlyOverviewPage = () => {
                                                     <div className={`mmo-pline ${plan.hasAchievement ? 'done' : ''}`} />
                                                     <div className={`mmo-pdot ${plan.hasAchievement ? 'done' : ''}`} title="Achievement" />
                                                     <div className={`mmo-pline ${isEval ? 'done' : ''}`} />
-                                                    <div className={`mmo-pdot ${isEval ? 'done evaluated' : ''}`} title="Evaluated" />
+                                                    <div className={`mmo-pdot ${isEval ? 'done' : ''}`} title="Evaluated" />
                                                 </div>
                                             </td>
                                             <td>
@@ -885,10 +841,11 @@ const HRDMonthlyOverviewPage = () => {
                                             </td>
                                             <td className="mmo-cell-date">{fmtDate(plan.submittedAt)}</td>
                                             <td>
-                                                <button 
-                                                    className="mmo-page-btn" 
+                                                <button
+                                                    className="mmo-page-btn"
                                                     style={{ padding: '6px 12px', fontSize: '0.8rem' }}
                                                     onClick={(e) => { e.stopPropagation(); setSelected(plan); }}
+                                                    aria-label={`View plan details for ${plan.employee?.name || 'employee'}`}
                                                 >
                                                     <FiEye /> View
                                                 </button>

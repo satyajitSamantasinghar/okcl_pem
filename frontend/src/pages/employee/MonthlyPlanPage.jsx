@@ -1438,9 +1438,17 @@ const MonthlyPlanPage = () => {
             {showPlanForm && (() => {
                 const now = new Date();
                 const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-                const todayDay = now.getDate();
-                // CENTRALIZED DEADLINE: planDay from .env via DeadlineContext
-                const planDeadlinePassed = ENFORCE_DEADLINES && todayDay > planDay;
+                // EXTENSION-AWARE: Use effective deadline (respects RA-granted extensions).
+                // Falls back to config deadline while the async fetch is still loading.
+                // This mirrors the same logic in planCtaState so the form gate is always
+                // consistent with the button gate — both use the same source of truth.
+                const resolvedDeadline = effectivePlanDeadline ?? getPlanDeadline(currentMonthStr);
+                const planDeadlinePassed = ENFORCE_DEADLINES && (resolvedDeadline ? now > resolvedDeadline : false);
+
+                // Human-readable deadline label for the locked banner message.
+                const deadlineLabel = resolvedDeadline
+                    ? resolvedDeadline.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })
+                    : `${planDay}th of the month`;
 
                 return (
                     <div className="mp-form-card">
@@ -1455,13 +1463,13 @@ const MonthlyPlanPage = () => {
                         </div>
 
                         {planDeadlinePassed ? (
-                            /* ── LOCKED BANNER: Deadline passed in production mode ── */
+                            /* ── LOCKED BANNER: Deadline passed (extension-aware) ── */
                             <div className="mp-deadline-locked-banner">
                                 <div className="mp-deadline-locked-icon"><FiAlertCircle /></div>
                                 <div className="mp-deadline-locked-content">
                                     <strong>Submission Window Closed</strong>
                                     <p>
-                                        The monthly plan for <strong>{new Date(now.getFullYear(), now.getMonth()).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</strong> can only be submitted between the <strong>1st–{planDay}th</strong> of each month.
+                                        The monthly plan for <strong>{new Date(now.getFullYear(), now.getMonth()).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</strong> had a submission deadline of <strong>{deadlineLabel}</strong>{effectivePlanIsExtended ? ' (extended by your Reporting Authority)' : ''}.
                                         The deadline has passed.
                                     </p>
                                 </div>

@@ -46,14 +46,14 @@ exports.getHRDDashboard = async (req, res) => {
     }
 
     // CHANGE 1: countDocuments → Model.count({ where })
-      const [selYear, selMonthNum] = month.split("-").map(Number);
+    const [selYear, selMonthNum] = month.split("-").map(Number);
     // Last millisecond of the selected month (month is 1-based → pass it
     // directly as the month arg to get the 0th day of the *next* month = last
     // day of the selected month, then set time to 23:59:59.999)
     const endOfSelectedMonth = new Date(selYear, selMonthNum, 0, 23, 59, 59, 999);
 
-    const totalEmployees = await User.count({ where: { role: "EMPLOYEE", isActive: true , createdAt: { [Op.lte]: endOfSelectedMonth } } });
-    const totalRAs = await User.count({ where: { role: "RA", isActive: true , createdAt: { [Op.lte]: endOfSelectedMonth } } });
+    const totalEmployees = await User.count({ where: { role: "EMPLOYEE", isActive: true, createdAt: { [Op.lte]: endOfSelectedMonth } } });
+    const totalRAs = await User.count({ where: { role: "RA", isActive: true, createdAt: { [Op.lte]: endOfSelectedMonth } } });
 
     let plansThisMonth = 0, evaluationsThisMonth = 0, pendingEvaluations = 0;
 
@@ -266,8 +266,16 @@ exports.getMonthlyPlansList = async (req, res) => {
       // CHANGE 5: { $regex: `^${year}` } → Op.like `${year}%`
       where.month = { [Op.like]: `${year}%` };
     }
-    // Only override the default DRAFT exclusion if a specific status is requested
-    if (status) where.status = status;
+    // FIX: `?status=` on this endpoint is a UI-level filter (PENDING / EVALUATED /
+    // REJECTED) that spans two different tables — MonthlyPlan.status and the
+    // separately-queried MonthlyEvaluation.status (merged in below). Only
+    // REJECTED is an actual value of enum_monthly_plans_status, so that's the
+    // only one we can push down into the WHERE clause here. Blindly assigning
+    // `where.status = status` for "EVALUATED"/"PENDING" made Postgres reject the
+    // query with "invalid input value for enum enum_monthly_plans_status" since
+    // those strings aren't valid values for this column at all. EVALUATED and
+    // PENDING are applied further down, after evaluationStatus is computed.
+    if (status === "REJECTED") where.status = "REJECTED";
 
     // Step 1: Fetch plans with employee info
     const plans = await MonthlyPlan.findAll({
@@ -305,13 +313,19 @@ exports.getMonthlyPlansList = async (req, res) => {
     achievements.forEach(ach => { achMap[ach.monthlyPlanId] = ach; });
 
     // Step 4: Merge — identical response shape to original MongoDB pipeline output
-    const result = plans.map(p => {
+    let result = plans.map(p => {
       const ev = evalMap[`${p.employeeId}__${p.month}`];
       const ach = achMap[p.id];
       return {
         ...p.toJSON(),
         evaluationStatus: ev?.status || null,
-        evaluationScore: ev?.score || null,
+        // FIX: MonthlyEvaluation.score is a Postgres NUMERIC/DECIMAL column, which
+        // Sequelize returns as a string (e.g. "9.00") to avoid float rounding —
+        // that string was being rendered as-is on the frontend ("9.00/10" instead
+        // of "9/10"). Casting to a real Number here fixes the display everywhere
+        // this field is used, and `ev?.score != null` (rather than `||`) makes
+        // sure a genuine score of 0 isn't dropped to null.
+        evaluationScore: ev?.score != null ? Number(ev.score) : null,
         evaluationRemarks: ev?.remarks || null,
         evaluatedAt: ev?.evaluatedAt || null,
         hasAchievement: !!(ach && ach.status !== "DRAFT"),
@@ -322,6 +336,15 @@ exports.getMonthlyPlansList = async (req, res) => {
         achievementDate: ach?.submittedAt || null,
       };
     });
+
+    // FIX (cont'd): apply the EVALUATED / PENDING branches of the UI-level status
+    // filter here, now that evaluationStatus has been merged in. Mirrors the
+    // same rule the frontend already uses in getStatusInfo/processed filtering.
+    if (status === "EVALUATED") {
+      result = result.filter(p => p.evaluationStatus === "EVALUATED");
+    } else if (status === "PENDING") {
+      result = result.filter(p => p.evaluationStatus !== "EVALUATED" && p.status !== "REJECTED");
+    }
 
     res.json(result);
   } catch (error) {
@@ -542,11 +565,11 @@ exports.assignEmployeesToRA = async (req, res) => {
 
       // 2. Open a new history record for the new RA assignment
       await EmployeeRAHistory.create({
-        employeeId:    empId,
-        raId:          id,
+        employeeId: empId,
+        raId: id,
         effectiveFrom: now,
-        effectiveTo:   null,          // null = currently active
-        assignedBy:    req.user.userId,
+        effectiveTo: null,          // null = currently active
+        assignedBy: req.user.userId,
       });
 
       // 3. Update the denormalized current-RA column on the user record.
@@ -561,5 +584,3 @@ exports.assignEmployeesToRA = async (req, res) => {
     res.status(500).json({ message: "Failed to assign employees", error: error.message });
   }
 };
-
-

@@ -901,7 +901,7 @@ exports.getMyDeadlineContext = async (req, res) => {
     }
 
     const monthNum = parseInt(month, 10);
-    const yearNum  = parseInt(year, 10);
+    const yearNum = parseInt(year, 10);
     const typeUpper = type.toUpperCase();
 
     if (!["PLAN", "ACHIEVEMENT"].includes(typeUpper)) {
@@ -914,8 +914,8 @@ exports.getMyDeadlineContext = async (req, res) => {
       return res.status(400).json({ message: "year is invalid" });
     }
 
-    const empRole  = normalizeRole(req.user.role);
-    const config   = parseDeadlineConfig(empRole);
+    const empRole = normalizeRole(req.user.role);
+    const config = parseDeadlineConfig(empRole);
 
     // Compute base deadline for this type
     const baseDeadline = typeUpper === "PLAN"
@@ -923,30 +923,36 @@ exports.getMyDeadlineContext = async (req, res) => {
       : buildDeadlineDate(yearNum, monthNum, config.achievementDay, config.achievementDeadlineMonthOffset, true);
 
     // Check for an RA-granted extension
-    const { effectiveDeadline, isExtended, extensionCount } = await getEffectiveDeadline({
+    const { effectiveDeadline, isExtended, extensionCount, lastExtension } = await getEffectiveDeadline({
       employeeId,
       month: monthNum,
-      year:  yearNum,
-      type:  typeUpper,
+      year: yearNum,
+      type: typeUpper,
       baseDeadline,
     });
 
     // Ceiling (used by the frontend date-picker if ever shown)
     const ceiling = getExtensionCeiling(empRole, typeUpper, monthNum, yearNum);
-    const now     = new Date();
+    const now = new Date();
     const monthStr = `${yearNum}-${String(monthNum).padStart(2, "0")}`;
 
     res.json({
-      type:              typeUpper,
-      month:             monthStr,
-      year:              yearNum,
-      baseDeadline:      baseDeadline.toISOString().split("T")[0],
+      type: typeUpper,
+      month: monthStr,
+      year: yearNum,
+      baseDeadline: baseDeadline.toISOString().split("T")[0],
       effectiveDeadline: effectiveDeadline.toISOString().split("T")[0],
       isExtended,
       extensionCount,
-      isWithinDeadline:  now <= effectiveDeadline,
-      minDate:           now.toISOString().split("T")[0],
-      maxDate:           ceiling.toISOString().split("T")[0],
+      isWithinDeadline: now <= effectiveDeadline,
+      minDate: now.toISOString().split("T")[0],
+      maxDate: ceiling.toISOString().split("T")[0],
+      // DASHBOARD EXTENSION TRANSPARENCY — surfaces the RA's stated reason and
+      // when the extension was granted, so the employee-facing dashboard can
+      // render a tooltip without a second, RA-only endpoint call. lastExtension
+      // is already fetched by getEffectiveDeadline() above — no extra query.
+      reason: isExtended && lastExtension ? lastExtension.reason : null,
+      extendedAt: isExtended && lastExtension ? lastExtension.createdAt : null,
     });
   } catch (error) {
     res.status(500).json({ message: "Failed to load deadline context", error: error.message });
