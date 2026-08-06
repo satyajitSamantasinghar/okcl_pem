@@ -274,7 +274,7 @@ const OutstandingTab = () => {
             <>
                 <div className="edmp-empty">
                     <span className="edmp-empty-icon">✅</span>
-                    <div className="edmp-empty-title">No actionable overdue submissions</div>
+                    <div className="edmp-empty-title">There are currently no overdue submissions eligible for deadline extension.</div>
                     <div className="edmp-empty-sub">
                         {data?.expiredCount > 0
                             ? `${data.expiredCount} submission${data.expiredCount !== 1 ? 's' : ''} were permanently missed — extension window has closed.`
@@ -711,10 +711,10 @@ const ByMonthTab = () => {
                                             : emp.plan.status === 'REJECTED'
                                                 ? <span className="edmp-rejected-chip">Rejected</span>
                                                 : emp.plan.status === 'EVALUATED'
-                                                    ? <span className="edmp-evaluated-chip">✓ Evaluated</span>
+                                                    ? <span className="edmp-evaluated-chip"> Evaluated</span>
                                                     : emp.plan.status === 'DRAFT'
-                                                        ? <span className="edmp-draft-chip">✎ Draft</span>
-                                                        : <span className="edmp-submitted-chip">↑ {planStatusLabel(emp.plan.status)}</span>
+                                                        ? <span className="edmp-draft-chip"> Draft</span>
+                                                        : <span className="edmp-submitted-chip"> {planStatusLabel(emp.plan.status)}</span>
                                         }
                                     </td>
                                     {/* Plan deadline */}
@@ -746,12 +746,12 @@ const ByMonthTab = () => {
                                             : emp.achievement.status === 'MISSING'
                                                 ? <span className="edmp-missing-chip">Missing</span>
                                                 : emp.achievement.status === 'DRAFT'
-                                                    ? <span className="edmp-draft-chip">✎ Draft</span>
+                                                    ? <span className="edmp-draft-chip"> Draft</span>
                                                     : emp.achievement.status === 'EVALUATED'
                                                         ? <span className="edmp-evaluated-chip">✓ Evaluated</span>
                                                         : emp.achievement.status === 'REJECTED'
                                                             ? <span className="edmp-rejected-chip">Rejected</span>
-                                                            : <span className="edmp-submitted-chip">↑ {planStatusLabel(emp.achievement.status)}</span>
+                                                            : <span className="edmp-submitted-chip"> {planStatusLabel(emp.achievement.status)}</span>
                                         }
                                     </td>
                                     {/* Achievement deadline
