@@ -44,11 +44,36 @@ const { getQuarterMonthStrings } = require("../utils/fiscalUtils");
 const { parseDeadlineConfig, normalizeRole, getExtensionCeiling } = require("./configController");
 const { getEffectiveDeadline, getExtensionHistory } = require("../utils/deadlineResolver");
 const { GO_LIVE, buildDeadlineDate } = require("../utils/dateHelpers");
+const { notifyEvaluation, notifyRejection, notifyDeadlineExtension } = require("../services/notificationService");
 
 /* helper — mirrors the old in-file function */
 function getQuarterMonths(quarter) {
   return getQuarterMonthStrings(quarter);
 }
+
+async function notifyEmployeeOfEvaluation(employeeId, raId, month, remarks) {
+  try {
+    const employee = await User.findByPk(employeeId, { attributes: ["id", "name", "email"] });
+    if (!employee?.email) return;
+    const reportingAuthority = await User.findByPk(raId, { attributes: ["id", "name"] });
+    await notifyEvaluation({ employee, reportingAuthority, period: month, type: "Monthly Plan", remarks });
+  } catch (err) {
+    console.error("[notification] Evaluation notice failed:", err.message);
+  }
+}
+
+async function notifyEmployeeOfRejection(employeeId, raId, month, remarks) {
+  try {
+    const employee = await User.findByPk(employeeId, { attributes: ["id", "name", "email"] });
+    if (!employee?.email) return;
+    const reportingAuthority = await User.findByPk(raId, { attributes: ["id", "name"] });
+    await notifyRejection({ employee, reportingAuthority, period: month, type: "Monthly Plan", remarks });
+  } catch (err) {
+    console.error("[notification] Rejection notice failed:", err.message);
+  }
+}
+
+
 
 /* ─── 1. RA DASHBOARD ────────────────────────────────────────────────────────── */
 exports.getRADashboard = async (req, res) => {
@@ -390,6 +415,8 @@ exports.submitMonthlyEvaluation = async (req, res) => {
     await evaluation.save();
 
     await AuditLog.create({ userId: req.user.userId, action: "EVALUATE", entityType: "MONTHLY_EVALUATION", entityId: String(evaluation.id), ipAddress: req.ip });
+    notifyEmployeeOfEvaluation(evaluation.employeeId, req.user.userId, evaluation.month, evaluation.remarks);
+
     res.json({ message: "Monthly evaluation submitted successfully" });
   } catch (error) {
     res.status(500).json({ message: "Failed to submit evaluation", error: error.message });
@@ -1198,6 +1225,7 @@ exports.rejectMonthlyPlan = async (req, res) => {
       message: `Your monthly plan for ${plan.month} has been rejected by your Reporting Authority. Reason: "${raRemarks.trim()}". Please revise and resubmit.`,
       entityType: "MONTHLY_PLAN", entityId: String(plan.id),
     });
+    notifyEmployeeOfRejection(plan.employeeId, raId, plan.month, raRemarks.trim());
 
     res.json({ message: "Monthly plan rejected successfully." });
   } catch (error) {
@@ -1377,6 +1405,23 @@ exports.extendDeadline = async (req, res) => {
           },
           { transaction: t }
         );
+        (async () => {
+          try {
+            const reportingAuthority = await User.findByPk(raId, { attributes: ["id", "name"] });
+            await notifyDeadlineExtension({
+              employee,
+              reportingAuthority,
+              type: typeLabel,
+              period: monthStr,
+              newDeadline: extendedDeadlineDate.toLocaleDateString("en-US", {
+                day: "numeric", month: "long", year: "numeric",
+              }),
+              reason: reason.trim(),
+            });
+          } catch (err) {
+            console.error("[notification] Deadline extension notice failed:", err.message);
+          }
+        })();
       }
 
       return ext;

@@ -48,6 +48,36 @@ const { Op } = require("sequelize");
 const { parseDeadlineConfig, normalizeRole, getExtensionCeiling } = require("./configController");
 const { getEffectiveDeadline } = require("../utils/deadlineResolver");
 const { buildDeadlineDate } = require("../utils/dateHelpers");
+const { notifySubmission } = require("../services/notificationService");
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EMAIL NOTIFICATION HELPERS
+//
+// Deliberately NOT awaited by callers, and deliberately fetch fresh data
+// AFTER the transaction commits — never pass transaction-scoped instances
+// into these, since a notification must only fire for data that is
+// actually persisted, not data that might still roll back.
+//
+// Both helpers swallow their own errors: a failed/slow email must never
+// affect the API response the employee already received.
+// ─────────────────────────────────────────────────────────────────────────────
+async function notifyRAOfSubmission(employeeId, period, type) {
+  try {
+    const employee = await User.findByPk(employeeId, {
+      attributes: ["id", "name", "email", "reportingAuthorityId"],
+    });
+    if (!employee?.reportingAuthorityId) return; // no RA assigned — nothing to notify
+
+    const reportingAuthority = await User.findByPk(employee.reportingAuthorityId, {
+      attributes: ["id", "name", "email"],
+    });
+
+    await notifySubmission({ employee, reportingAuthority, period, type });
+  } catch (err) {
+    console.error(`[notification] ${type} submission notice failed for employee ${employeeId}:`, err.message);
+  }
+}
 
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -125,6 +155,9 @@ exports.submitMonthlyPlan = async (req, res) => {
         );
 
         await t.commit();
+        if (planStatus === "PENDING") {
+          notifyRAOfSubmission(req.user.userId, month, "Monthly Plan");
+        }
         return res.json({ message: "Plan resubmitted successfully", monthlyPlanId: existingPlan.id });
       }
 
@@ -177,6 +210,11 @@ exports.submitMonthlyPlan = async (req, res) => {
         );
 
         await t.commit();
+
+        if (planStatus === "PENDING") {
+          notifyRAOfSubmission(req.user.userId, month, "Monthly Plan");
+        }
+
         return res.json({
           message: planStatus === "DRAFT" ? "Draft updated" : "Plan submitted",
           monthlyPlanId: existingPlan.id,
@@ -242,6 +280,10 @@ exports.submitMonthlyPlan = async (req, res) => {
     );
 
     await t.commit();
+    if (planStatus === "PENDING") {
+      notifyRAOfSubmission(req.user.userId, month, "Monthly Plan");
+    }
+
     res.status(201).json({
       message: planStatus === "DRAFT" ? "Draft saved" : "Monthly plan submitted",
       monthlyPlanId: plan.id,
@@ -338,6 +380,9 @@ exports.submitMonthlyAchievement = async (req, res) => {
       );
 
       await t.commit();
+      if (achStatus === "SUBMITTED") {
+        notifyRAOfSubmission(req.user.userId, plan.month, "Monthly Achievement");
+      }
       return res.json({ message: achStatus === "DRAFT" ? "Draft saved" : "Achievement submitted" });
     }
 
@@ -372,6 +417,9 @@ exports.submitMonthlyAchievement = async (req, res) => {
     );
 
     await t.commit();
+    if (achStatus === "SUBMITTED") {
+        notifyRAOfSubmission(req.user.userId, plan.month, "Monthly Achievement");
+      }
     res.status(201).json({ message: achStatus === "DRAFT" ? "Draft saved" : "Monthly achievement submitted" });
   } catch (error) {
     await t.rollback();

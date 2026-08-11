@@ -2,8 +2,9 @@
 const dotenv = require('dotenv');
 dotenv.config();
 const app = require("./src/app");
-const { sequelize, EmployeeRAHistory, User, MonthlyPlan, MonthlyPlanItem, MonthlyAchievement, MonthlyAchievementItem, MonthlyEvaluation } = require("./src/models");
+const { sequelize, EmployeeRAHistory, User, MonthlyPlan, MonthlyPlanItem, MonthlyAchievement, MonthlyAchievementItem, MonthlyEvaluation, DeadlineExtension } = require("./src/models");
 const { DataTypes, Op } = require("sequelize");
+const { verifyEmailConnection } = require('./src/services/email');
 
 
 const PORT = process.env.PORT || 5000;
@@ -388,6 +389,7 @@ const startServer = async () => {
         // }
 
         // Start server only after DB is ready
+         await verifyEmailConnection();
         app.listen(PORT, () => {
             console.log(`🚀 Server running on port ${PORT}`);
         });

@@ -81,6 +81,47 @@ function buildDeadlineDate(year, month, day, monthOffset, endOfDay) {
     : new Date(y, m - 1, resolvedDay, 0, 0, 0, 0);
 }
 
+/* ════════════════════════════════════════════════════════════════════
+   HELPER — Converts an ISO period string "YYYY-MM" to a human-readable
+   label such as "August 2026". Safe-falls-back to the raw string if the
+   input is malformed or missing.
+   Usage (email notifications, UI labels):
+     formatPeriod("2026-08")  → "August 2026"
+════════════════════════════════════════════════════════════════════ */
+function formatPeriod(period) {
+  if (!period || typeof period !== 'string') return String(period || '');
+  const parts = period.split('-');
+  if (parts.length < 2) return period;
+  const year = parseInt(parts[0], 10);
+  const month = parseInt(parts[1], 10);
+  if (isNaN(year) || isNaN(month) || month < 1 || month > 12) return period;
+  // Use UTC to avoid DST-induced off-by-one day shifts
+  const date = new Date(Date.UTC(year, month - 1, 1));
+  return date.toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  // e.g. "August 2026"
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   HELPER — Converts an ISO date string "YYYY-MM-DD" to a human-readable
+   label such as "31 July 2026". Safe-falls-back to the raw string if the
+   input is malformed or missing.
+   Usage (deadline extension emails):
+     formatDeadline("2026-07-31")  → "31 July 2026"
+════════════════════════════════════════════════════════════════════ */
+function formatDeadline(dateStr) {
+  if (!dateStr || typeof dateStr !== 'string') return String(dateStr || '');
+  const parts = dateStr.split('-');
+  if (parts.length < 3) return dateStr;
+  const year = parseInt(parts[0], 10);
+  const month = parseInt(parts[1], 10);
+  const day = parseInt(parts[2], 10);
+  if (isNaN(year) || isNaN(month) || isNaN(day)) return dateStr;
+  // Use UTC to avoid DST-induced off-by-one day shifts
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+  // e.g. "31 July 2026"
+}
+
 module.exports = {
   GO_LIVE,
   getOrdinalSuffix,
@@ -88,4 +129,6 @@ module.exports = {
   addCalendarMonths,
   getLastDayOfMonth,
   buildDeadlineDate,
+  formatPeriod,
+  formatDeadline,
 };

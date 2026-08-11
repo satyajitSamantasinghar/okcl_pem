@@ -32,7 +32,13 @@ const LoginPage = () => {
         hrmsLogin(ssoToken)
             .then((userData) => {
                 toast.success(`Welcome, ${userData.name}!`);
-                navigate(getRoleDashboardPath(userData.role), { replace: true });
+                // ── HRMS SSO Fallback: respect the original KRA page the user was trying ──
+                // When HRMS sends the user back after re-login, it appends ?redirect=<kraPath>
+                // so we land the user directly on e.g. /employee/monthly-plan
+                const redirect = params.get('redirect');
+                const destination = redirect || getRoleDashboardPath(userData.role);
+                // navigate(getRoleDashboardPath(userData.role), { replace: true }); // old behaviour
+                navigate(destination, { replace: true });
             })
             .catch((error) => {
                 const msg = error.response?.data?.message || 'HRMS login failed. Please contact IT support.';

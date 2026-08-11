@@ -32,7 +32,18 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
     }
 
     if (!isAuthenticated) {
-        return <Navigate to="/login" replace />;
+        // return <Navigate to="/login" replace />;
+        // ── HRMS SSO Fallback ─────────────────────────────────────────────────
+        // When a user lands on a KRA page via an email link and their session
+        // has expired, redirect them to the HRMS login page instead of the
+        // local KRA login. HRMS will re-authenticate and bounce them back here
+        // with a fresh encrypted token + the original KRA page as ?redirect=
+        const kraReturnUrl = encodeURIComponent(window.location.href);
+        window.location.replace(
+            `https://hrmserp.okcl.co.in/index.php?kra_redirect=${kraReturnUrl}`
+        );
+        return null; // nothing to render while the browser is redirecting
+        // return <Navigate to="/login" replace />; // old behaviour — kept for reference
     }
 
     // Check whether the user's BASE ROLE (from JWT) grants access to the required view.

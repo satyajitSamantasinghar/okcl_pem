@@ -37,7 +37,12 @@ api.interceptors.response.use(
         const refreshToken = localStorage.getItem('refreshToken');
         if (!refreshToken) {
           localStorage.clear();
-          window.location.href = '/login';
+          // window.location.href = '/login'; // old behaviour — kept for reference
+          // ── HRMS SSO Fallback: no refresh token — send user to HRMS to re-authenticate
+          const kraReturnUrl = encodeURIComponent(window.location.href);
+          window.location.replace(
+            `https://hrmserp.okcl.co.in/index.php?kra_redirect=${kraReturnUrl}`
+          );
           return Promise.reject(error);
         }
 
@@ -51,7 +56,12 @@ api.interceptors.response.use(
         return api(originalRequest);
       } catch (refreshError) {
         localStorage.clear();
-        window.location.href = '/login';
+        // window.location.href = '/login'; // old behaviour — kept for reference
+        // ── HRMS SSO Fallback: refresh token invalid/expired — send user to HRMS
+        const kraReturnUrl = encodeURIComponent(window.location.href);
+        window.location.replace(
+          `https://hrmserp.okcl.co.in/index.php?kra_redirect=${kraReturnUrl}`
+        );
         return Promise.reject(refreshError);
       }
     }
