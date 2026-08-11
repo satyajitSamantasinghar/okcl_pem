@@ -671,9 +671,19 @@ exports.getMonthlyAchievements = async (req, res) => {
       include: [
         { model: User, as: "employee", attributes: ["id", "name", "employeeCode", "department"] },
         { model: MonthlyPlan, as: "monthlyPlan", attributes: ["id", "month", "planDetails"] },
-        { model: MonthlyAchievementItem, as: "planAchievements", order: [["planIndex", "ASC"]] },
+        // NOTE: Sequelize v6 silently ignores `order` inside a nested `include`.
+        // Ordering is applied in JS after the query (see sort below).
+        { model: MonthlyAchievementItem, as: "planAchievements" },
       ],
       order: [["submittedAt", "DESC"]],
+    });
+
+    // Sort planAchievements by planIndex (0-based) so the frontend always
+    // receives items in the correct plan order regardless of DB insertion order.
+    achievements.forEach((ach) => {
+      if (Array.isArray(ach.planAchievements)) {
+        ach.planAchievements.sort((a, b) => (a.planIndex ?? 0) - (b.planIndex ?? 0));
+      }
     });
 
     res.json(achievements);

@@ -32,9 +32,16 @@ const DashboardLayout = () => {
         window.location.href = HRMS_LOGOUT_URL;
     };
 
-    const handleRedirectToHRMS = async () => {
+    const handleRedirectToHRMS = () => {
         setDropdownOpen(false);
-        await logout();
+        // ── Go to HRMS Portal ─────────────────────────────────────────────────
+        // DO NOT call logout() here. The user is still authenticated in HRMS;
+        // calling logout() clears the KRA session but ALSO destroys the HRMS
+        // session cookie, which causes HRMS to redirect to its own login page
+        // instead of landing on plist.php.
+        // We simply navigate to the HRMS portal directly — the HRMS session
+        // cookie is sent automatically by the browser and plist.php loads fine.
+        // await logout(); // ← old behaviour: caused HRMS login redirect
         window.location.href = HRMS_PORTAL_URL;
     };
 

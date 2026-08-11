@@ -130,8 +130,11 @@ exports.getRADashboard = async (req, res) => {
     const planIds = submittedPlans.map(p => p.id);
     const submittedEmployeeIds = submittedPlans.map(p => p.employeeId);
 
+    // FIX: only count achievements the employee has actually submitted.
+    // DRAFT achievements (saved locally but not sent for RA review) must never
+    // be shown as "submitted" in the dashboard counts or the submission-status widget.
     const achievements = planIds.length > 0 ? await MonthlyAchievement.findAll({
-      where: { monthlyPlanId: { [Op.in]: planIds } },
+      where: { monthlyPlanId: { [Op.in]: planIds }, status: "SUBMITTED" },
       include: [{ model: MonthlyPlan, as: "monthlyPlan", attributes: ["id", "employeeId"] }],
     }) : [];
 
@@ -216,8 +219,9 @@ exports.getMonthlyTrend = async (req, res) => {
         });
         const planIds = monthPlans.map(p => p.id);
 
+        // FIX: only count SUBMITTED achievements — DRAFT records must not inflate the trend bars.
         const achievements = planIds.length > 0
-          ? await MonthlyAchievement.count({ where: { monthlyPlanId: { [Op.in]: planIds } } })
+          ? await MonthlyAchievement.count({ where: { monthlyPlanId: { [Op.in]: planIds }, status: "SUBMITTED" } })
           : 0;
         const evaluations = await MonthlyEvaluation.count({
           where: { employeeId: { [Op.in]: employeeIds }, month: monthStr, raId, status: "EVALUATED" },
@@ -287,10 +291,14 @@ exports.getMyEmployees = async (req, res) => {
         const [totalPlans, totalEvaluated, totalAchievements, currentMonthPlan, currentMonthAchievement, currentMonthEvaluation] = await Promise.all([
           MonthlyPlan.count({ where: { employeeId: emp.id } }),
           MonthlyEvaluation.count({ where: { employeeId: emp.id, raId, status: "EVALUATED" } }),
-          MonthlyAchievement.count({ where: { employeeId: emp.id } }),
+          // FIX: only count achievements the employee has actually submitted (not drafts).
+          MonthlyAchievement.count({ where: { employeeId: emp.id, status: "SUBMITTED" } }),
           // CHANGE 7: { status: { $ne: "DRAFT" } } → Op.ne
           MonthlyPlan.findOne({ where: { employeeId: emp.id, month: currentMonth, status: { [Op.ne]: "DRAFT" } }, attributes: ["id"] }),
-          MonthlyAchievement.findOne({ where: { employeeId: emp.id }, attributes: ["id"] }),
+          // FIX: currentMonthAchievementSubmitted must be false for DRAFT achievements.
+          // Previously this had no status filter, so a DRAFT record would set the flag to true
+          // and the My Employees card would wrongly read "Plan & progress submitted".
+          MonthlyAchievement.findOne({ where: { employeeId: emp.id, status: "SUBMITTED" }, attributes: ["id"] }),
           MonthlyEvaluation.findOne({ where: { employeeId: emp.id, raId, month: currentMonth, status: "EVALUATED" }, attributes: ["id"] }),
         ]);
 
@@ -591,8 +599,12 @@ exports.getMonthlyEvaluations = async (req, res) => {
     // When no evaluations have a linked plan, skip the achievement lookup entirely.
     const achSet = new Set();
     if (planIds.length > 0) {
+      // FIX: only SUBMITTED achievements should mark hasAchievement = true in the
+      // evaluation list. A DRAFT achievement (employee saved progress locally but
+      // hasn't submitted yet) must show as "Pending" — not "Submitted" — so the
+      // RA knows they cannot evaluate yet.
       const achievements = await MonthlyAchievement.findAll({
-        where: { monthlyPlanId: { [Op.in]: planIds } },
+        where: { monthlyPlanId: { [Op.in]: planIds }, status: "SUBMITTED" },
         attributes: ["monthlyPlanId"],
       });
       achievements.forEach(a => achSet.add(String(a.monthlyPlanId)));
@@ -633,8 +645,15 @@ exports.getMonthlyEvaluationById = async (req, res) => {
     if (req.user.role === "EMPLOYEE" && evaluation.employee?.id !== req.user.userId) return res.status(403).json({ message: "Not authorized" });
 
     const planDoc = evaluation.monthlyPlan || null;
+    // FIX: only return a SUBMITTED achievement. If the employee saved a draft,
+    // this query must return null so the detail modal correctly shows
+    // "Progress Details not yet submitted" instead of displaying draft content
+    // as if it were an official submission.
     const achievement = planDoc
-      ? await MonthlyAchievement.findOne({ where: { monthlyPlanId: planDoc.id }, include: [{ model: MonthlyAchievementItem, as: "planAchievements", order: [["planIndex", "ASC"]] }] })
+      ? await MonthlyAchievement.findOne({
+          where: { monthlyPlanId: planDoc.id, status: "SUBMITTED" },
+          include: [{ model: MonthlyAchievementItem, as: "planAchievements", order: [["planIndex", "ASC"]] }],
+        })
       : null;
 
     const canViewScore = ["RA", "HRD", "MD"].includes(req.user.role);
@@ -1144,13 +1163,11 @@ exports.getQuarterlyFullDetail = async (req, res) => {
       monthlyEvals.map(async (ev) => {
         const planDoc = ev.monthlyPlan || null;
 
-        // CHANGE 13: find achievement with planAchievements via include
+        // FIX: only show SUBMITTED achievement. If the employee only has a DRAFT,
+        // treat it as "not submitted" so the quarterly detail view is accurate.
         const achievement = planDoc
           ? await MonthlyAchievement.findOne({
             where: { monthlyPlanId: planDoc.id, status: "SUBMITTED" },
-            include: [{ model: MonthlyAchievementItem, as: "planAchievements", order: [["planIndex", "ASC"]] }],
-          }) || await MonthlyAchievement.findOne({
-            where: { monthlyPlanId: planDoc.id },
             include: [{ model: MonthlyAchievementItem, as: "planAchievements", order: [["planIndex", "ASC"]] }],
           })
           : null;
@@ -1529,8 +1546,12 @@ exports.getMissedDeadlines = async (req, res) => {
 
     // Achievement lookup: plan id → true
     const planIds = allPlans.map(p => p.id);
+    // FIX: only SUBMITTED achievements count as "achievement present" for the
+    // missed-deadline check. A DRAFT means the employee started but hasn't sent
+    // their progress for RA review — they are still "missing" from the RA's
+    // perspective and must appear in this list if past deadline.
     const allAchievements = planIds.length > 0 ? await MonthlyAchievement.findAll({
-      where: { monthlyPlanId: { [Op.in]: planIds } },
+      where: { monthlyPlanId: { [Op.in]: planIds }, status: "SUBMITTED" },
       attributes: ["monthlyPlanId"],
     }) : [];
     const achievedPlanIds = new Set(allAchievements.map(a => String(a.monthlyPlanId)));

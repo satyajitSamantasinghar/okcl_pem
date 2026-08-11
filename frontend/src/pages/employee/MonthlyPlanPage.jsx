@@ -178,7 +178,11 @@ function getEffectivePlanAch(ach, planCount) {
     const pa = ach.planAchievements;
     if (Array.isArray(pa) && pa.length > 0) {
         const hasRealData = pa.some(a => (a.achievementDetails || '').trim() || (a.progress || 0) > 0);
-        if (hasRealData) return pa;
+        if (hasRealData) {
+            // Always sort by planIndex so positional access is safe even if the
+            // backend returns items in an unexpected order (e.g. insertion order).
+            return [...pa].sort((a, b) => (a.planIndex ?? 0) - (b.planIndex ?? 0));
+        }
     }
     if (ach.achievementDetails) {
         const parsed = parseLegacyPlanAch(ach.achievementDetails, planCount);
@@ -626,7 +630,27 @@ const MonthlyPlanPage = () => {
         setAchModal(plan);
         if (existing) {
             const effective = getEffectivePlanAch(existing, itemList.length);
-            setAchItems(itemList.map((_, i) => ({ achievementDetails: effective?.[i]?.achievementDetails || '', progress: effective?.[i]?.progress || 0 })));
+
+            // Build a lookup map keyed by planIndex so we never rely on array
+            // position. This makes the mapping correct even if items arrive
+            // in non-sequential order (e.g. DB insertion order remnants).
+            const achByPlanIndex = {};
+            if (Array.isArray(effective)) {
+                effective.forEach((a, idx) => {
+                    // Use planIndex field when available; fall back to position
+                    // only for legacy parsed entries that have no planIndex field.
+                    const key = (a.planIndex !== undefined && a.planIndex !== null)
+                        ? a.planIndex
+                        : idx;
+                    achByPlanIndex[key] = a;
+                });
+            }
+
+            setAchItems(itemList.map((_, i) => ({
+                achievementDetails: achByPlanIndex[i]?.achievementDetails ?? '',
+                progress:           achByPlanIndex[i]?.progress           ?? 0,
+            })));
+
             if (existing.additionalAchievement) {
                 const parsed = parseAdditionalAch(existing.additionalAchievement);
                 setAdditionalAchItems(parsed.length ? parsed : [{ text: '', progress: 0 }]);
