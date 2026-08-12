@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import api from '../services/api';
+import api, { suppressHrmsRedirect } from '../services/api';
 
 const AuthContext = createContext(null);
 
@@ -30,6 +30,10 @@ export const AuthProvider = ({ children }) => {
     const [activeView, setActiveView] = useState(null);
     // mdIsRA: fetched once on MD login — controls whether "Switch to RA View" button shows
     const [mdIsRA, setMdIsRA]       = useState(false);
+    // isLoggingOut: true during intentional logout/go-to-HRMS so ProtectedRoute
+    // knows NOT to fire the HRMS SSO redirect (which would create a redirect loop).
+    // Reset to false on any fresh login.
+    const [isLoggingOut, setIsLoggingOut] = useState(false);
 
     useEffect(() => {
         // Restore session from localStorage
@@ -64,6 +68,8 @@ export const AuthProvider = ({ children }) => {
 
     // ── Local login ───────────────────────────────────────────────────────────
     const login = async (email, password) => {
+        setIsLoggingOut(false); // Reset on any new login
+        suppressHrmsRedirect(false); // Re-enable HRMS redirect for normal 401s
         const { data } = await api.post('/auth/login', { email, password });
 
         localStorage.setItem('accessToken', data.accessToken);
@@ -88,6 +94,8 @@ export const AuthProvider = ({ children }) => {
 
     // ── HRMS SSO Login ────────────────────────────────────────────────────────
     const hrmsLogin = async (token) => {
+        setIsLoggingOut(false); // Reset on any new SSO login
+        suppressHrmsRedirect(false); // Re-enable HRMS redirect for normal 401s
         const { data } = await api.post('/auth/hrms-sso', { token });
 
         localStorage.setItem('accessToken', data.accessToken);
@@ -112,6 +120,19 @@ export const AuthProvider = ({ children }) => {
 
     // ── Logout ────────────────────────────────────────────────────────────────
     const logout = async () => {
+        // ── isLoggingOut flag ─────────────────────────────────────────────────
+        // Set BEFORE the API call so that if ProtectedRoute re-renders while
+        // the API call is in flight, it already sees isLoggingOut=true and uses
+        // <Navigate to="/login"> instead of the HRMS SSO redirect.
+        // This prevents the redirect loop: logout → HRMS redirect → kra_redirect loop.
+        setIsLoggingOut(true);
+        // ── Suppress HRMS redirect in the Axios interceptor ──────────────────
+        // This is a MODULE-LEVEL flag (not React state) so it takes effect
+        // IMMEDIATELY — before the API call even starts. If api.post('/auth/logout')
+        // returns 401 (expired token), the interceptor sees _suppressHrmsRedirect=true
+        // and just rejects the promise silently instead of hijacking the browser
+        // to the HRMS login page with ?kra_redirect=...
+        suppressHrmsRedirect(true);
         try {
             await api.post('/auth/logout');
         } catch {
@@ -159,6 +180,7 @@ export const AuthProvider = ({ children }) => {
                 user,
                 loading,
                 isAuthenticated,
+                isLoggingOut,
                 activeView,
                 mdIsRA,
                 switchView,

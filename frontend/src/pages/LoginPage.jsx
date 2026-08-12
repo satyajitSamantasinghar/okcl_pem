@@ -14,12 +14,38 @@ const LoginPage = () => {
     const { login, hrmsLogin, getRoleDashboardPath } = useAuth();
     const navigate = useNavigate();
 
-    // ── HRMS SSO Auto-Login ───────────────────────────────────────────────────
-    // When HRMS redirects the employee here with ?token=<BASE64>, we
-    // automatically extract it, exchange it for a local JWT, and navigate
-    // to the dashboard — the employee never sees the login form.
+    // ── HRMS SSO Auto-Login & Background Logout ──────────────────────────────
+    // Two scenarios handled in this single effect:
+    //
+    // 1. HRMS SSO Login: HRMS redirects here with ?token=<BASE64>
+    //    → exchange token for a local JWT, navigate to the dashboard.
+    //
+    // 2. KRA Logout: DashboardLayout navigates here with ?logged_out=true
+    //    instead of navigating to HRMS logout URL directly (which caused a
+    //    redirect loop: HRMS logout → back to KRA → ProtectedRoute SSO fallback
+    //    → HRMS login page with kra_redirect in the URL).
+    //    We fire HRMS logout silently via a hidden <iframe> — no browser
+    //    navigation, no redirect loop. If HRMS has X-Frame-Options: SAMEORIGIN,
+    //    the iframe fails silently and the HRMS session expires naturally.
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
+
+        // ── Scenario 2: Background HRMS logout ───────────────────────────────
+        const loggedOut = params.get('logged_out');
+        if (loggedOut === 'true') {
+            // Clean the URL bar immediately (remove ?logged_out=true)
+            window.history.replaceState({}, document.title, '/login');
+            // Fire HRMS logout silently via a hidden iframe (best-effort)
+            const iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+            iframe.src = 'https://hrmserp.okcl.co.in/phpscript/logout.php';
+            document.body.appendChild(iframe);
+            // Remove the iframe after 4 seconds (enough for logout.php to run)
+            setTimeout(() => iframe.remove(), 4000);
+            return; // Show the normal login form — do not attempt SSO login
+        }
+
+        // ── Scenario 1: HRMS SSO Token Login ─────────────────────────────────
         const ssoToken = params.get('token');
 
         if (!ssoToken) return; // No SSO token → show normal login form

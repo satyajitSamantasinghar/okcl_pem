@@ -20,7 +20,7 @@ const viewAccessMap = {
 };
 
 const ProtectedRoute = ({ children, allowedRoles }) => {
-    const { user, loading, isAuthenticated } = useAuth();
+    const { user, loading, isAuthenticated, isLoggingOut } = useAuth();
 
     if (loading) {
         return (
@@ -32,8 +32,18 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
     }
 
     if (!isAuthenticated) {
-        // return <Navigate to="/login" replace />;
-        // ── HRMS SSO Fallback ─────────────────────────────────────────────────
+        // ── Intentional Logout / Go-to-HRMS ──────────────────────────────────
+        // If isLoggingOut=true, the user deliberately triggered logout or
+        // navigated to HRMS. Do NOT fire the HRMS SSO redirect here — that
+        // would append ?kra_redirect=... to the HRMS login URL and create
+        // an infinite redirect loop. Fall back to the original /login behaviour.
+        // DashboardLayout's window.location call will override this React Router
+        // navigation and take the user to the correct final destination.
+        if (isLoggingOut) {
+            return <Navigate to="/login" replace />;
+        }
+
+        // ── HRMS SSO Fallback (email link / expired session) ──────────────────
         // When a user lands on a KRA page via an email link and their session
         // has expired, redirect them to the HRMS login page instead of the
         // local KRA login. HRMS will re-authenticate and bounce them back here

@@ -29,19 +29,29 @@ const DashboardLayout = () => {
 
     const handleLogout = async () => {
         await logout();
+        // ── isLoggingOut flag (set inside logout()) now prevents the redirect loop ──
+        // Before the isLoggingOut fix, navigating to HRMS_LOGOUT_URL caused:
+        //   HRMS logout.php → redirects back to KRA → ProtectedRoute fires
+        //   HRMS SSO redirect → kra_redirect appended → HRMS login loop.
+        //
+        // Now: logout() sets isLoggingOut=true BEFORE clearing the session.
+        // When ProtectedRoute re-renders it sees isLoggingOut=true and returns
+        // <Navigate to="/login"> instead of the HRMS SSO redirect — no loop.
+        // HRMS logout script runs, clears HRMS session, redirects back to KRA,
+        // KRA sees isLoggingOut=true → goes to /login (public page). ✅
         window.location.href = HRMS_LOGOUT_URL;
     };
 
-    const handleRedirectToHRMS = () => {
+    const handleRedirectToHRMS = async () => {
         setDropdownOpen(false);
-        // ── Go to HRMS Portal ─────────────────────────────────────────────────
-        // DO NOT call logout() here. The user is still authenticated in HRMS;
-        // calling logout() clears the KRA session but ALSO destroys the HRMS
-        // session cookie, which causes HRMS to redirect to its own login page
-        // instead of landing on plist.php.
-        // We simply navigate to the HRMS portal directly — the HRMS session
-        // cookie is sent automatically by the browser and plist.php loads fine.
-        // await logout(); // ← old behaviour: caused HRMS login redirect
+        // ── isLoggingOut flag now makes this safe to call logout() again ─────
+        // Previously, calling logout() here caused ProtectedRoute to fire the
+        // HRMS SSO redirect (with ?kra_redirect=...) instead of going to plist.php.
+        // Now logout() sets isLoggingOut=true first, so ProtectedRoute returns
+        // <Navigate to="/login"> (safe fallback) instead of the HRMS SSO redirect.
+        // The window.location.href below then overrides the React Router navigation
+        // and takes the browser directly to plist.php. ✅
+        await logout();
         window.location.href = HRMS_PORTAL_URL;
     };
 

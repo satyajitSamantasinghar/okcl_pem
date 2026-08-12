@@ -5,6 +5,24 @@ import axios from 'axios';
 // we fall back to the full localhost URL via the env variable.
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
+// ── HRMS redirect suppression flag ───────────────────────────────────────────
+// When true, the 401 interceptor falls back to /login instead of firing the
+// HRMS SSO redirect. This is set by AuthContext.logout() BEFORE calling
+// api.post('/auth/logout') so that if the logout request itself returns 401
+// (e.g. expired token), the interceptor doesn't hijack the browser to HRMS.
+//
+// This is a module-level variable (not React state) so it's available
+// synchronously inside the Axios interceptor — no React render cycle needed.
+let _suppressHrmsRedirect = false;
+
+/**
+ * Call with `true` before initiating a logout API call.
+ * Call with `false` after login succeeds (AuthContext handles this).
+ */
+export function suppressHrmsRedirect(value) {
+  _suppressHrmsRedirect = value;
+}
+
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
@@ -37,7 +55,12 @@ api.interceptors.response.use(
         const refreshToken = localStorage.getItem('refreshToken');
         if (!refreshToken) {
           localStorage.clear();
-          // window.location.href = '/login'; // old behaviour — kept for reference
+          // ── Check suppression flag before deciding where to redirect ─────
+          if (_suppressHrmsRedirect) {
+            // Intentional logout — go to KRA's own login page (no loop)
+            // window.location.href = '/login'; // old behaviour — kept for reference
+            return Promise.reject(error);
+          }
           // ── HRMS SSO Fallback: no refresh token — send user to HRMS to re-authenticate
           const kraReturnUrl = encodeURIComponent(window.location.href);
           window.location.replace(
@@ -56,7 +79,12 @@ api.interceptors.response.use(
         return api(originalRequest);
       } catch (refreshError) {
         localStorage.clear();
-        // window.location.href = '/login'; // old behaviour — kept for reference
+        // ── Check suppression flag before deciding where to redirect ─────
+        if (_suppressHrmsRedirect) {
+          // Intentional logout — go to KRA's own login page (no loop)
+          // window.location.href = '/login'; // old behaviour — kept for reference
+          return Promise.reject(refreshError);
+        }
         // ── HRMS SSO Fallback: refresh token invalid/expired — send user to HRMS
         const kraReturnUrl = encodeURIComponent(window.location.href);
         window.location.replace(
