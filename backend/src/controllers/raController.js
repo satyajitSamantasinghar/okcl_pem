@@ -410,6 +410,23 @@ exports.submitMonthlyEvaluation = async (req, res) => {
       });
     }
 
+    // ── BUSINESS RULE: Cannot evaluate before achievement/progress is submitted ──
+    // The correct workflow is: Plan submission → Achievement/progress submission → Evaluation.
+    // An RA must not be able to evaluate a monthly plan until the employee has submitted
+    // their progress/achievement (status = SUBMITTED). Draft records are excluded.
+    // This guard enforces the rule at the API layer as a defense-in-depth measure.
+    if (evaluation.monthlyPlanId) {
+      const submittedAchievement = await MonthlyAchievement.findOne({
+        where: { monthlyPlanId: evaluation.monthlyPlanId, status: "SUBMITTED" },
+        attributes: ["id"],
+      });
+      if (!submittedAchievement) {
+        return res.status(400).json({
+          message: "Cannot evaluate: the employee has not yet submitted their monthly progress/achievement. Evaluation can only proceed after the progress submission is received.",
+        });
+      }
+    }
+
     // Validate score range
     const numScore = Number(score);
     if (!Number.isInteger(numScore) || numScore < 1 || numScore > 10) {
@@ -1857,7 +1874,22 @@ exports.getDeadlineManagement = async (req, res) => {
           isStillExtendable: nowForCeiling <= planCeiling && planEffectiveDateOnly < planCeilingDateOnly,
         },
         achievement: {
-          status: empAch ? empAch.status : (empPlan ? "MISSING" : "N/A"),
+          // Apply the same evaluation-status precedence as the plan:
+          // MonthlyEvaluation is the authoritative source once the RA has acted.
+          //   1. No plan at all              → N/A
+          //   2. Plan exists, no achievement → MISSING
+          //   3. Achievement + eval=EVALUATED → EVALUATED
+          //   4. Achievement + eval=REJECTED  → REJECTED
+          //   5. Achievement, no eval yet     → MonthlyAchievement.status (SUBMITTED / PENDING)
+          status: !empPlan
+            ? "N/A"
+            : !empAch
+              ? "MISSING"
+              : empEval?.status === "EVALUATED"
+                ? "EVALUATED"
+                : empEval?.status === "REJECTED"
+                  ? "REJECTED"
+                  : empAch.status,
           baseDeadline: baseAchDeadline.toISOString().split("T")[0],
           effectiveDeadline: achExt.effectiveDeadline.toISOString().split("T")[0],
           isExtended: achExt.isExtended,

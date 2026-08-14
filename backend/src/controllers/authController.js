@@ -229,6 +229,7 @@ exports.hrmsSSO = async (req, res) => {
     let decoded;
     try {
       decoded = decryptKraToken(token);
+
       // Log key identity fields immediately after decryption so every login is traceable
       console.log(
         `[HRMS SSO] Decrypted → emp_code: "${decoded.emp_code}" | ` +
@@ -264,7 +265,8 @@ exports.hrmsSSO = async (req, res) => {
       derivedRole = "RA";
     } else {
       const ishod = String(decoded.ishod ?? "");
-      derivedRole = (ishod === "" || ishod === "-1") ? "EMPLOYEE" : "RA";
+      console.log("ishod is :", ishod);
+      derivedRole = (ishod === "" || ishod === "-1" || ishod === "0") ? "EMPLOYEE" : "RA";
     }
 
     // ── 5. Resolve Reporting Authority UUID from ra_id ─────────────────────

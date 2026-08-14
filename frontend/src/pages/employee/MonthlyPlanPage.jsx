@@ -1,11 +1,11 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
 import {
     FiSend, FiFileText, FiCheckCircle, FiX, FiCalendar,
     FiTrendingUp, FiMessageSquare, FiClock, FiPlus, FiChevronRight,
-    FiSave, FiSearch, FiEdit3, FiAlertCircle, FiRefreshCw, FiStar
+    FiSave, FiSearch, FiEdit3, FiAlertCircle, FiRefreshCw, FiStar, FiLock
 } from 'react-icons/fi';
 import './MonthlyPlanPage.css';
 // FISCAL YEAR FIX — shared fiscal utility
@@ -351,13 +351,22 @@ const MonthlyPlanPage = () => {
     const [achModal, setAchModal] = useState(null);
     const [achItems, setAchItems] = useState([]);
     const [additionalAchItems, setAdditionalAchItems] = useState([{ text: '', progress: 0 }]);
+    // UNSAVED-CHANGES GUARD — snapshot of achItems/additionalAchItems taken the
+    // instant the Achievement modal opens (openAchModal). Compared against the
+    // live state on close-attempt so we only warn when the user actually typed
+    // something new, not just because a draft happened to have pre-filled text.
+    const achModalSnapshotRef = useRef(null);
 
     const [selectedPlan, setSelectedPlan] = useState(null);
     const [resubmitPlan, setResubmitPlan] = useState(null);
     const [resubmitItems, setResubmitItems] = useState(['']);
+    // Same unsaved-changes guard, for the Resubmit / Add More Plans modal.
+    const resubmitSnapshotRef = useRef(null);
 
-    // Confirmation dialog shown before any final (non-draft) submission.
-    // Shape: { title, message, confirmLabel, onConfirm }
+    // Confirmation dialog shown before any final (non-draft) submission, and
+    // also reused (with variant: 'danger') for the "discard unsaved changes?"
+    // guard when a data-entry modal is closed with edits still pending.
+    // Shape: { title, message, confirmLabel, onConfirm, variant?, icon? }
     const [confirmDialog, setConfirmDialog] = useState(null);
 
     const fetchData = async () => {
@@ -509,18 +518,38 @@ const MonthlyPlanPage = () => {
             return { mode: 'resubmit', label: 'Resubmit Plan', disabled: false, plan: currentMonthPlan };
         }
 
+        // ── ADD MORE PLANS — status is PENDING (already submitted). Per spec,
+        // this window is NOT bounded by the original plan submission
+        // deadline (that only ever governed the FIRST submission) — it stays
+        // open for the rest of this calendar month, or until the RA/MD
+        // evaluates the plan, whichever comes first. Since currentMonthPlan
+        // is by definition this month's plan, being in this branch at all
+        // already satisfies "still within the month" — the backend
+        // (allowMonthlyPlanSubmission) enforces the actual month-end cutoff
+        // server-side the same way. So the only client-side gate left here
+        // is evaluation status.
+        const currentEval = evaluationByMonth[currentMonthDefault];
+        const isCurrentEvaluated = currentEval && currentEval.status === 'EVALUATED';
+        if (!isCurrentEvaluated) {
+            return { mode: 'add-more', label: 'Add More Plans', disabled: false, plan: currentMonthPlan };
+        }
+
         return {
             mode: 'submitted',
             label: `Plan Submitted — ${formatMonth(currentMonthDefault)}`,
             disabled: true,
             plan: currentMonthPlan,
         };
-    }, [currentMonthPlan, effectivePlanDeadline, getPlanDeadline, currentMonthDefault]);
+    }, [currentMonthPlan, effectivePlanDeadline, getPlanDeadline, currentMonthDefault, evaluationByMonth]);
 
     const handlePlanCtaClick = () => {
         if (planCtaState.mode === 'create') { setShowPlanForm(true); return; }
         if (planCtaState.mode === 'continue-draft' || planCtaState.mode === 'resubmit') {
             openResubmitModal(planCtaState.plan);
+            return;
+        }
+        if (planCtaState.mode === 'add-more') {
+            openAppendPlanModal(planCtaState.plan);
             return;
         }
         // 'submitted' / 'locked': button is disabled for pointer users; this
@@ -628,6 +657,10 @@ const MonthlyPlanPage = () => {
         const existing = achievementByPlanId[plan.id];
         const itemList = getPlanItems(plan);
         setAchModal(plan);
+
+        let nextAchItems;
+        let nextAdditionalItems;
+
         if (existing) {
             const effective = getEffectivePlanAch(existing, itemList.length);
 
@@ -646,28 +679,161 @@ const MonthlyPlanPage = () => {
                 });
             }
 
-            setAchItems(itemList.map((_, i) => ({
+            nextAchItems = itemList.map((_, i) => ({
                 achievementDetails: achByPlanIndex[i]?.achievementDetails ?? '',
                 progress:           achByPlanIndex[i]?.progress           ?? 0,
-            })));
+            }));
 
             if (existing.additionalAchievement) {
                 const parsed = parseAdditionalAch(existing.additionalAchievement);
-                setAdditionalAchItems(parsed.length ? parsed : [{ text: '', progress: 0 }]);
-            } else { setAdditionalAchItems([{ text: '', progress: 0 }]); }
+                nextAdditionalItems = parsed.length ? parsed : [{ text: '', progress: 0 }];
+            } else { nextAdditionalItems = [{ text: '', progress: 0 }]; }
         } else {
-            setAchItems(itemList.map(() => ({ achievementDetails: '', progress: 0 })));
-            setAdditionalAchItems([{ text: '', progress: 0 }]);
+            nextAchItems = itemList.map(() => ({ achievementDetails: '', progress: 0 }));
+            nextAdditionalItems = [{ text: '', progress: 0 }];
+        }
+
+        setAchItems(nextAchItems);
+        setAdditionalAchItems(nextAdditionalItems);
+        // Baseline snapshot for the unsaved-changes guard — taken from the same
+        // values we just loaded, so re-opening an unmodified draft never
+        // trips a false "discard changes?" warning.
+        achModalSnapshotRef.current = JSON.stringify({ achItems: nextAchItems, additionalAchItems: nextAdditionalItems });
+    };
+
+    const openResubmitModal = (plan) => {
+        setResubmitPlan(plan);
+        const items = getPlanItems(plan);
+        const nextItems = items.length ? items : [''];
+        setResubmitItems(nextItems);
+        resubmitSnapshotRef.current = JSON.stringify(nextItems);
+    };
+
+    // ── ADD MORE PLANS — reuses the same resubmit modal/state, but in
+    // "append" mode: existing items (getPlanItems(plan).length of them,
+    // read at open-time and re-derived from resubmitPlan wherever needed so
+    // no separate lock-count state is required) render locked/read-only,
+    // and only new items typed below them are editable.
+    const openAppendPlanModal = (plan) => {
+        setResubmitPlan(plan);
+        const items = getPlanItems(plan);
+        const nextItems = [...items, ''];
+        setResubmitItems(nextItems);
+        resubmitSnapshotRef.current = JSON.stringify(nextItems);
+    };
+
+    // ── UNSAVED-CHANGES GUARDS ──────────────────────────────────────────
+    // True only when the live form state has *meaningfully* diverged from
+    // the snapshot captured at open-time. Values are normalised (trimmed,
+    // empty/untouched extra boxes dropped) before comparing, so merely
+    // clicking "+" for a new blank box — or nudging a slider back to where
+    // it started — never trips a false "discard changes?" warning; only
+    // content the user would actually lose does.
+    const normalizeAchRows = (items) =>
+        (items || []).map(a => ({ achievementDetails: (a.achievementDetails || '').trim(), progress: a.progress || 0 }));
+    const normalizeAdditionalRows = (items) =>
+        (items || [])
+            .map(a => ({ text: (a.text || '').trim(), progress: a.progress || 0 }))
+            .filter(a => a.text || a.progress); // drop blank, never-touched boxes
+    const normalizePlanTexts = (items) => (items || []).map(s => (s || '').trim()).filter(Boolean);
+
+    const isAchModalDirty = () => {
+        if (!achModal) return false;
+        let baseline;
+        try { baseline = JSON.parse(achModalSnapshotRef.current) || {}; } catch { return true; }
+        const current = JSON.stringify({
+            achItems: normalizeAchRows(achItems),
+            additionalAchItems: normalizeAdditionalRows(additionalAchItems),
+        });
+        const original = JSON.stringify({
+            achItems: normalizeAchRows(baseline.achItems),
+            additionalAchItems: normalizeAdditionalRows(baseline.additionalAchItems),
+        });
+        return current !== original;
+    };
+
+    const isResubmitModalDirty = () => {
+        if (!resubmitPlan) return false;
+        let baseline;
+        try { baseline = JSON.parse(resubmitSnapshotRef.current) || []; } catch { return true; }
+        return JSON.stringify(normalizePlanTexts(resubmitItems)) !== JSON.stringify(normalizePlanTexts(baseline));
+    };
+
+    // Close handlers used by the backdrop click, the header "X", and the
+    // "Cancel" button — every dismissal path goes through the same guard so
+    // behaviour is consistent no matter how the user tries to close it.
+    // Mid-submit closes are ignored outright to avoid orphaning a request.
+    const requestCloseAchModal = () => {
+        if (submitting) return;
+        if (isAchModalDirty()) {
+            setConfirmDialog({
+                variant: 'danger',
+                icon: FiAlertCircle,
+                title: 'Discard unsaved progress?',
+                message: "You've entered progress details for this month that haven't been saved yet. Closing now will discard them — click \u201CSave as Draft\u201D first if you'd like to keep them.",
+                confirmLabel: 'Discard Changes',
+                onConfirm: () => {
+                    setAchModal(null);
+                    setAchItems([]);
+                    setAdditionalAchItems([{ text: '', progress: 0 }]);
+                },
+            });
+        } else {
+            setAchModal(null);
         }
     };
 
-    const openResubmitModal = (plan) => { setResubmitPlan(plan); const items = getPlanItems(plan); setResubmitItems(items.length ? items : ['']); };
+    const requestCloseResubmitModal = () => {
+        if (submitting) return;
+        if (isResubmitModalDirty()) {
+            setConfirmDialog({
+                variant: 'danger',
+                icon: FiAlertCircle,
+                title: 'Discard unsaved changes?',
+                message: "You've made changes to this plan that haven't been saved yet. Closing now will discard them.",
+                confirmLabel: 'Discard Changes',
+                onConfirm: () => setResubmitPlan(null),
+            });
+        } else {
+            setResubmitPlan(null);
+        }
+    };
 
-    const submitResubmitRequest = async (month, filled, asDraft, wasDraft) => {
+    // ── MODAL A11Y/UX — background scroll lock ──────────────────────────
+    // Industry-standard behaviour: while any overlay modal is open, the page
+    // behind it shouldn't scroll. Restores the previous inline value on
+    // close so we never clobber styles set elsewhere.
+    useEffect(() => {
+        const anyOverlayOpen = achModal || selectedPlan || resubmitPlan || confirmDialog;
+        if (!anyOverlayOpen) return;
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => { document.body.style.overflow = previousOverflow; };
+    }, [achModal, selectedPlan, resubmitPlan, confirmDialog]);
+
+    // ── MODAL A11Y/UX — Escape-to-close ─────────────────────────────────
+    // Closes whichever overlay is topmost first. Data-entry modals route
+    // through the same guarded close handlers as the backdrop/X/Cancel
+    // controls, so an accidental Escape press can't silently drop input.
+    useEffect(() => {
+        const anyOverlayOpen = achModal || selectedPlan || resubmitPlan || confirmDialog;
+        if (!anyOverlayOpen) return;
+        const handleKeyDown = (e) => {
+            if (e.key !== 'Escape') return;
+            if (confirmDialog) { setConfirmDialog(null); return; }
+            if (achModal) { requestCloseAchModal(); return; }
+            if (resubmitPlan) { requestCloseResubmitModal(); return; }
+            if (selectedPlan) { setSelectedPlan(null); return; }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [achModal, selectedPlan, resubmitPlan, confirmDialog, achItems, additionalAchItems, resubmitItems, submitting]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const submitResubmitRequest = async (month, filled, asDraft, wasDraft, isAppend = false) => {
         setSubmitting(true);
         try {
             await api.post('/employee/monthly-plan', { month, planItems: filled, planDetails: filled.join('\n'), status: asDraft ? 'DRAFT' : 'PENDING' });
-            toast.success(asDraft ? 'Draft saved!' : (wasDraft ? 'Plan submitted!' : 'Plan resubmitted!'));
+            toast.success(isAppend ? 'New plan(s) added!' : (asDraft ? 'Draft saved!' : (wasDraft ? 'Plan submitted!' : 'Plan resubmitted!')));
             setResubmitPlan(null); setResubmitItems(['']);
             fetchData();
         } catch (err) {
@@ -676,6 +842,26 @@ const MonthlyPlanPage = () => {
     };
 
     const handleResubmitPlan = (asDraft = false) => {
+        const isAppendMode = resubmitPlan.status === 'PENDING';
+
+        // ── ADD MORE PLANS branch — append-only, no draft option (the plan
+        // is already submitted; there's nothing to "draft" here).
+        if (isAppendMode) {
+            const lockCount = getPlanItems(resubmitPlan).length;
+            const filled = resubmitItems.filter(p => p.trim());
+            const newItems = resubmitItems.slice(lockCount).filter(p => p.trim());
+            if (newItems.length === 0) { toast.error('Please add at least one new plan.'); return; }
+
+            const month = resubmitPlan.month;
+            setConfirmDialog({
+                title: 'Add More Plans?',
+                message: `You're about to add ${newItems.length} new plan${newItems.length !== 1 ? 's' : ''} to ${formatMonth(month)}. Your existing plans stay unchanged, and your Reporting Authority will be notified of the addition.`,
+                confirmLabel: 'Yes, Add Plans',
+                onConfirm: () => submitResubmitRequest(month, filled, false, false, true),
+            });
+            return;
+        }
+
         const filled = resubmitItems.filter(p => p.trim());
         if (filled.length === 0) { toast.error('Please enter at least one plan'); return; }
 
@@ -805,7 +991,20 @@ const MonthlyPlanPage = () => {
             ? Math.round(achItems.reduce((s, a) => s + (Math.min(100, a.progress || 0)), 0) / achItems.length) : 0;
         const monthLabel = formatMonth(achModal.month);
 
-        setConfirmDialog({
+        // Detect append mode the same way renderAchModal does, for wording only.
+        const existingAch = achievementByPlanId[achModal.id];
+        const planItemsListForCheck = getPlanItems(achModal);
+        const priorAchForCheck = existingAch && existingAch.status !== 'DRAFT'
+            ? getEffectivePlanAch(existingAch, planItemsListForCheck.length) : null;
+        const achLockCountForCheck = priorAchForCheck ? priorAchForCheck.length : 0;
+        const isAppendModeForCheck = achLockCountForCheck > 0 && achLockCountForCheck < planItemsListForCheck.length;
+
+        setConfirmDialog(isAppendModeForCheck ? {
+            title: 'Add Progress?',
+            message: `You're about to add progress for your newly added plan${planItemsListForCheck.length - achLockCountForCheck !== 1 ? 's' : ''} for ${monthLabel}. Your earlier progress entries stay unchanged, and your Reporting Authority will be notified.`,
+            confirmLabel: 'Yes, Add Progress',
+            onConfirm: () => submitAchievementRequest(false),
+        } : {
             title: 'Submit Progress?',
             message: `You're about to submit your monthly progress for ${monthLabel} at ${overallProgress}% overall progress. Once submitted, it will be sent to your Reporting Authority for evaluation.`,
             confirmLabel: 'Yes, Submit Progress',
@@ -841,6 +1040,24 @@ const MonthlyPlanPage = () => {
                 />
             </div>
             <button className="mp-plan-add-btn" onClick={() => onAdd(index)} type="button" title="Add another plan below"><FiPlus /></button>
+        </div>
+    );
+
+    /* ── READ-ONLY PLAN BOX — used for already-submitted plan items while
+       in "Add More Plans" mode. No textarea, no add/remove controls, so
+       existing items can never be reordered, edited, or have a new box
+       spliced in between them (which would break the positional planIndex
+       link to already-submitted achievement progress). ── */
+    const renderLockedPlanBox = (item, index) => (
+        <div key={index} className="mp-plan-box-row">
+            <div className="mp-plan-box-content mp-plan-box-content--locked">
+                <div className="mp-plan-box-header">
+                    <span className="mp-plan-seq-num mp-plan-seq-num--locked">{index + 1}</span>
+                    <span className="mp-plan-box-label">Plan {index + 1}</span>
+                    <span className="mp-plan-locked-tag"><FiLock size={10} /> Already submitted</span>
+                </div>
+                <div className="mp-plan-box-textarea mp-plan-box-textarea--locked filled">{item}</div>
+            </div>
         </div>
     );
 
@@ -916,17 +1133,29 @@ const MonthlyPlanPage = () => {
             ? Math.round(achItems.reduce((s, a) => s + (Math.min(100, a.progress || 0)), 0) / achItems.length) : 0;
         const completedCount = achItems.filter(a => a.progress >= 100).length;
 
+        // ── ADD MORE PROGRESS — if achievement was already SUBMITTED (not a
+        // draft), everything up to the count already stored is locked; only
+        // indices beyond that (from newly appended plan items) are editable.
+        // getEffectivePlanAch's structured-data path returns exactly the
+        // stored planAchievements rows, so its length IS the "already
+        // submitted" count — no separate lock-count state needed.
+        const priorAch = existing && !isDraft ? getEffectivePlanAch(existing, planItemsList.length) : null;
+        const achLockCount = priorAch ? priorAch.length : 0;
+        const isAppendMode = achLockCount > 0 && achLockCount < planItemsList.length;
+
         return createPortal(
-            <div className="mp-overlay" onClick={() => setAchModal(null)}>
+            <div className="mp-overlay" onClick={requestCloseAchModal}>
                 <div className="mp-ach-modal mp-ach-modal--wide" onClick={e => e.stopPropagation()}>
                     <div className="mp-ach-modal-header mp-ach-modal-header--green">
                         <div>
                             <h2>{formatMonth(achModal.month)}</h2>
                             <p className="mp-ach-subtitle">
-                                {isDraft ? 'Continue editing your draft' : `Submit Monthly Progress for ${planItemsList.length} plan${planItemsList.length > 1 ? 's' : ''}`}
+                                {isDraft ? 'Continue editing your draft'
+                                    : isAppendMode ? 'Add progress for your newly added plan(s) below — earlier entries are locked.'
+                                    : `Submit Monthly Progress for ${planItemsList.length} plan${planItemsList.length > 1 ? 's' : ''}`}
                             </p>
                         </div>
-                        <button className="mp-modal-close" onClick={() => setAchModal(null)}><FiX /></button>
+                        <button className="mp-modal-close" onClick={requestCloseAchModal}><FiX /></button>
                     </div>
                     <div className="mp-ach-overall-summary">
                         <div className="mp-ach-overall-left">
@@ -948,6 +1177,28 @@ const MonthlyPlanPage = () => {
                             const item = achItems[idx] || { achievementDetails: '', progress: 0 };
                             const safeProgress = Math.min(100, item.progress || 0);
                             const tk = getProgressTokens(safeProgress);
+
+                            // ── Locked row — already-submitted progress, shown for context but
+                            // not editable while adding progress for newly appended plan items.
+                            if (idx < achLockCount) {
+                                return (
+                                    <div key={idx} className="mp-ach-item-row mp-ach-item-row--locked" style={{ borderLeftColor: '#CBD5E1' }}>
+                                        <div className="mp-ach-item-header">
+                                            <CircularProgress progress={safeProgress} size={48} />
+                                            <div className="mp-ach-item-plan-info">
+                                                <div className="mp-ach-item-plan-num">
+                                                    Plan {idx + 1}
+                                                    <span className="mp-plan-locked-tag"><FiLock size={10} /> Already submitted</span>
+                                                </div>
+                                                <div className="mp-ach-item-plan-text">{planText}</div>
+                                            </div>
+                                            <span className="mp-ach-progress-badge" style={{ background: tk.badgeBg, color: tk.badgeText }}>{tk.label}</span>
+                                        </div>
+                                        <p className="mp-ach-locked-details">{item.achievementDetails || '—'}</p>
+                                    </div>
+                                );
+                            }
+
                             return (
                                 <div key={idx} className="mp-ach-item-row" style={{ borderLeftColor: tk.borderColor }}>
                                     <div className="mp-ach-item-header">
@@ -1012,13 +1263,15 @@ const MonthlyPlanPage = () => {
                         </div>
                     </div>
                     <div className="mp-ach-actions">
-                        <button className="btn btn-secondary" disabled={submitting} onClick={() => handleAchSubmit(true)}>
-                            <FiSave /> Save as Draft
-                        </button>
+                        {!isAppendMode && (
+                            <button className="btn btn-secondary" disabled={submitting} onClick={() => handleAchSubmit(true)}>
+                                <FiSave /> Save as Draft
+                            </button>
+                        )}
                         <button className="btn btn-primary" disabled={submitting} onClick={() => handleAchSubmit(false)}>
-                            <FiSend /> {submitting ? 'Submitting...' : 'Submit Monthly Progress'}
+                            <FiSend /> {submitting ? 'Submitting...' : isAppendMode ? 'Add Progress' : 'Submit Monthly Progress'}
                         </button>
-                        <button className="btn btn-secondary" onClick={() => setAchModal(null)}>Cancel</button>
+                        <button className="btn btn-secondary" onClick={requestCloseAchModal}>Cancel</button>
                     </div>
                 </div>
             </div>,
@@ -1028,6 +1281,8 @@ const MonthlyPlanPage = () => {
 
     /* ======================================================
        DETAIL MODAL — redesigned header with month chip + stepper below
+       (read-only — no editable fields, so backdrop/X click-to-close is
+       safe here and intentionally left unguarded)
     ====================================================== */
     const renderDetailModal = () => {
         if (!selectedPlan) return null;
@@ -1251,7 +1506,35 @@ const MonthlyPlanPage = () => {
                         {(!ach || ach.status === 'DRAFT') && (
                             <div className="dmod-no-ach">
                                 <div className="dmod-no-ach-icon-wrap"><FiTrendingUp size={15} /></div>
-                                <p>{ach?.status === 'DRAFT' ? 'Progress draft saved — not yet submitted.' : 'No Monthly progress submitted for this month yet.'}</p>
+                                {ach?.status === 'DRAFT' ? (
+                                    <>
+                                        <p>Progress draft saved — not yet submitted.</p>
+                                        <button
+                                            className="mp-add-ach-btn mp-add-ach-btn--continue dmod-no-ach-cta"
+                                            onClick={() => { setSelectedPlan(null); openAchModal(selectedPlan); }}
+                                        >
+                                            <FiEdit3 /> Continue Editing
+                                        </button>
+                                    </>
+                                ) : prog.isPlanDraft ? (
+                                    <p>Submit your plan first to unlock progress entry.</p>
+                                ) : selectedPlan.status === 'REJECTED' ? (
+                                    <p>Resubmit your plan to unlock progress entry.</p>
+                                ) : selectedPlan.month === currentMonthDefault && achievementWindowStatus === 'not_open' ? (
+                                    <p>Monthly progress submission opens on the {achievementStartDay}{ordinalSuffix(achievementStartDay)} of the month.</p>
+                                ) : selectedPlan.month === currentMonthDefault && achievementWindowStatus === 'closed' ? (
+                                    <p>Monthly progress submission window has closed for this month.</p>
+                                ) : (
+                                    <>
+                                        <p>No Monthly progress submitted for this month yet.</p>
+                                        <button
+                                            className="mp-add-ach-btn dmod-no-ach-cta"
+                                            onClick={() => { setSelectedPlan(null); openAchModal(selectedPlan); }}
+                                        >
+                                            <FiPlus /> Add Monthly Progress
+                                        </button>
+                                    </>
+                                )}
                             </div>
                         )}
 
@@ -1334,27 +1617,34 @@ const MonthlyPlanPage = () => {
     ====================================================== */
     const renderConfirmDialog = () => {
         if (!confirmDialog) return null;
-        const { title, message, confirmLabel, onConfirm } = confirmDialog;
+        // variant: 'default' (submission confirmations, orange/FiSend) or
+        // 'danger' (unsaved-changes discard guard, red/FiAlertCircle).
+        // Backdrop click here always cancels — safe by definition, since
+        // cancelling a discard just returns the user to their still-open,
+        // still-editable form with nothing lost.
+        const { title, message, confirmLabel, onConfirm, variant = 'default', icon: Icon } = confirmDialog;
+        const isDanger = variant === 'danger';
+        const IconTag = Icon || FiSend;
 
         return createPortal(
             <div className="mp-overlay" onClick={() => setConfirmDialog(null)}>
-                <div className="mp-confirm-modal" onClick={e => e.stopPropagation()}>
+                <div className={`mp-confirm-modal${isDanger ? ' mp-confirm-modal--danger' : ''}`} onClick={e => e.stopPropagation()}>
                     <button className="mp-modal-close mp-confirm-close" onClick={() => setConfirmDialog(null)}><FiX /></button>
-                    <div className="mp-confirm-icon-wrap"><FiSend size={20} /></div>
+                    <div className="mp-confirm-icon-wrap"><IconTag size={20} /></div>
                     <h3 className="mp-confirm-title">{title}</h3>
                     <p className="mp-confirm-message">{message}</p>
                     <div className="mp-confirm-actions">
                         <button className="btn btn-secondary" onClick={() => setConfirmDialog(null)}>
-                            Cancel
+                            {isDanger ? 'Keep Editing' : 'Cancel'}
                         </button>
                         <button
-                            className="btn btn-primary"
+                            className={`btn ${isDanger ? 'btn-danger' : 'btn-primary'}`}
                             onClick={() => {
                                 setConfirmDialog(null);
                                 onConfirm();
                             }}
                         >
-                            <FiCheckCircle /> {confirmLabel}
+                            {isDanger ? <FiAlertCircle /> : <FiCheckCircle />} {confirmLabel}
                         </button>
                     </div>
                 </div>
@@ -1642,6 +1932,17 @@ const MonthlyPlanPage = () => {
                                     ) : (
                                         <div className="mp-section-date"><FiClock size={10} /> Submitted {formatDateShort(plan.submittedAt)}</div>
                                     )}
+                                    {/* ── ADD MORE PLANS — open for the rest of this calendar month
+                                        (or until the RA evaluates), not bounded by the original
+                                        submission deadline. Scoped to the current month's card;
+                                        server-side (allowMonthlyPlanSubmission) enforces the same
+                                        month-end cutoff. ── */}
+                                    {plan.status === 'PENDING' && !isEval && plan.month === currentMonthDefault && (
+                                        <button className="mp-add-ach-btn mp-add-ach-btn--continue" style={{ marginTop: 8 }}
+                                            onClick={e => { e.stopPropagation(); openAppendPlanModal(plan); }}>
+                                            <FiPlus /> Add More Plans
+                                        </button>
+                                    )}
                                 </div>
                                 <div className={`mp-section achievement ${ach && !isDraftAch ? 'filled' : 'empty'}`}>
                                     <div className="mp-section-label"><FiTrendingUp /> Monthly Progress</div>
@@ -1659,11 +1960,20 @@ const MonthlyPlanPage = () => {
                                                 <div className="mp-section-text">{ach.achievementDetails}</div>
                                             )}
                                             <div className="mp-section-date"><FiClock size={10} /> Submitted {formatDateShort(ach.submittedAt)}</div>
+                                            {/* ── ADD MORE PROGRESS — shows only when extra plan items were
+                                                appended after this achievement was already submitted, RA
+                                                hasn't evaluated yet, and the progress window is still open. ── */}
+                                            {!isEval && planItemsList.length > (effectivePlanAch ? effectivePlanAch.length : 0)
+                                                && plan.month === currentMonthDefault && achievementWindowStatus === 'open' && (
+                                                <button className="mp-add-ach-btn mp-add-ach-btn--continue" onClick={() => openAchModal(plan)}>
+                                                    <FiPlus /> Add Progress for New Plan{planItemsList.length - (effectivePlanAch ? effectivePlanAch.length : 0) !== 1 ? 's' : ''}
+                                                </button>
+                                            )}
                                         </>
                                     ) : isDraftAch ? (
                                         <div className="mp-draft-inline">
                                             <div className="mp-draft-badge-sm"><FiSave /> Draft saved</div>
-                                            <button className="mp-add-ach-btn" onClick={() => openAchModal(plan)}><FiEdit3 /> Continue Editing</button>
+                                            <button className="mp-add-ach-btn mp-add-ach-btn--continue" onClick={() => openAchModal(plan)}><FiEdit3 /> Continue Editing</button>
                                         </div>
                                     ) : isPlanDraft ? (
                                         <div className="mp-ach-locked"><FiAlertCircle className="mp-ach-locked-icon" /><span>Submit your plan first to unlock progress entry</span></div>
@@ -1694,15 +2004,23 @@ const MonthlyPlanPage = () => {
             {renderAchModal()}
             {renderDetailModal()}
 
-            {resubmitPlan && createPortal(
-                <div className="mp-overlay" onClick={() => setResubmitPlan(null)}>
+            {resubmitPlan && (() => {
+                const isAppendMode = resubmitPlan.status === 'PENDING';
+                const lockCount = isAppendMode ? getPlanItems(resubmitPlan).length : 0;
+                const newCount = resubmitItems.slice(lockCount).filter(p => p.trim()).length;
+                return createPortal(
+                <div className="mp-overlay" onClick={requestCloseResubmitModal}>
                     <div className="mp-ach-modal mp-ach-modal--wide" onClick={e => e.stopPropagation()}>
                         <div className="mp-ach-modal-header">
                             <div>
-                                <h2>{resubmitPlan.status === 'DRAFT' ? 'Edit & Submit Plan' : 'Resubmit Plan'} — {formatMonth(resubmitPlan.month)}</h2>
-                                <p className="mp-ach-subtitle">{resubmitPlan.status === 'DRAFT' ? 'Finalise your draft and submit.' : 'MD rejected your previous plan. Update and resubmit below.'}</p>
+                                <h2>{isAppendMode ? 'Add More Plans' : resubmitPlan.status === 'DRAFT' ? 'Edit & Submit Plan' : 'Resubmit Plan'} — {formatMonth(resubmitPlan.month)}</h2>
+                                <p className="mp-ach-subtitle">
+                                    {isAppendMode
+                                        ? 'Your existing plans are locked below. Add new plans in the boxes at the bottom.'
+                                        : resubmitPlan.status === 'DRAFT' ? 'Finalise your draft and submit.' : 'MD rejected your previous plan. Update and resubmit below.'}
+                                </p>
                             </div>
-                            <button className="mp-modal-close" onClick={() => setResubmitPlan(null)}><FiX /></button>
+                            <button className="mp-modal-close" onClick={requestCloseResubmitModal}><FiX /></button>
                         </div>
                         <div className="mp-ach-items-container">
                             {resubmitPlan.mdRemarks && (
@@ -1711,37 +2029,54 @@ const MonthlyPlanPage = () => {
                                     <div className="mp-resubmit-remarks-text">{resubmitPlan.mdRemarks}</div>
                                 </div>
                             )}
+                            {isAppendMode && (
+                                <div className="mp-append-notice">
+                                    <FiLock size={12} />
+                                    Existing plans can't be edited or removed once submitted — you can only add new ones below.
+                                </div>
+                            )}
                             <div className="mp-form-hint" style={{ margin: 0 }}>
                                 <FiPlus className="mp-form-hint-icon" />
-                                Write each plan in its own box. Click <strong>+</strong> to add another plan below it.
+                                {isAppendMode
+                                    ? <>Write each new plan in its own box. Click <strong>+</strong> to add another below it.</>
+                                    : <>Write each plan in its own box. Click <strong>+</strong> to add another plan below it.</>}
                             </div>
                             <div>
                                 <div className="mp-ach-section-title">
-                                    <FiFileText /> Updated Plan Details
-                                    <span className="mp-ach-section-count">{resubmitItems.filter(p => p.trim()).length} plan{resubmitItems.filter(p => p.trim()).length !== 1 ? 's' : ''}</span>
+                                    <FiFileText /> {isAppendMode ? 'New Plans' : 'Updated Plan Details'}
+                                    <span className="mp-ach-section-count">
+                                        {isAppendMode
+                                            ? `${newCount} new plan${newCount !== 1 ? 's' : ''}`
+                                            : `${resubmitItems.filter(p => p.trim()).length} plan${resubmitItems.filter(p => p.trim()).length !== 1 ? 's' : ''}`}
+                                    </span>
                                 </div>
                                 <div className="mp-plan-boxes" style={{ marginTop: 10 }}>
-                                    {resubmitItems.map((item, i) => renderPlanBox(item, i, resubmitItems, updateResubmitItem, addResubmitItem, removeResubmitItem))}
+                                    {resubmitItems.map((item, i) => (
+                                        i < lockCount
+                                            ? renderLockedPlanBox(item, i)
+                                            : renderPlanBox(item, i, resubmitItems, updateResubmitItem, addResubmitItem, removeResubmitItem)
+                                    ))}
                                 </div>
                             </div>
                         </div>
                         <div className="mp-ach-actions">
-                            {resubmitPlan.status === 'DRAFT' && (
+                            {!isAppendMode && resubmitPlan.status === 'DRAFT' && (
                                 <button className="btn btn-secondary" disabled={submitting || !resubmitItems.some(p => p.trim())} onClick={() => handleResubmitPlan(true)}>
                                     <FiSave /> Save as Draft
                                 </button>
                             )}
                             <button className="btn btn-primary"
-                                disabled={submitting || !resubmitItems.some(p => p.trim())}
+                                disabled={submitting || (isAppendMode ? newCount === 0 : !resubmitItems.some(p => p.trim()))}
                                 onClick={() => handleResubmitPlan(false)}>
-                                <FiSend /> {submitting ? 'Submitting...' : (resubmitPlan.status === 'DRAFT' ? 'Submit Plan' : 'Resubmit Plan')}
+                                <FiSend /> {submitting ? 'Submitting...' : (isAppendMode ? 'Add Plans' : resubmitPlan.status === 'DRAFT' ? 'Submit Plan' : 'Resubmit Plan')}
                             </button>
-                            <button className="btn btn-secondary" onClick={() => setResubmitPlan(null)}>Cancel</button>
+                            <button className="btn btn-secondary" onClick={requestCloseResubmitModal}>Cancel</button>
                         </div>
                     </div>
                 </div>,
                 document.body
-            )}
+                );
+            })()}
 
             {renderConfirmDialog()}
         </div>

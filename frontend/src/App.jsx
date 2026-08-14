@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -89,18 +90,26 @@ function App() {
     <AuthProvider>
       <DeadlineProvider>
       <BrowserRouter>
-        <Toaster
-          position="top-right"
-          toastOptions={{
-            duration: 3000,
-            style: {
-              fontFamily: "'Inter', sans-serif",
-              fontSize: '0.9rem',
-              borderRadius: '10px',
-              padding: '12px 16px',
-            },
-          }}
-        />
+        {createPortal(
+          <Toaster
+            position="top-right"
+            // Rendered above every modal in the app (all modals use z-index: 1000
+            // via .mp-overlay / equivalent). Kept far above that so toasts never
+            // get buried behind a modal's backdrop, regardless of DOM mount order.
+            containerStyle={{ zIndex: 99999 }}
+            toastOptions={{
+              duration: 3000,
+              style: {
+                fontFamily: "'Inter', sans-serif",
+                fontSize: '0.9rem',
+                borderRadius: '10px',
+                padding: '12px 16px',
+                zIndex: 99999,
+              },
+            }}
+          />,
+          document.body
+        )}
 
         <Routes>
           {/* Public */}

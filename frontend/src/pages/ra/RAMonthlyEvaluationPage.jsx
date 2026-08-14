@@ -1321,7 +1321,10 @@ const RAMonthlyEvaluationPage = () => {
                             <div className="meval-table-body">
                                 {pageRows.map((ev, idx) => {
                                     const planCount = getPlanCount(ev);
-                                    const hasAch = ev.monthlyPlanId && ev.achievementSubmitted; // may not exist - we'll just show a badge
+                                    // hasAchievement is set by the backend: true only when a SUBMITTED
+                                    // (not DRAFT) MonthlyAchievement exists for this plan.
+                                    // Evaluation is only permitted AFTER the employee submits their progress.
+                                    const hasAch = !!ev.hasAchievement;
 
                                     return (
                                         <div
@@ -1359,7 +1362,7 @@ const RAMonthlyEvaluationPage = () => {
                                                     if (planStatus === 'REJECTED') {
                                                         return <span className="meval-ach-badge meval-ach-badge--rejected"><FiXCircle size={10} /> Plan Rejected</span>;
                                                     }
-                                                    if (ev.status === 'EVALUATED' || ev.hasAchievement) {
+                                                    if (ev.hasAchievement) {
                                                         return <span className="meval-ach-badge meval-ach-badge--submitted"><FiCheckCircle size={10} /> Submitted</span>;
                                                     }
                                                     return <span className="meval-ach-badge meval-ach-badge--pending"><FiClock size={10} /> Pending</span>;
@@ -1384,18 +1387,24 @@ const RAMonthlyEvaluationPage = () => {
                                                 >
                                                     <FiEye size={13} /> View
                                                 </button>
-                                                {ev.status !== 'EVALUATED' && ev.monthlyPlanId?.status !== 'REJECTED' && (
+                                                {/* Evaluate: only shown AFTER the employee submits their progress/achievement */}
+                                                {ev.status !== 'EVALUATED'
+                                                    && ev.monthlyPlanId?.status !== 'REJECTED'
+                                                    && hasAch && (
                                                     <button
                                                         className="btn btn-sm btn-primary"
                                                         onClick={() => setEvaluatingItem(ev)}
+                                                        title="Evaluate — progress has been submitted"
                                                     >
                                                         <FiStar size={13} /> Evaluate
                                                     </button>
                                                 )}
+                                                {/* Reject Plan: allowed as long as not yet evaluated or already rejected */}
                                                 {ev.status !== 'EVALUATED' && ev.monthlyPlanId?.status !== 'REJECTED' && (
                                                     <button
                                                         className="btn btn-sm btn-danger"
                                                         onClick={() => setRejectingItem(ev)}
+                                                        title="Reject plan and ask employee to revise"
                                                     >
                                                         <FiXCircle size={13} /> Reject Plan
                                                     </button>

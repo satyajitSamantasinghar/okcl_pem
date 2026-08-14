@@ -96,7 +96,7 @@ const DeadlineHistoryModal = ({ params, onClose, onExtend, canExtend }) => {
             <div className="edmp-hist-modal" onClick={e => e.stopPropagation()}>
                 <div className="edmp-hist-header">
                     <h3 className="edmp-hist-title">
-                        Extension History — {params.type === 'PLAN' ? '📋 Plan' : '🏆 Progress'}
+                        Extension History — {params.type === 'PLAN' ? 'Plan' : 'Progress'}
                     </h3>
                     <button className="edmp-hist-close" onClick={onClose}><FiX /></button>
                 </div>
@@ -366,7 +366,7 @@ const OutstandingTab = () => {
                                 <td>{fmtMonth(item.month)}</td>
                                 <td>
                                     <span className={item.type === 'PLAN' ? 'edmp-type-plan' : 'edmp-type-achievement'}>
-                                        {item.type === 'PLAN' ? '📋 Plan' : '🏆 Progress'}
+                                        {item.type === 'PLAN' ? 'Plan' : 'Progress'}
                                     </span>
                                 </td>
                                 <td>
@@ -440,6 +440,7 @@ const OutstandingTab = () => {
             {histParams && (
                 <DeadlineHistoryModal
                     params={histParams}
+                    canExtend={histParams?._row?.isStillExtendable ?? true}
                     onClose={() => setHistParams(null)}
                     onExtend={() => {
                         const r = histParams._row;
@@ -452,7 +453,7 @@ const OutstandingTab = () => {
                                 month: parseInt(r.month.split('-')[1], 10),
                                 year: parseInt(r.month.split('-')[0], 10),
                             },
-                            missingType: r.type === 'PLAN' ? 'plan' : 'Progress',
+                            missingType: r.type === 'PLAN' ? 'plan' : 'achievement',
                         });
                         setHistParams(null);
                     }}
@@ -628,7 +629,7 @@ const ByMonthTab = () => {
         setExtendTarget({
             employee: { id: emp.employeeId, name: emp.employeeName, employeeCode: emp.employeeCode, department: emp.department },
             monthYear: { month: m, year: y },
-            missingType: type === 'PLAN' ? 'plan' : 'Progress',
+            missingType: type === 'PLAN' ? 'plan' : 'achievement',
         });
     };
 

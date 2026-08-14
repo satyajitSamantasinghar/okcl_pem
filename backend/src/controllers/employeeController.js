@@ -221,6 +221,80 @@ exports.submitMonthlyPlan = async (req, res) => {
         });
       }
 
+      // ── NEW: ADD MORE PLANS ────────────────────────────────────────────────
+      // Lets an employee append extra plan items to an already-submitted
+      // (PENDING) plan — e.g. the RA hands them extra work mid-month after
+      // the original plan was already sent for review. Allowed only until
+      // the RA/MD has evaluated this month's plan. The current-month +
+      // effective-deadline gate was already enforced by
+      // allowMonthlyPlanSubmission (dateMiddleware) before we got here, so
+      // we don't re-check dates — we only check evaluation state and that
+      // existing items are not being edited/removed.
+      //
+      // IMPORTANT: this deliberately does NOT bump `version`, reset the
+      // MonthlyEvaluation, or touch MonthlyAchievement rows — those resets
+      // belong to the REJECTED→resubmit flow above. Bumping version here
+      // would also wrongly trigger the "version > 1 bypasses achievement
+      // deadline checks" rule in dateMiddleware, which is meant only for
+      // genuine post-rejection resubmissions.
+      if (existingPlan.status === "PENDING") {
+        const evaluation = await MonthlyEvaluation.findOne({
+          where: { employeeId: req.user.userId, month },
+          transaction: t,
+        });
+        if (evaluation && evaluation.status === "EVALUATED") {
+          await t.rollback();
+          return res.status(400).json({ message: "This month's plan has already been evaluated. New plans can no longer be added." });
+        }
+
+        const existingItems = await MonthlyPlanItem.findAll({
+          where: { monthlyPlanId: existingPlan.id },
+          order: [["itemOrder", "ASC"]],
+          transaction: t,
+        });
+
+        const incoming = Array.isArray(planItems) ? planItems.filter(Boolean) : [];
+
+        if (incoming.length <= existingItems.length) {
+          await t.rollback();
+          return res.status(400).json({ message: "No new plans to add." });
+        }
+
+        // Existing items must arrive unchanged, in the same order — additions
+        // only ever land at the tail. This keeps MonthlyAchievementItem's
+        // positional planIndex linkage to MonthlyPlanItem intact.
+        const prefixUnchanged = existingItems.every((row, idx) => incoming[idx] === row.itemText);
+        if (!prefixUnchanged) {
+          await t.rollback();
+          return res.status(400).json({ message: "Existing plans can't be edited or removed once submitted — you can only add new plans below them." });
+        }
+
+        const newTail = incoming.slice(existingItems.length);
+        await MonthlyPlanItem.bulkCreate(
+          newTail.map((text, i) => ({
+            monthlyPlanId: existingPlan.id,
+            itemText: text,
+            itemOrder: existingItems.length + i,
+          })),
+          { transaction: t }
+        );
+
+        // Keep the legacy concatenated text field in sync. version, status,
+        // and submittedAt are deliberately left untouched.
+        existingPlan.planDetails = incoming.join("\n");
+        await existingPlan.save({ transaction: t });
+
+        await AuditLog.create(
+          { userId: req.user.userId, action: "ADD_PLAN_ITEMS", entityType: "MONTHLY_PLAN", entityId: String(existingPlan.id), ipAddress: req.ip },
+          { transaction: t }
+        );
+
+        await t.commit();
+        notifyRAOfSubmission(req.user.userId, month, "Monthly Plan");
+        return res.json({ message: `${newTail.length} new plan${newTail.length !== 1 ? "s" : ""} added`, monthlyPlanId: existingPlan.id });
+      }
+      // ─────────────────────────────────────────────────────────────────────────
+
       await t.rollback();
       return res.status(409).json({ message: "Monthly plan already submitted for this month" });
     }
@@ -345,9 +419,75 @@ exports.submitMonthlyAchievement = async (req, res) => {
 
     if (existingAchievement) {
       if (existingAchievement.status === "SUBMITTED") {
-        await t.rollback();
-        return res.status(409).json({ message: "Monthly achievement already submitted for this month" });
+        // ── NEW: ADD MORE PROGRESS ─────────────────────────────────────────────
+        // Mirrors the "add more plans" flow: if extra plan items were appended
+        // to the plan after achievement was already submitted, the employee can
+        // add progress for just the new items — but only until the RA/MD has
+        // evaluated this month's plan. Existing (already-submitted) progress
+        // entries cannot be edited or removed, only appended to.
+        const evaluation = await MonthlyEvaluation.findOne({
+          where: { employeeId: req.user.userId, month: plan.month },
+          transaction: t,
+        });
+        if (evaluation && evaluation.status === "EVALUATED") {
+          await t.rollback();
+          return res.status(400).json({ message: "This month's plan has already been evaluated. Progress can no longer be added or changed." });
+        }
+
+        const existingItems = await MonthlyAchievementItem.findAll({
+          where: { monthlyAchievementId: existingAchievement.id },
+          order: [["planIndex", "ASC"]],
+          transaction: t,
+        });
+
+        const incoming = Array.isArray(planAchievements)
+          ? [...planAchievements].sort((a, b) => (a.planIndex ?? 0) - (b.planIndex ?? 0))
+          : [];
+
+        if (incoming.length <= existingItems.length) {
+          await t.rollback();
+          return res.status(400).json({ message: "No new plan items to add progress for." });
+        }
+
+        const prefixUnchanged = existingItems.every((row, idx) => {
+          const match = incoming[idx];
+          return match
+            && (match.achievementDetails || "") === (row.achievementDetails || "")
+            && (match.progress || 0) === (row.progress || 0);
+        });
+        if (!prefixUnchanged) {
+          await t.rollback();
+          return res.status(400).json({ message: "Existing progress entries can't be edited once submitted — you can only add progress for newly added plan items." });
+        }
+
+        const newTail = incoming.slice(existingItems.length);
+        await MonthlyAchievementItem.bulkCreate(
+          newTail.map((a, i) => ({
+            monthlyAchievementId: existingAchievement.id,
+            planIndex: existingItems.length + i,
+            achievementDetails: a.achievementDetails || "",
+            progress: a.progress || 0,
+          })),
+          { transaction: t }
+        );
+
+        // Keep the legacy concatenated text field in sync. status and
+        // submittedAt are deliberately left untouched — this is an addition,
+        // not a resubmission.
+        existingAchievement.achievementDetails = resolvedDetails;
+        if (additionalAchievement !== undefined) existingAchievement.additionalAchievement = additionalAchievement;
+        await existingAchievement.save({ transaction: t });
+
+        await AuditLog.create(
+          { userId: req.user.userId, action: "ADD_ACHIEVEMENT_ITEMS", entityType: "MONTHLY_ACHIEVEMENT", entityId: String(existingAchievement.id), ipAddress: req.ip },
+          { transaction: t }
+        );
+
+        await t.commit();
+        notifyRAOfSubmission(req.user.userId, plan.month, "Monthly Achievement");
+        return res.json({ message: `${newTail.length} new progress item${newTail.length !== 1 ? "s" : ""} added` });
       }
+      // ─────────────────────────────────────────────────────────────────────────
 
       existingAchievement.achievementDetails = resolvedDetails;
       if (additionalAchievement !== undefined) existingAchievement.additionalAchievement = additionalAchievement;
@@ -418,8 +558,8 @@ exports.submitMonthlyAchievement = async (req, res) => {
 
     await t.commit();
     if (achStatus === "SUBMITTED") {
-        notifyRAOfSubmission(req.user.userId, plan.month, "Monthly Achievement");
-      }
+      notifyRAOfSubmission(req.user.userId, plan.month, "Monthly Achievement");
+    }
     res.status(201).json({ message: achStatus === "DRAFT" ? "Draft saved" : "Monthly achievement submitted" });
   } catch (error) {
     await t.rollback();

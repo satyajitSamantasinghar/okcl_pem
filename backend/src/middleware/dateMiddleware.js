@@ -134,6 +134,26 @@ exports.allowMonthlyPlanSubmission = async (req, res, next) => {
     }
     // ─────────────────────────────────────────────────────────────────────────
 
+    // ── INDUSTRY STANDARD: Add-More-Plans Bypass ──────────────────────────────
+    // Once an employee has already submitted at least one plan for a month
+    // (status PENDING), the window to append additional plans to it stays
+    // open for the REST OF THAT CALENDAR MONTH — independent of the original
+    // MONTHLY_PLAN_DEADLINE_DAY_* cutoff, which only governs the deadline for
+    // the FIRST submission. It closes at that month's end (enforced by the
+    // "must be the current month" guard below, unchanged) or the moment the
+    // RA/MD evaluates the plan (enforced in the controller) — whichever
+    // comes first. If no plan was ever submitted for the month, this bypass
+    // does not apply and the employee remains fully blocked past the normal
+    // deadline until an RA grants an extension, same as today.
+    const existingPending = await MonthlyPlan.findOne({
+      where: {
+        employeeId: req.user.userId,
+        month: submittedMonth,
+        status: "PENDING",
+      },
+    });
+    // ─────────────────────────────────────────────────────────────────────────
+
     // ── EXTENSION CHECK: resolve effective deadline before the current-month guard ──
     // An active extension must be able to unlock a month that has already passed
     // (the "not current month" check below would reject it otherwise).
@@ -160,14 +180,19 @@ exports.allowMonthlyPlanSubmission = async (req, res, next) => {
     // ─────────────────────────────────────────────────────────────────────────
 
     // ── Normal deadline enforcement for fresh first submissions ───────────────
+    // Still applies to add-more requests too — this is what correctly closes
+    // the add-more window the moment the plan's month ends.
     if (submittedMonth !== currentMonth) {
       return res.status(403).json({
-        message: `You can only submit a monthly plan for the current month (${currentMonth}). Received: ${submittedMonth}`
+        message: existingPending
+          ? `The window to add more plans for ${submittedMonth} has closed — it's no longer within that month.`
+          : `You can only submit a monthly plan for the current month (${currentMonth}). Received: ${submittedMonth}`
       });
     }
 
     // ── ROLE-AWARE DEADLINE: use effectiveDeadline (may be extended) ──────────
-    if (today > effectiveDeadline) {
+    // Skipped entirely for add-more requests — see the bypass comment above.
+    if (!existingPending && today > effectiveDeadline) {
       const roleLabel = role === "RA" ? "As a Reporting Authority, your plans" : "Plans";
       return res.status(403).json({
         message: `Monthly plan submission deadline has passed. ${roleLabel} must be submitted by the ${config.planDay}${getOrdinalSuffix(config.planDay)} of the month.`

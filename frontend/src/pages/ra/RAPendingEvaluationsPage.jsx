@@ -344,13 +344,27 @@ const RAPendingEvaluationsPage = () => {
                                     >
                                         <FiEye /> View Detail
                                     </button>
-                                    <button
-                                        type="button"
-                                        className="btn btn-sm btn-primary"
-                                        onClick={() => openEvaluationModal(item, 'evaluate')}
-                                    >
-                                        <FiStar /> Evaluate
-                                    </button>
+                                    {/* Evaluate button: only available after the employee submits their progress/achievement */}
+                                    {item.hasAchievement ? (
+                                        <button
+                                            type="button"
+                                            className="btn btn-sm btn-primary"
+                                            onClick={() => openEvaluationModal(item, 'evaluate')}
+                                            title="Evaluate — progress has been submitted"
+                                        >
+                                            <FiStar /> Evaluate
+                                        </button>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            className="btn btn-sm btn-secondary"
+                                            disabled
+                                            title="Awaiting achievement/progress submission from employee"
+                                            style={{ opacity: 0.5, cursor: 'not-allowed' }}
+                                        >
+                                            <FiClock /> Awaiting Progress
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         ))}
@@ -403,53 +417,73 @@ const RAPendingEvaluationsPage = () => {
                                 </div>
 
                                 {modalMode === 'evaluate' ? (
-                                    <form className="ra-pending-form" onSubmit={handleEvaluate}>
-                                        <div className="ra-pending-form-grid">
-                                            <div className="form-group">
-                                                <label htmlFor="ra-pending-score">Score</label>
-                                                <input
-                                                    id="ra-pending-score"
-                                                    type="number"
-                                                    min="0"
-                                                    max="10"
-                                                    step="0.5"
-                                                    value={score}
-                                                    onChange={(e) => setScore(e.target.value)}
-                                                    placeholder="Enter score out of 10"
-                                                    required
-                                                />
+                                    detail?.achievement
+                                        ? (
+                                        <form className="ra-pending-form" onSubmit={handleEvaluate}>
+                                            <div className="ra-pending-form-grid">
+                                                <div className="form-group">
+                                                    <label htmlFor="ra-pending-score">Score</label>
+                                                    <input
+                                                        id="ra-pending-score"
+                                                        type="number"
+                                                        min="0"
+                                                        max="10"
+                                                        step="0.5"
+                                                        value={score}
+                                                        onChange={(e) => setScore(e.target.value)}
+                                                        placeholder="Enter score out of 10"
+                                                        required
+                                                    />
+                                                </div>
+
+                                                <div className="form-group">
+                                                    <label htmlFor="ra-pending-month">Month</label>
+                                                    <input
+                                                        id="ra-pending-month"
+                                                        type="text"
+                                                        value={formatMonth(selectedItem.month)}
+                                                        readOnly
+                                                    />
+                                                </div>
                                             </div>
 
                                             <div className="form-group">
-                                                <label htmlFor="ra-pending-month">Month</label>
-                                                <input
-                                                    id="ra-pending-month"
-                                                    type="text"
-                                                    value={formatMonth(selectedItem.month)}
-                                                    readOnly
+                                                <label htmlFor="ra-pending-remarks">Remarks</label>
+                                                <textarea
+                                                    id="ra-pending-remarks"
+                                                    value={remarks}
+                                                    onChange={(e) => setRemarks(e.target.value)}
+                                                    placeholder="Add concise remarks about delivery, ownership, and performance."
                                                 />
                                             </div>
-                                        </div>
 
-                                        <div className="form-group">
-                                            <label htmlFor="ra-pending-remarks">Remarks</label>
-                                            <textarea
-                                                id="ra-pending-remarks"
-                                                value={remarks}
-                                                onChange={(e) => setRemarks(e.target.value)}
-                                                placeholder="Add concise remarks about delivery, ownership, and performance."
-                                            />
+                                            <div className="modal-actions">
+                                                <button type="button" className="btn btn-secondary" onClick={closeModal}>
+                                                    Close
+                                                </button>
+                                                <button type="submit" className="btn btn-primary" disabled={submitting}>
+                                                    {submitting ? 'Submitting...' : 'Submit Evaluation'}
+                                                </button>
+                                            </div>
+                                        </form>
+                                    ) : (
+                                        /* Achievement/progress not yet submitted — block evaluation */
+                                        <div style={{ padding: '16px', background: '#FFF7ED', borderRadius: '8px', border: '1px solid #FDE68A', marginTop: '12px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                                                <FiAlertCircle size={16} color="#B45309" />
+                                                <strong style={{ color: '#92400E' }}>Achievement / Progress Not Yet Submitted</strong>
+                                            </div>
+                                            <p style={{ color: '#78350F', fontSize: '0.875rem', margin: 0 }}>
+                                                The employee has not yet submitted their monthly progress for this period.
+                                                Evaluation can only proceed after the progress submission is received.
+                                            </p>
+                                            <div className="modal-actions" style={{ marginTop: '12px' }}>
+                                                <button type="button" className="btn btn-secondary" onClick={closeModal}>
+                                                    Close
+                                                </button>
+                                            </div>
                                         </div>
-
-                                        <div className="modal-actions">
-                                            <button type="button" className="btn btn-secondary" onClick={closeModal}>
-                                                Close
-                                            </button>
-                                            <button type="submit" className="btn btn-primary" disabled={submitting}>
-                                                {submitting ? 'Submitting...' : 'Submit Evaluation'}
-                                            </button>
-                                        </div>
-                                    </form>
+                                    )
                                 ) : (
                                     <div className="modal-actions">
                                         <button type="button" className="btn btn-secondary" onClick={closeModal}>

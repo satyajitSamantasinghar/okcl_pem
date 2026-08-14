@@ -23,3 +23,5 @@ Thumbs.db
 
 # Editor directories and files
 .vs/
+
+decryptToken.js

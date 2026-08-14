@@ -105,7 +105,7 @@ const ExtendDeadlineModal = ({
                 employeeId:     employee.id,
                 month:          monthYear?.month,
                 year:           monthYear?.year,
-                type:           missingType,
+                type:           missingType === 'plan' ? 'plan' : 'achievement',
                 newDeadline:    new Date(newDeadline + 'T23:59:59').toISOString(),
                 oldDeadline:    ctx?.effectiveDeadline
                     ? new Date(ctx.effectiveDeadline + 'T23:59:59').toISOString()

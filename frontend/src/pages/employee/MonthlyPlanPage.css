@@ -127,6 +127,12 @@
     border: 1px solid #FECACA !important;
 }
 
+.mp-plan-cta--add-more {
+    background: #EFF6FF !important;
+    color: #1D4ED8 !important;
+    border: 1px solid #BFDBFE !important;
+}
+
 .mp-filter-group {
     display: flex;
     align-items: center;
@@ -477,6 +483,68 @@
     resize: none;
 }
 
+/* ── ADD MORE PLANS / ADD MORE PROGRESS — locked, read-only rows for
+   already-submitted items shown for context while appending new ones ── */
+.mp-plan-box-content--locked {
+    opacity: 0.85;
+}
+
+.mp-plan-seq-num--locked {
+    background: var(--bg-page);
+    border-color: var(--border-default);
+    color: var(--text-muted);
+}
+
+.mp-plan-locked-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: 6px;
+    padding: 2px 8px;
+    border-radius: 100px;
+    background: rgba(100, 116, 139, .1);
+    color: var(--text-muted);
+    font-size: 0.625rem;
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+.mp-plan-box-textarea--locked {
+    background: var(--bg-page);
+    color: var(--text-secondary);
+    cursor: default;
+    white-space: pre-wrap;
+    border-style: dashed;
+}
+
+.mp-append-notice {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 12px 20px 0;
+    padding: 10px 14px;
+    background: rgba(100, 116, 139, .06);
+    border: 1px solid rgba(100, 116, 139, .2);
+    border-radius: var(--radius-md);
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+.mp-ach-item-row--locked {
+    background: var(--bg-page);
+    opacity: 0.85;
+}
+
+.mp-ach-locked-details {
+    font-size: .8125rem;
+    color: var(--text-secondary);
+    margin: 0;
+    padding-left: 60px;
+    white-space: pre-wrap;
+}
+
 .mp-plan-add-btn {
     margin-top: 32px;
     width: 36px;
@@ -763,8 +831,9 @@
     gap: 4px;
     font-size: 0.625rem;
     font-weight: 700;
-    color: #5F5E5A;
-    background: #F1EFE8;
+    color: #B45309;
+    background: #FFFBEB;
+    border: 1px solid #FDE68A;
     padding: 3px 8px;
     border-radius: 100px;
     width: fit-content;
@@ -774,23 +843,68 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
+    gap: 7px;
     width: 100%;
-    padding: 10px;
-    background: none;
-    border: 2px dashed var(--border-default);
+    padding: 11px 16px;
+    background: linear-gradient(135deg, #FF7A45 0%, #FF6B35 55%, #F0561F 100%);
+    border: none;
     border-radius: var(--radius-md);
-    color: var(--text-muted);
-    font-size: 0.75rem;
-    font-weight: 600;
+    color: #fff;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    letter-spacing: 0.2px;
     cursor: pointer;
-    transition: all var(--transition-fast);
+    box-shadow: 0 2px 8px rgba(255, 107, 53, .35), 0 1px 2px rgba(255, 107, 53, .18);
+    transition: transform .15s ease, box-shadow .15s ease, filter .15s ease;
+}
+
+.mp-add-ach-btn svg {
+    flex-shrink: 0;
 }
 
 .mp-add-ach-btn:hover {
-    border-color: var(--primary);
-    color: var(--primary);
-    background: rgba(255, 107, 53, .04);
+    transform: translateY(-1px);
+    filter: brightness(1.05);
+    box-shadow: 0 6px 16px rgba(255, 107, 53, .4), 0 2px 4px rgba(255, 107, 53, .22);
+}
+
+.mp-add-ach-btn:active {
+    transform: translateY(0);
+    filter: brightness(0.98);
+    box-shadow: 0 2px 6px rgba(255, 107, 53, .3);
+}
+
+.mp-add-ach-btn:focus-visible {
+    outline: 2px solid #FF6B35;
+    outline-offset: 2px;
+}
+
+/* "Continue Editing" variant — amber, so a draft-in-progress reads visually
+   distinct from a fresh "start" CTA, consistent with the amber draft
+   language used elsewhere on this page (mp-plan-cta--continue-draft, etc). */
+.mp-add-ach-btn--continue {
+    background: linear-gradient(135deg, #FBBF24 0%, #F59E0B 55%, #D97706 100%);
+    box-shadow: 0 2px 8px rgba(245, 158, 11, .35), 0 1px 2px rgba(245, 158, 11, .18);
+}
+
+.mp-add-ach-btn--continue:hover {
+    box-shadow: 0 6px 16px rgba(245, 158, 11, .4), 0 2px 4px rgba(245, 158, 11, .22);
+}
+
+.mp-add-ach-btn--continue:active {
+    box-shadow: 0 2px 6px rgba(245, 158, 11, .3);
+}
+
+.mp-add-ach-btn--continue:focus-visible {
+    outline-color: #D97706;
+}
+
+/* Used when this CTA sits inside a centered empty-state box (detail modal)
+   rather than stretched full-width across a card. */
+.dmod-no-ach-cta {
+    width: auto;
+    min-width: 210px;
+    margin-top: 6px;
 }
 
 .mp-ach-locked {
@@ -865,7 +979,13 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 9999;
+    /* Kept intentionally below react-hot-toast's default z-index (9999) so
+       toast notifications (e.g. validation errors while a modal is open)
+       always render on top of every modal in this file instead of being
+       buried behind the overlay. Industry convention: modal ≈ 1000-1300,
+       toast/snackbar ≈ 1400+. If a global Toaster is ever given a custom
+       z-index below ~1500, bump it back up rather than raising this value. */
+    z-index: 1000;
     padding: 20px;
     animation: fadeIn .2s ease-out;
 }

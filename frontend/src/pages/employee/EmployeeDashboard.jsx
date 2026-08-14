@@ -13,6 +13,53 @@ import { getFiscalYearShort } from '../../utils/fiscalUtils';
 // CENTRALIZED DEADLINE CONFIG — single source of truth via DeadlineContext
 import { useDeadlines } from '../../context/DeadlineContext';
 
+/**
+ * formatPeriod — mirrors the backend's dateHelpers.formatPeriod().
+ * Converts an ISO period string "YYYY-MM" to a human-readable label
+ * such as "August 2026". Falls back to the raw string on bad input.
+ */
+const formatPeriod = (period) => {
+    if (!period || typeof period !== 'string') return String(period || '');
+    const parts = period.split('-');
+    if (parts.length < 2) return period;
+    const year = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10);
+    if (isNaN(year) || isNaN(month) || month < 1 || month > 12) return period;
+    // Use UTC to avoid DST-induced off-by-one day shifts
+    const date = new Date(Date.UTC(year, month - 1, 1));
+    return date.toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+};
+
+/**
+ * formatPlanStatus — maps raw backend plan/progress status codes to
+ * professional, human-readable labels for display in the Recent Activity feed.
+ */
+const formatPlanStatus = (status) => {
+    switch ((status || '').toUpperCase()) {
+        case 'DRAFT':       return 'Draft Saved';
+        case 'PENDING':     return 'Submitted';
+        case 'APPROVED':    return 'Approved';
+        case 'REJECTED':    return 'Rejected';
+        case 'RA_EVALUATED': return 'Evaluated';
+        default:            return status || 'Unknown';
+    }
+};
+
+/**
+ * formatProgressStatus — same as formatPlanStatus but tailored to monthly
+ * progress (achievement) records, where PENDING means the employee submitted.
+ */
+const formatProgressStatus = (status) => {
+    switch ((status || '').toUpperCase()) {
+        case 'DRAFT':       return 'Draft Saved';
+        case 'PENDING':     return 'Submitted';
+        case 'APPROVED':    return 'Approved';
+        case 'REJECTED':    return 'Rejected';
+        case 'RA_EVALUATED': return 'Evaluated';
+        default:            return status || 'Unknown';
+    }
+};
+
 const getInitials = (name) => {
     if (!name) return '?';
     return name.split(' ').map((p) => p[0]).join('').substring(0, 2).toUpperCase();
@@ -133,9 +180,17 @@ const EmployeeDashboard = () => {
                 const planCtx = planDeadlineCtxRes?.data || null;
                 const achCtx = achDeadlineCtxRes?.data || null;
 
+                // STATS FIX — exclude DRAFT achievements from the Monthly Progress
+                // count so the dashboard correctly reflects only submitted records.
+                // A DRAFT means the employee has not yet submitted; counting it as
+                // "1" was misleading the user into thinking they had submitted.
+                const submittedAchievements = achievements.filter(
+                    a => (a.status || '').toUpperCase() !== 'DRAFT'
+                );
+
                 setStats({
                     monthlyPlans: plans.length,
-                    monthlyAchievements: achievements.length,
+                    monthlyAchievements: submittedAchievements.length,
                     yearlyPlans: yearly.length,
                     quarterlyEvals: quarterlyRes.data?.totalRecords || 0,
                 });
@@ -359,18 +414,29 @@ const EmployeeDashboard = () => {
                 setDeadlines(dls.sort((a, b) => a.days - b.days));
 
                 // --- 4. Compute Recent Activity ---
+                // ACTIVITY FIX — use human-readable status labels (formatPlanStatus /
+                // formatProgressStatus) and properly formatted month names (formatPeriod)
+                // instead of exposing raw backend status codes (e.g. "PENDING", "DRAFT")
+                // and ISO period strings (e.g. "2026-08") to the user.
                 plans.forEach(p => activities.push({
-                    type: 'Plan ' + p.status,
-                    desc: `Monthly Plan for ${p.month}`,
+                    type: `Monthly Plan — ${formatPlanStatus(p.status)}`,
+                    desc: `Monthly Plan for ${formatPeriod(p.month)}`,
                     date: new Date(p.submittedAt || p.createdAt || Date.now()),
                     icon: <FiCalendar />
                 }));
-                achievements.forEach(a => activities.push({
-                    type: 'Monthly Progress ' + a.status,
-                    desc: `Monthly Progress submitted`,
-                    date: new Date(a.submittedAt || a.createdAt || Date.now()),
-                    icon: <FiTarget />
-                }));
+                achievements.forEach(a => {
+                    const progressLabel = formatProgressStatus(a.status);
+                    const isDraft = (a.status || '').toUpperCase() === 'DRAFT';
+                    activities.push({
+                        type: `Monthly Progress — ${progressLabel}`,
+                        // Desc is status-aware: a draft has NOT been submitted yet.
+                        desc: isDraft
+                            ? 'Monthly progress draft — not yet submitted'
+                            : 'Monthly progress submitted',
+                        date: new Date(a.submittedAt || a.createdAt || Date.now()),
+                        icon: <FiTarget />
+                    });
+                });
                 yearly.forEach(y => activities.push({
                     type: 'Yearly Plan ' + y.status,
                     desc: `FY ${y.financialYear}`,

@@ -2,7 +2,27 @@
 const dotenv = require('dotenv');
 dotenv.config();
 const app = require("./src/app");
-const { sequelize, EmployeeRAHistory, User, MonthlyPlan, MonthlyPlanItem, MonthlyAchievement, MonthlyAchievementItem, MonthlyEvaluation, DeadlineExtension } = require("./src/models");
+const {
+    sequelize,
+    User,
+    AuditLog,
+    Notification,
+    EmployeeRAHistory,
+    MonthlyPlan,
+    MonthlyPlanItem,
+    MonthlyAchievement,
+    MonthlyAchievementItem,
+    MonthlyEvaluation,
+    QuarterlyEvaluation,
+    YearlyPlan,
+    YearlyPlanKra,
+    YearlyPlanRevisionLog,
+    YearlyPlanEditHistory,
+    YearlyAppraisalReport,
+    YearlyAppraisalKraAssessment,
+    AppraisalQuarterlyEvaluation,
+    DeadlineExtension,
+} = require("./src/models");
 const { DataTypes, Op } = require("sequelize");
 const { verifyEmailConnection } = require('./src/services/email');
 
@@ -333,6 +353,177 @@ const backfillRAHistory = async () => {
 //     }
 // };
 
+// ─── One-time Employee Hard-Delete ───────────────────────────────────────────
+//  Permanently removes the employees listed in TARGET_EMP_CODES and ALL of
+//  their associated data (plans, achievements, evaluations, appraisals, etc.)
+//  in the correct FK-safe order (leaf → root) inside a single transaction.
+//
+//  Safety guarantees:
+//    • Idempotent — destroy() on already-gone rows is always a safe no-op.
+//      Re-deploying after this block is commented out causes zero side effects.
+//    • SERIALIZABLE transaction — all-or-nothing; any error rolls back fully.
+//    • Missing employee codes are silently skipped (warn only), so the server
+//      still starts even if some codes were already deleted.
+//    • Wrapped in try/catch — a failure here NEVER crashes the server.
+//
+//  ⚠️  COMMENT THIS ENTIRE BLOCK OUT after the next successful deployment.
+// ─────────────────────────────────────────────────────────────────────────────
+const deleteTargetEmployees = async () => {
+    const TARGET_EMP_CODES = [
+        ...new Set(["152", "1015", "1031", "1042", "1052", "1036", "1016", "39", "36"]),
+    ];
+
+    try {
+        // ── Resolve employee codes → UUIDs ────────────────────────────────────
+        const targetUsers = await User.findAll({
+            where: { employeeCode: { [Op.in]: TARGET_EMP_CODES } },
+            attributes: ["id", "employeeCode", "name"],
+        });
+
+        if (targetUsers.length === 0) {
+            console.log("✅ Employee Cleanup: none of the target employees found — skipping.");
+            return;
+        }
+
+        const foundCodes  = targetUsers.map(u => u.employeeCode);
+        const missingCodes = TARGET_EMP_CODES.filter(c => !foundCodes.includes(c));
+        if (missingCodes.length > 0) {
+            console.warn(`⚠️  Employee Cleanup: codes not found in DB (already deleted or never existed): ${missingCodes.join(", ")}`);
+        }
+
+        const empIds   = targetUsers.map(u => u.id);
+        const empWhere = { [Op.in]: empIds };
+        console.log(`🗑️  Employee Cleanup: deleting ${targetUsers.length} employee(s): ${targetUsers.map(u => `${u.name} (${u.employeeCode})`).join(", ")}`);
+
+        const t = await sequelize.transaction({
+            isolationLevel: require("sequelize").Transaction.ISOLATION_LEVELS.SERIALIZABLE,
+        });
+
+        try {
+            // Collect child-record IDs before any deletes
+            const appraisalReports = await YearlyAppraisalReport.findAll({
+                where: { employeeId: empWhere }, attributes: ["id"], transaction: t,
+            });
+            const appraisalReportIds = appraisalReports.map(r => r.id);
+
+            const quarterlyEvals = await QuarterlyEvaluation.findAll({
+                where: { employeeId: empWhere }, attributes: ["id"], transaction: t,
+            });
+            const quarterlyEvalIds = quarterlyEvals.map(r => r.id);
+
+            const achievements = await MonthlyAchievement.findAll({
+                where: { employeeId: empWhere }, attributes: ["id"], transaction: t,
+            });
+            const achievementIds = achievements.map(a => a.id);
+
+            const plans = await MonthlyPlan.findAll({
+                where: { employeeId: empWhere }, attributes: ["id"], transaction: t,
+            });
+            const planIds = plans.map(p => p.id);
+
+            const yearlyPlans = await YearlyPlan.findAll({
+                where: { employeeId: empWhere }, attributes: ["id"], transaction: t,
+            });
+            const yearlyPlanIds = yearlyPlans.map(yp => yp.id);
+
+            // Step 1 — AppraisalQuarterlyEvaluation (junction)
+            if (appraisalReportIds.length > 0 || quarterlyEvalIds.length > 0) {
+                const aqeOr = [];
+                if (appraisalReportIds.length > 0) aqeOr.push({ yearlyAppraisalReportId: { [Op.in]: appraisalReportIds } });
+                if (quarterlyEvalIds.length   > 0) aqeOr.push({ quarterlyEvaluationId:   { [Op.in]: quarterlyEvalIds   } });
+                await AppraisalQuarterlyEvaluation.destroy({ where: { [Op.or]: aqeOr }, transaction: t });
+            }
+
+            // Step 2 — YearlyAppraisalKraAssessment
+            if (appraisalReportIds.length > 0) {
+                await YearlyAppraisalKraAssessment.destroy({
+                    where: { yearlyAppraisalReportId: { [Op.in]: appraisalReportIds } }, transaction: t,
+                });
+            }
+
+            // Step 3 — YearlyAppraisalReport
+            await YearlyAppraisalReport.destroy({ where: { employeeId: empWhere }, transaction: t });
+
+            // Step 4 — QuarterlyEvaluation
+            await QuarterlyEvaluation.destroy({ where: { employeeId: empWhere }, transaction: t });
+
+            // Step 5 — MonthlyEvaluation
+            await MonthlyEvaluation.destroy({ where: { employeeId: empWhere }, transaction: t });
+
+            // Step 6 — MonthlyAchievementItem
+            if (achievementIds.length > 0) {
+                await MonthlyAchievementItem.destroy({
+                    where: { monthlyAchievementId: { [Op.in]: achievementIds } }, transaction: t,
+                });
+            }
+
+            // Step 7 — MonthlyAchievement
+            await MonthlyAchievement.destroy({ where: { employeeId: empWhere }, transaction: t });
+
+            // Step 8 — MonthlyPlanItem
+            if (planIds.length > 0) {
+                await MonthlyPlanItem.destroy({
+                    where: { monthlyPlanId: { [Op.in]: planIds } }, transaction: t,
+                });
+            }
+
+            // Step 9 — MonthlyPlan
+            await MonthlyPlan.destroy({ where: { employeeId: empWhere }, transaction: t });
+
+            // Steps 10–12 — YearlyPlan children
+            if (yearlyPlanIds.length > 0) {
+                const ypOpt = { where: { yearlyPlanId: { [Op.in]: yearlyPlanIds } }, transaction: t };
+                await YearlyPlanKra.destroy({ ...ypOpt });
+                await YearlyPlanRevisionLog.destroy({ ...ypOpt });
+                await YearlyPlanEditHistory.destroy({ ...ypOpt });
+            }
+
+            // Step 13 — YearlyPlan
+            await YearlyPlan.destroy({ where: { employeeId: empWhere }, transaction: t });
+
+            // Step 14 — EmployeeRAHistory (covers employeeId, raId, and assignedBy)
+            await EmployeeRAHistory.destroy({
+                where: { [Op.or]: [{ employeeId: empWhere }, { raId: empWhere }, { assignedBy: empWhere }] },
+                transaction: t,
+            });
+
+            // Step 15 — DeadlineExtension (covers employeeId and extendedById)
+            await DeadlineExtension.destroy({
+                where: { [Op.or]: [{ employeeId: empWhere }, { extendedById: empWhere }] },
+                transaction: t,
+            });
+
+            // Step 16 — AuditLog
+            await AuditLog.destroy({ where: { userId: empWhere }, transaction: t });
+
+            // Step 17 — Notification
+            await Notification.destroy({ where: { userId: empWhere }, transaction: t });
+
+            // Step 18a — Null out self-referencing FK on subordinates of any deleted RA
+            await User.update(
+                { reportingAuthorityId: null },
+                { where: { reportingAuthorityId: empWhere }, transaction: t }
+            );
+
+            // Step 18b — Delete the User rows (must be last)
+            await User.destroy({ where: { id: empWhere }, transaction: t });
+
+            await t.commit();
+            console.log(`✅ Employee Cleanup: successfully deleted ${targetUsers.length} employee(s) and all associated data.`);
+
+        } catch (txErr) {
+            await t.rollback();
+            throw txErr;  // re-throw so the outer catch logs it
+        }
+
+    } catch (cleanupErr) {
+        // Log but do NOT rethrow — a cleanup failure must never prevent the server
+        // from starting. Fix manually if needed.
+        console.error("❌ Employee Cleanup failed (server will still start):", cleanupErr.message);
+        console.error(cleanupErr.stack);
+    }
+};
+
 // ─── STEP 3: async startup — connect DB first, then start server ──────────
 const startServer = async () => {
     try {
@@ -360,6 +551,10 @@ const startServer = async () => {
         // Backfill EmployeeRAHistory for pre-existing employees (runs after sync
         // so the table is guaranteed to exist).
         await backfillRAHistory();
+
+        // One-time employee hard-delete (152, 1015, 1031, 1042, 1052, 1036, 1016, 39, 36)
+        // ⚠️  COMMENT THIS LINE OUT after the next successful deployment.
+        await deleteTargetEmployees();
 
         // One-time monthly plan deletion for July 2026
         // await deleteJuly2026Plans();

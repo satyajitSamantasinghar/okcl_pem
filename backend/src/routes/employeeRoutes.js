@@ -17,7 +17,7 @@ router.post(
   "/monthly-plan",
   verifyToken,
   authorizeRoles("EMPLOYEE", "RA"), // RA is also an employee — can submit own plan
-  allowMonthlyPlanSubmission,
+allowMonthlyPlanSubmission,
   employeeController.submitMonthlyPlan
 );
 
