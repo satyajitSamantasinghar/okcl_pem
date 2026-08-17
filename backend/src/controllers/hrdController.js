@@ -58,14 +58,36 @@ exports.getHRDDashboard = async (req, res) => {
     let plansThisMonth = 0, evaluationsThisMonth = 0, pendingEvaluations = 0;
 
     if (month) {
-      plansThisMonth = await MonthlyPlan.count({ where: { month } });
+      // FIX (permanent): exclude REJECTED plans from the "plans submitted" count.
+      // A REJECTED plan has been invalidated by the RA — the employee must resubmit.
+      plansThisMonth = await MonthlyPlan.count({
+        where: { month, status: { [Op.notIn]: ["DRAFT", "REJECTED"] } },
+      });
       evaluationsThisMonth = await MonthlyEvaluation.count({ where: { month, status: "EVALUATED" } });
 
-      // CHANGE 3: { $or: [{ status: "PENDING" }, { status: { $exists: false } }] }
-      //           → Op.or with Op.is for NULL handling (status NOT NULL in PG schema)
-      pendingEvaluations = await MonthlyEvaluation.count({
-        where: { month, status: "PENDING" },
+      // FIX (permanent): pendingEvaluations must only count evaluations where
+      // the employee has actually submitted their progress/achievement AND the
+      // evaluation is still PENDING (not yet scored by the RA).
+      //
+      // The old query counted all PENDING evaluation rows — including those
+      // where the employee had NOT yet uploaded progress, giving the HRD a
+      // misleadingly high "pending" number. The correct meaning is:
+      //   "How many evaluations CAN the RA perform right now?"
+      // That is only true when a SUBMITTED achievement exists for the linked plan.
+      const plansWithAchievement = await MonthlyAchievement.findAll({
+        where: { status: "SUBMITTED" },
+        attributes: ["monthlyPlanId"],
       });
+      const planIdsWithAch = plansWithAchievement.map(a => a.monthlyPlanId).filter(Boolean);
+      pendingEvaluations = planIdsWithAch.length > 0
+        ? await MonthlyEvaluation.count({
+            where: {
+              month,
+              status: "PENDING",
+              monthlyPlanId: { [Op.in]: planIdsWithAch },
+            },
+          })
+        : 0;
     }
 
     const totalQuarterly = await QuarterlyEvaluation.count();

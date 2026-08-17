@@ -326,6 +326,29 @@ const MonthlyPlanPage = () => {
         return 'open';
     }, [isAfterAchievementStart, isWithinAchievementWindow]);
 
+    // CENTRALIZED DEADLINE (extension-aware, PER-PLAN-MONTH): the memo above only
+    // ever reflects TODAY's calendar month, so every other month's card fell
+    // through to an unconditional "Add Monthly Progress" button — even once its
+    // deadline had passed, even once it had already been evaluated. This resolves
+    // the achievement window for ANY plan, and mirrors the same rules already
+    // enforced on submit (handleAchSubmit):
+    //   1. Post-rejection resubmissions (version > 1) are never deadline-gated —
+    //      the employee lost time to RA rejection, not their own delay.
+    //   2. Otherwise, use the RA-granted effective deadline from effectiveAchCache
+    //      when we have it (warmed by the prefetch effect below, or lazily by
+    //      openAchModal/handleAchSubmit) so an extension re-opens the window.
+    //   3. While extension data hasn't loaded yet, fall back to the base
+    //      (non-extended) config window so the UI never falsely shows "open".
+    const getAchievementWindowStatusForPlan = (plan) => {
+        if (!ENFORCE_DEADLINES) return 'open';
+        if ((plan?.version || 1) > 1) return 'open';
+        const monthStr = plan.month;
+        if (!isAfterAchievementStart(monthStr)) return 'not_open';
+        const cached = effectiveAchCache[monthStr];
+        if (cached) return new Date() > cached.date ? 'closed' : 'open';
+        return isWithinAchievementWindow(monthStr) ? 'open' : 'closed';
+    };
+
     const [plans, setPlans] = useState([]);
     const [achievements, setAchievements] = useState([]);
     const [evaluations, setEvaluations] = useState([]);
@@ -402,6 +425,51 @@ const MonthlyPlanPage = () => {
         evaluations.forEach(ev => { if (ev.month) map[ev.month] = ev; });
         return map;
     }, [evaluations]);
+
+    // ── Prefetch extension-aware achievement deadlines for every plan that can
+    //    still show an "Add Monthly Progress" CTA (not a draft, not rejected,
+    //    no submitted achievement yet, not already evaluated). Warms
+    //    effectiveAchCache so getAchievementWindowStatusForPlan renders the
+    //    correct locked/open state immediately, instead of only after the
+    //    employee clicks into a specific plan's modal. ──
+    useEffect(() => {
+        if (!ENFORCE_DEADLINES || loading) return;
+        const monthsNeeding = [...new Set(
+            plans
+                .filter(p => p.status !== 'DRAFT' && p.status !== 'REJECTED' && (p.version || 1) <= 1)
+                .filter(p => {
+                    const ach = achievementByPlanId[p.id];
+                    const achSubmitted = ach && ach.status !== 'DRAFT';
+                    const ev = evaluationByMonth[p.month];
+                    const isEval = ev && ev.status === 'EVALUATED';
+                    return !achSubmitted && !isEval;
+                })
+                .map(p => p.month)
+                .filter(m => !effectiveAchCache[m])
+        )];
+        if (monthsNeeding.length === 0) return;
+
+        let cancelled = false;
+        (async () => {
+            for (const m of monthsNeeding) {
+                const [y, mm] = m.split('-').map(Number);
+                try {
+                    const res = await api.get('/employee/my-deadline-context', { params: { month: mm, year: y, type: 'ACHIEVEMENT' } });
+                    if (cancelled) return;
+                    const [dy, dm, dd] = res.data.effectiveDeadline.split('-').map(Number);
+                    setEffectiveAchCache(prev => ({
+                        ...prev,
+                        [m]: { date: new Date(dy, dm - 1, dd, 23, 59, 59, 999), isExtended: !!res.data.isExtended },
+                    }));
+                } catch {
+                    // Ignore — render falls back to the base config window, and the
+                    // server remains the source of truth if the employee submits.
+                }
+            }
+        })();
+        return () => { cancelled = true; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [plans, achievementByPlanId, evaluationByMonth, loading]);
 
     const filteredPlans = useMemo(() => {
         if (!ENFORCE_DEADLINES) {
@@ -511,7 +579,16 @@ const MonthlyPlanPage = () => {
         }
 
         if (currentMonthPlan.status === 'DRAFT') {
-            return { mode: 'continue-draft', label: 'Continue Draft', disabled: false, plan: currentMonthPlan };
+            // DEADLINE-AWARE: a saved draft is still a first-time submission —
+            // the same submission deadline that gates a brand-new plan applies
+            // to it too. Previously this branch returned unconditionally, so
+            // "Continue Draft" kept showing (and stayed clickable) long after
+            // the deadline had passed, only for the actual submit inside the
+            // modal to fail server-side. Now it only stays open while the
+            // (extension-aware) deadline computed above hasn't passed yet.
+            return deadlinePassed
+                ? { mode: 'locked', label: 'Submission Window Closed', disabled: true, plan: currentMonthPlan }
+                : { mode: 'continue-draft', label: 'Continue Draft', disabled: false, plan: currentMonthPlan };
         }
 
         if (currentMonthPlan.status === 'REJECTED') {
@@ -864,6 +941,22 @@ const MonthlyPlanPage = () => {
 
         const filled = resubmitItems.filter(p => p.trim());
         if (filled.length === 0) { toast.error('Please enter at least one plan'); return; }
+
+        // DEADLINE-AWARE (defense-in-depth): the "Continue Draft" / "Edit &
+        // Submit" triggers are already hidden once the deadline has passed
+        // (see planCtaState and the card's draft banner above), so this modal
+        // should not normally be reachable past the deadline. This guard just
+        // makes sure that holds even if it somehow is — e.g. the modal was
+        // already open when the deadline ticked over. REJECTED resubmissions
+        // are intentionally exempt (RA rejection opens a fresh window).
+        if (resubmitPlan.status === 'DRAFT' && ENFORCE_DEADLINES) {
+            const isCurrentMonthDraft = resubmitPlan.month === currentMonthDefault;
+            const deadline = isCurrentMonthDraft ? (effectivePlanDeadline ?? getPlanDeadline(resubmitPlan.month)) : getPlanDeadline(resubmitPlan.month);
+            if (deadline && new Date() > deadline) {
+                toast.error(`Monthly plan submission deadline has passed for ${formatMonth(resubmitPlan.month)}. Ask your Reporting Authority to extend the deadline.`);
+                return;
+            }
+        }
 
         if (resubmitPlan.status === 'REJECTED' && !asDraft) {
             const originalItems = getPlanItems(resubmitPlan);
@@ -1290,6 +1383,7 @@ const MonthlyPlanPage = () => {
         const ach = achievementByPlanId[selectedPlan.id];
         const ev = evaluationByMonth[selectedPlan.month];
         const isEval = ev && ev.status === 'EVALUATED';
+        const detailWindowStatus = getAchievementWindowStatusForPlan(selectedPlan);
         const prog = getProgress(selectedPlan);
         const planItemsList = getPlanItems(selectedPlan);
         const chipStyle = getMonthChipStyle(selectedPlan.month);
@@ -1520,10 +1614,12 @@ const MonthlyPlanPage = () => {
                                     <p>Submit your plan first to unlock progress entry.</p>
                                 ) : selectedPlan.status === 'REJECTED' ? (
                                     <p>Resubmit your plan to unlock progress entry.</p>
-                                ) : selectedPlan.month === currentMonthDefault && achievementWindowStatus === 'not_open' ? (
+                                ) : ENFORCE_DEADLINES && isEval ? (
+                                    <p>This month's plan has already been evaluated — progress can no longer be added.</p>
+                                ) : ENFORCE_DEADLINES && detailWindowStatus === 'not_open' ? (
                                     <p>Monthly progress submission opens on the {achievementStartDay}{ordinalSuffix(achievementStartDay)} of the month.</p>
-                                ) : selectedPlan.month === currentMonthDefault && achievementWindowStatus === 'closed' ? (
-                                    <p>Monthly progress submission window has closed for this month.</p>
+                                ) : ENFORCE_DEADLINES && detailWindowStatus === 'closed' ? (
+                                    <p>Monthly progress submission deadline has passed for {formatMonth(selectedPlan.month)}{effectiveAchCache[selectedPlan.month]?.isExtended ? ' (including your extended deadline)' : ''}.</p>
                                 ) : (
                                     <>
                                         <p>No Monthly progress submitted for this month yet.</p>
@@ -1876,6 +1972,7 @@ const MonthlyPlanPage = () => {
                         const isDraftAch = ach?.status === 'DRAFT';
                         const isPlanDraft = plan.status === 'DRAFT';
                         const isRejected = plan.status === 'REJECTED';
+                        const monthWindowStatus = getAchievementWindowStatusForPlan(plan);
                         const planItemsList = getPlanItems(plan);
                         const chipStyle = getMonthChipStyle(plan.month);
                         const effectivePlanAch = ach && !isDraftAch ? getEffectivePlanAch(ach, planItemsList.length) : null;
@@ -1892,14 +1989,34 @@ const MonthlyPlanPage = () => {
                                     <div className="mp-month-full">{formatMonth(plan.month)}</div>
                                     <span className={`mp-status-badge ${st.cls}`}>{st.label}</span>
                                 </div>
-                                {isPlanDraft && (
-                                    <div className="mp-draft-banner">
-                                        <div className="mp-rejection-header"><FiSave /><strong>Draft — Not Yet Submitted</strong></div>
-                                        <button className="mp-resubmit-btn" style={{ background: '#3B82F6' }} onClick={e => { e.stopPropagation(); openResubmitModal(plan); }}>
-                                            <FiEdit3 /> Edit & Submit
-                                        </button>
-                                    </div>
-                                )}
+                                {isPlanDraft && (() => {
+                                    // DEADLINE-AWARE: a saved draft is still a first-time submission, so
+                                    // it's bound by the same plan deadline as a brand-new plan — unlike a
+                                    // REJECTED plan (below), which always gets a fresh window regardless of
+                                    // the date. Only the current month ever has a fresh draft under
+                                    // production rules, so effectivePlanDeadline (extension-aware) applies
+                                    // there; any other month falls back to the base config deadline.
+                                    const isCurrentMonthDraft = plan.month === currentMonthDefault;
+                                    const draftDeadline = isCurrentMonthDraft ? (effectivePlanDeadline ?? getPlanDeadline(plan.month)) : getPlanDeadline(plan.month);
+                                    const draftDeadlinePassed = ENFORCE_DEADLINES && !!draftDeadline && new Date() > draftDeadline;
+                                    return (
+                                        <div className="mp-draft-banner">
+                                            <div className="mp-rejection-header"><FiSave /><strong>Draft — Not Yet Submitted</strong></div>
+                                            {draftDeadlinePassed ? (
+                                                <div className="mp-ach-locked">
+                                                    <FiAlertCircle className="mp-ach-locked-icon" />
+                                                    <span>
+                                                        Submission window closed for {formatMonth(plan.month)}{isCurrentMonthDraft && effectivePlanIsExtended ? ' (including your extended deadline)' : ''} — ask your Reporting Authority to extend the deadline to submit this draft
+                                                    </span>
+                                                </div>
+                                            ) : (
+                                                <button className="mp-resubmit-btn" style={{ background: '#3B82F6' }} onClick={e => { e.stopPropagation(); openResubmitModal(plan); }}>
+                                                    <FiEdit3 /> Edit & Submit
+                                                </button>
+                                            )}
+                                        </div>
+                                    );
+                                })()}
                                 {isRejected && (
                                     <div className="mp-rejection-banner">
                                         <div className="mp-rejection-header"><FiAlertCircle /><strong>Rejected by Reporting Authority (RA)</strong></div>
@@ -1979,10 +2096,12 @@ const MonthlyPlanPage = () => {
                                         <div className="mp-ach-locked"><FiAlertCircle className="mp-ach-locked-icon" /><span>Submit your plan first to unlock progress entry</span></div>
                                     ) : isRejected ? (
                                         <div className="mp-ach-locked"><FiAlertCircle className="mp-ach-locked-icon" /><span>Resubmit your plan to unlock progress entry</span></div>
-                                    ) : plan.month === currentMonthDefault && achievementWindowStatus === 'not_open' ? (
+                                    ) : ENFORCE_DEADLINES && isEval ? (
+                                        <div className="mp-ach-locked"><FiAlertCircle className="mp-ach-locked-icon" /><span>This month's plan has already been evaluated — progress can no longer be added</span></div>
+                                    ) : ENFORCE_DEADLINES && monthWindowStatus === 'not_open' ? (
                                         <div className="mp-ach-locked"><FiAlertCircle className="mp-ach-locked-icon" /><span>Monthly progress submission opens on the {achievementStartDay}{ordinalSuffix(achievementStartDay)} of the month</span></div>
-                                    ) : plan.month === currentMonthDefault && achievementWindowStatus === 'closed' ? (
-                                        <div className="mp-ach-locked"><FiAlertCircle className="mp-ach-locked-icon" /><span>Monthly progress submission window has closed for this month</span></div>
+                                    ) : ENFORCE_DEADLINES && monthWindowStatus === 'closed' ? (
+                                        <div className="mp-ach-locked"><FiAlertCircle className="mp-ach-locked-icon" /><span>Monthly progress submission deadline has passed for {formatMonth(plan.month)}{effectiveAchCache[plan.month]?.isExtended ? ' (including your extended deadline)' : ''}</span></div>
                                     ) : (
                                         <button className="mp-add-ach-btn" onClick={() => openAchModal(plan)}><FiPlus /> Add Monthly Progress</button>
                                     )}
@@ -2008,6 +2127,20 @@ const MonthlyPlanPage = () => {
                 const isAppendMode = resubmitPlan.status === 'PENDING';
                 const lockCount = isAppendMode ? getPlanItems(resubmitPlan).length : 0;
                 const newCount = resubmitItems.slice(lockCount).filter(p => p.trim()).length;
+
+                // DEADLINE-AWARE (defense-in-depth, mirrors the guard in
+                // handleResubmitPlan): this modal shouldn't normally be reachable
+                // past the deadline since its own triggers are already hidden —
+                // this only covers the edge case of the modal already being open
+                // when the deadline ticks over. REJECTED and PENDING (add-more)
+                // are exempt, same as everywhere else on this page.
+                const isCurrentMonthDraft = resubmitPlan.status === 'DRAFT' && resubmitPlan.month === currentMonthDefault;
+                const resubmitDeadline = isCurrentMonthDraft ? (effectivePlanDeadline ?? getPlanDeadline(resubmitPlan.month)) : getPlanDeadline(resubmitPlan.month);
+                const draftDeadlinePassed = resubmitPlan.status === 'DRAFT' && ENFORCE_DEADLINES && !!resubmitDeadline && new Date() > resubmitDeadline;
+                const draftDeadlineLabel = resubmitDeadline
+                    ? resubmitDeadline.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })
+                    : `${planDay}th of the month`;
+
                 return createPortal(
                 <div className="mp-overlay" onClick={requestCloseResubmitModal}>
                     <div className="mp-ach-modal mp-ach-modal--wide" onClick={e => e.stopPropagation()}>
@@ -2015,63 +2148,87 @@ const MonthlyPlanPage = () => {
                             <div>
                                 <h2>{isAppendMode ? 'Add More Plans' : resubmitPlan.status === 'DRAFT' ? 'Edit & Submit Plan' : 'Resubmit Plan'} — {formatMonth(resubmitPlan.month)}</h2>
                                 <p className="mp-ach-subtitle">
-                                    {isAppendMode
-                                        ? 'Your existing plans are locked below. Add new plans in the boxes at the bottom.'
-                                        : resubmitPlan.status === 'DRAFT' ? 'Finalise your draft and submit.' : 'MD rejected your previous plan. Update and resubmit below.'}
+                                    {draftDeadlinePassed
+                                        ? 'The submission window for this draft has closed.'
+                                        : isAppendMode
+                                            ? 'Your existing plans are locked below. Add new plans in the boxes at the bottom.'
+                                            : resubmitPlan.status === 'DRAFT' ? 'Finalise your draft and submit.' : 'RA rejected your previous plan. Update and resubmit below.'}
                                 </p>
                             </div>
                             <button className="mp-modal-close" onClick={requestCloseResubmitModal}><FiX /></button>
                         </div>
-                        <div className="mp-ach-items-container">
-                            {resubmitPlan.mdRemarks && (
-                                <div className="mp-resubmit-remarks-box">
-                                    <div className="mp-resubmit-remarks-label">MD Remarks</div>
-                                    <div className="mp-resubmit-remarks-text">{resubmitPlan.mdRemarks}</div>
+                        {draftDeadlinePassed ? (
+                            <>
+                                <div className="mp-ach-items-container">
+                                    <div className="mp-deadline-locked-banner">
+                                        <div className="mp-deadline-locked-icon"><FiAlertCircle /></div>
+                                        <div className="mp-deadline-locked-content">
+                                            <strong>Submission Window Closed</strong>
+                                            <p>
+                                                The monthly plan for <strong>{formatMonth(resubmitPlan.month)}</strong> had a submission deadline of <strong>{draftDeadlineLabel}</strong>{isCurrentMonthDraft && effectivePlanIsExtended ? ' (extended by your Reporting Authority)' : ''}.
+                                                The deadline has passed — ask your Reporting Authority to extend it if you still need to submit this draft.
+                                            </p>
+                                        </div>
+                                    </div>
                                 </div>
-                            )}
-                            {isAppendMode && (
-                                <div className="mp-append-notice">
-                                    <FiLock size={12} />
-                                    Existing plans can't be edited or removed once submitted — you can only add new ones below.
+                                <div className="mp-ach-actions">
+                                    <button className="btn btn-secondary" onClick={requestCloseResubmitModal}>Close</button>
                                 </div>
-                            )}
-                            <div className="mp-form-hint" style={{ margin: 0 }}>
-                                <FiPlus className="mp-form-hint-icon" />
-                                {isAppendMode
-                                    ? <>Write each new plan in its own box. Click <strong>+</strong> to add another below it.</>
-                                    : <>Write each plan in its own box. Click <strong>+</strong> to add another plan below it.</>}
-                            </div>
-                            <div>
-                                <div className="mp-ach-section-title">
-                                    <FiFileText /> {isAppendMode ? 'New Plans' : 'Updated Plan Details'}
-                                    <span className="mp-ach-section-count">
+                            </>
+                        ) : (
+                            <>
+                                <div className="mp-ach-items-container">
+                                    {resubmitPlan.mdRemarks && (
+                                        <div className="mp-resubmit-remarks-box">
+                                            <div className="mp-resubmit-remarks-label">MD Remarks</div>
+                                            <div className="mp-resubmit-remarks-text">{resubmitPlan.mdRemarks}</div>
+                                        </div>
+                                    )}
+                                    {isAppendMode && (
+                                        <div className="mp-append-notice">
+                                            <FiLock size={12} />
+                                            Existing plans can't be edited or removed once submitted — you can only add new ones below.
+                                        </div>
+                                    )}
+                                    <div className="mp-form-hint" style={{ margin: 0 }}>
+                                        <FiPlus className="mp-form-hint-icon" />
                                         {isAppendMode
-                                            ? `${newCount} new plan${newCount !== 1 ? 's' : ''}`
-                                            : `${resubmitItems.filter(p => p.trim()).length} plan${resubmitItems.filter(p => p.trim()).length !== 1 ? 's' : ''}`}
-                                    </span>
+                                            ? <>Write each new plan in its own box. Click <strong>+</strong> to add another below it.</>
+                                            : <>Write each plan in its own box. Click <strong>+</strong> to add another plan below it.</>}
+                                    </div>
+                                    <div>
+                                        <div className="mp-ach-section-title">
+                                            <FiFileText /> {isAppendMode ? 'New Plans' : 'Updated Plan Details'}
+                                            <span className="mp-ach-section-count">
+                                                {isAppendMode
+                                                    ? `${newCount} new plan${newCount !== 1 ? 's' : ''}`
+                                                    : `${resubmitItems.filter(p => p.trim()).length} plan${resubmitItems.filter(p => p.trim()).length !== 1 ? 's' : ''}`}
+                                            </span>
+                                        </div>
+                                        <div className="mp-plan-boxes" style={{ marginTop: 10 }}>
+                                            {resubmitItems.map((item, i) => (
+                                                i < lockCount
+                                                    ? renderLockedPlanBox(item, i)
+                                                    : renderPlanBox(item, i, resubmitItems, updateResubmitItem, addResubmitItem, removeResubmitItem)
+                                            ))}
+                                        </div>
+                                    </div>
                                 </div>
-                                <div className="mp-plan-boxes" style={{ marginTop: 10 }}>
-                                    {resubmitItems.map((item, i) => (
-                                        i < lockCount
-                                            ? renderLockedPlanBox(item, i)
-                                            : renderPlanBox(item, i, resubmitItems, updateResubmitItem, addResubmitItem, removeResubmitItem)
-                                    ))}
+                                <div className="mp-ach-actions">
+                                    {!isAppendMode && resubmitPlan.status === 'DRAFT' && (
+                                        <button className="btn btn-secondary" disabled={submitting || !resubmitItems.some(p => p.trim())} onClick={() => handleResubmitPlan(true)}>
+                                            <FiSave /> Save as Draft
+                                        </button>
+                                    )}
+                                    <button className="btn btn-primary"
+                                        disabled={submitting || (isAppendMode ? newCount === 0 : !resubmitItems.some(p => p.trim()))}
+                                        onClick={() => handleResubmitPlan(false)}>
+                                        <FiSend /> {submitting ? 'Submitting...' : (isAppendMode ? 'Add Plans' : resubmitPlan.status === 'DRAFT' ? 'Submit Plan' : 'Resubmit Plan')}
+                                    </button>
+                                    <button className="btn btn-secondary" onClick={requestCloseResubmitModal}>Cancel</button>
                                 </div>
-                            </div>
-                        </div>
-                        <div className="mp-ach-actions">
-                            {!isAppendMode && resubmitPlan.status === 'DRAFT' && (
-                                <button className="btn btn-secondary" disabled={submitting || !resubmitItems.some(p => p.trim())} onClick={() => handleResubmitPlan(true)}>
-                                    <FiSave /> Save as Draft
-                                </button>
-                            )}
-                            <button className="btn btn-primary"
-                                disabled={submitting || (isAppendMode ? newCount === 0 : !resubmitItems.some(p => p.trim()))}
-                                onClick={() => handleResubmitPlan(false)}>
-                                <FiSend /> {submitting ? 'Submitting...' : (isAppendMode ? 'Add Plans' : resubmitPlan.status === 'DRAFT' ? 'Submit Plan' : 'Resubmit Plan')}
-                            </button>
-                            <button className="btn btn-secondary" onClick={requestCloseResubmitModal}>Cancel</button>
-                        </div>
+                            </>
+                        )}
                     </div>
                 </div>,
                 document.body

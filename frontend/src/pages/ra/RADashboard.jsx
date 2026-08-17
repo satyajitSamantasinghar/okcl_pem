@@ -361,16 +361,23 @@ const RADashboard = () => {
         const submittedSet = new Set((stats.lists?.submitted || []).map(id => id?.toString()));
         const achievementsSet = new Set((stats.lists?.achievements || []).map(id => id?.toString()));
         const evaluatedSet = new Set((stats.lists?.evaluated || []).map(id => id?.toString()));
+        // FIX (permanent): track employees whose plan was REJECTED by the RA.
+        // The backend now returns this list in stats.lists.rejected.
+        // Without this, rejected-plan employees appeared as "submitted" in the
+        // leaderboard (green Plan badge) — visually incorrect and misleading.
+        const rejectedSet = new Set((stats.lists?.rejected || []).map(id => id?.toString()));
 
         return employeesList
             .map(emp => {
                 const empId = emp.id?.toString();
+                const planRejected = rejectedSet.has(empId);
+                // submitted is false for rejected plans (backend no longer includes them)
                 const submitted = submittedSet.has(empId);
                 const hasAchievement = achievementsSet.has(empId);
-                /* Achievement only relevant if plan submitted */
                 const evaluated = evaluatedSet.has(empId);
+                // Score: rejected plan earns 0 (must resubmit); normal progression 0-3
                 const score = [submitted, hasAchievement, evaluated].filter(Boolean).length;
-                return { ...emp, submitted, hasAchievement, evaluated, score };
+                return { ...emp, submitted, hasAchievement, evaluated, planRejected, score };
             })
             .sort((a, b) => b.score - a.score);
     }, [employeesList, stats.lists]);
@@ -388,10 +395,20 @@ const RADashboard = () => {
 
         const submittedSet = new Set((stats.lists?.submitted || []).map(id => id?.toString()));
         const achievementsSet = new Set((stats.lists?.achievements || []).map(id => id?.toString()));
+        // Employees whose plan was REJECTED by the RA are excluded from missed-deadline logic.
+        // A rejected plan means the employee DID submit within the deadline; the RA rejected
+        // it afterwards. The dateMiddleware already allows the employee to resubmit after a
+        // rejection at any time, so they do NOT need an extension and must NOT appear in the
+        // missed-deadline section with an "Extend" button.
+        const rejectedSet = new Set((stats.lists?.rejected || []).map(id => id?.toString()));
 
         return employeesList
             .map(emp => {
                 const empId = emp.id?.toString();
+
+                // Skip employees with a rejected plan — they're not "missed", they can resubmit freely
+                if (rejectedSet.has(empId)) return null;
+
                 const submitted = submittedSet.has(empId);
                 const hasAchievement = achievementsSet.has(empId);
 
@@ -1006,32 +1023,50 @@ const RADashboard = () => {
                                                 {/* Step indicators */}
                                                 {(() => {
                                                     const missedInfo = missedEmployees.find(m => m.id?.toString() === emp.id?.toString());
+                                                    // FIX (permanent): show "✕ Plan" rejected badge when plan was
+                                                    // rejected by the RA — previously showed green "Plan" (incorrect).
+                                                    const isPlanRejected = emp.planRejected === true;
                                                     return (
                                                         <div className="ra-lb-steps">
+                                                            {/* Plan step: rejected → red ✕ | missed → ⚠ | submitted → green | else → grey */}
                                                             <span className={`ra-lb-step ${
-                                                                emp.submitted ? 'ra-lb-step-done'
+                                                                isPlanRejected ? 'ra-lb-step-missed-deadline'
+                                                                : emp.submitted ? 'ra-lb-step-done'
                                                                 : (missedInfo?.missingType === 'plan' ? 'ra-lb-step-missed-deadline' : 'ra-lb-step-miss')
                                                             }`}
-                                                                style={missedInfo?.missingType === 'plan' && !emp.submitted ? {
+                                                                style={isPlanRejected ? {
+                                                                    background: '#FEE2E2', color: '#B91C1C',
+                                                                    border: '1px solid #FECACA',
+                                                                } : missedInfo?.missingType === 'plan' && !emp.submitted ? {
                                                                     background: '#FEE2E2', color: '#B91C1C',
                                                                     border: '1px solid #FECACA',
                                                                 } : {}}
                                                             >
-                                                                {missedInfo?.missingType === 'plan' && !emp.submitted ? '⚠ Plan' : 'Plan'}
+                                                                {isPlanRejected ? '✕ Plan'
+                                                                    : missedInfo?.missingType === 'plan' && !emp.submitted ? '⚠ Plan'
+                                                                    : 'Plan'}
                                                             </span>
+                                                            {/* Prog step: N/A if plan rejected, else normal logic */}
                                                             <span className={`ra-lb-step ${
-                                                                emp.hasAchievement ? 'ra-lb-step-done'
+                                                                isPlanRejected ? 'ra-lb-step-na'
+                                                                : emp.hasAchievement ? 'ra-lb-step-done'
                                                                 : emp.submitted ? (missedInfo?.missingType === 'achievement' ? 'ra-lb-step-missed-deadline' : 'ra-lb-step-miss')
                                                                 : 'ra-lb-step-na'
                                                             }`}
-                                                                style={missedInfo?.missingType === 'achievement' && emp.submitted && !emp.hasAchievement ? {
+                                                                style={!isPlanRejected && missedInfo?.missingType === 'achievement' && emp.submitted && !emp.hasAchievement ? {
                                                                     background: '#FEE2E2', color: '#B91C1C',
                                                                     border: '1px solid #FECACA',
                                                                 } : {}}
                                                             >
-                                                                {missedInfo?.missingType === 'achievement' && emp.submitted && !emp.hasAchievement ? '⚠ Prog' : 'Prog'}
+                                                                {!isPlanRejected && missedInfo?.missingType === 'achievement' && emp.submitted && !emp.hasAchievement ? '⚠ Prog' : 'Prog'}
                                                             </span>
-                                                            <span className={`ra-lb-step ${emp.evaluated ? 'ra-lb-step-done' : emp.submitted ? 'ra-lb-step-miss' : 'ra-lb-step-na'}`}>
+                                                            {/* Eval step: N/A if plan rejected */}
+                                                            <span className={`ra-lb-step ${
+                                                                isPlanRejected ? 'ra-lb-step-na'
+                                                                : emp.evaluated ? 'ra-lb-step-done'
+                                                                : emp.submitted ? 'ra-lb-step-miss'
+                                                                : 'ra-lb-step-na'
+                                                            }`}>
                                                                 Eval.
                                                             </span>
                                                         </div>

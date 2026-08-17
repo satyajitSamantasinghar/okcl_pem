@@ -1002,9 +1002,16 @@ const RAMonthlyEvaluationPage = () => {
         evaluations.forEach(ev => {
             const empId = ev.employee?.id?.toString();
             if (!empId) return;
+            // Treat any employee who has a monthlyPlanId (whether SUBMITTED, REJECTED, or
+            // otherwise) as having a "plan on record" for the missed-deadline check.
+            // Reason: a rejected plan means the employee DID submit within the deadline;
+            // the RA rejected it afterwards. The dateMiddleware already allows the employee
+            // to resubmit after a rejection regardless of the deadline, so they do NOT need
+            // a deadline extension and must NOT appear in the missed-deadline section.
             if (ev.monthlyPlanId) submittedSet.add(empId);
             if (ev.hasAchievement || ev.status === 'EVALUATED') achievementsSet.add(empId);
         });
+
 
         return employeesList.map(emp => {
             const empId = emp.id?.toString();
@@ -1100,9 +1107,27 @@ const RAMonthlyEvaluationPage = () => {
     };
 
 
-    const total = evaluations.length;
+    // FIX (permanent): "total" should only count active, valid plan submissions.
+    // A REJECTED plan is no longer valid — the employee must resubmit. Counting
+    // rejected plans inflates "Total" and makes the completion rate misleading.
+    const total = evaluations.filter(e => e.monthlyPlanId?.status !== 'REJECTED').length;
     const evaluated = evaluations.filter(e => e.status === 'EVALUATED').length;
-    const pending = total - evaluated;
+
+    // FIX (permanent): "pending" must only count evaluations the RA can actually
+    // act on right now. The three conditions that must ALL be true:
+    //   1. Not yet evaluated (status !== 'EVALUATED')
+    //   2. Plan is not rejected (monthlyPlanId?.status !== 'REJECTED')
+    //   3. Employee has submitted their progress (hasAchievement === true)
+    //
+    // Previously this was `total - evaluated` which incorrectly included:
+    //   • Employees who haven't uploaded progress yet (RA cannot evaluate yet)
+    //   • Employees whose plan was rejected (RA has already acted; no eval possible)
+    const pending = evaluations.filter(e =>
+      e.status !== 'EVALUATED' &&
+      e.monthlyPlanId?.status !== 'REJECTED' &&
+      e.hasAchievement === true
+    ).length;
+
     const completion = total > 0 ? Math.round((evaluated / total) * 100) : 0;
 
     const filtered = useMemo(() => {

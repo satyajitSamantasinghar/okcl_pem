@@ -116,23 +116,37 @@ exports.getRADashboard = async (req, res) => {
     const employeeIds = [...new Set(historyRows.map(h => h.employeeId))];
     const totalEmployees = employeeIds.length;
 
-    // CHANGE 7: { $in: employeeIds } → Op.in
-    // FIX: exclude DRAFT plans — only count plans the employee has actually submitted.
+    // FIX (permanent): exclude BOTH DRAFT and REJECTED plans from the "submitted" count.
+    // A DRAFT plan has not been sent for RA review.
+    // A REJECTED plan has been invalidated by the RA — the employee must resubmit;
+    // it is no longer an active, valid submission.
     const submittedPlans = employeeIds.length > 0 ? await MonthlyPlan.findAll({
       where: {
         employeeId: { [Op.in]: employeeIds },
         month,
-        status: { [Op.ne]: "DRAFT" },   // ← exclude drafts
+        status: { [Op.notIn]: ["DRAFT", "REJECTED"] },   // ← exclude drafts AND rejected
       },
       attributes: ["id", "employeeId"],
     }) : [];
 
+    // Also fetch REJECTED plans separately so we can:
+    //  • add their employees to notYetSubmitted (they need to resubmit)
+    //  • expose a rejected list to the frontend leaderboard
+    const rejectedPlans = employeeIds.length > 0 ? await MonthlyPlan.findAll({
+      where: {
+        employeeId: { [Op.in]: employeeIds },
+        month,
+        status: "REJECTED",
+      },
+      attributes: ["id", "employeeId"],
+    }) : [];
+    const rejectedEmployeeIds = rejectedPlans.map(p => p.employeeId);
+
     const planIds = submittedPlans.map(p => p.id);
     const submittedEmployeeIds = submittedPlans.map(p => p.employeeId);
 
-    // FIX: only count achievements the employee has actually submitted.
-    // DRAFT achievements (saved locally but not sent for RA review) must never
-    // be shown as "submitted" in the dashboard counts or the submission-status widget.
+    // FIX: only count SUBMITTED achievements (not DRAFT).
+    // DRAFT achievements must show as "Pending" — the RA cannot evaluate yet.
     const achievements = planIds.length > 0 ? await MonthlyAchievement.findAll({
       where: { monthlyPlanId: { [Op.in]: planIds }, status: "SUBMITTED" },
       include: [{ model: MonthlyPlan, as: "monthlyPlan", attributes: ["id", "employeeId"] }],
@@ -140,6 +154,8 @@ exports.getRADashboard = async (req, res) => {
 
     const achievementsThisMonth = achievements.length;
     const achievementEmployeeIds = achievements.map(a => a.monthlyPlan?.employeeId).filter(Boolean);
+    // plan IDs that have a submitted achievement (used for pendingEvaluation below)
+    const planIdsWithAchievement = achievements.map(a => a.monthlyPlanId).filter(Boolean);
 
     const evaluated = employeeIds.length > 0 ? await MonthlyEvaluation.findAll({
       where: { employeeId: { [Op.in]: employeeIds }, month, raId, status: "EVALUATED" },
@@ -149,22 +165,38 @@ exports.getRADashboard = async (req, res) => {
     const evaluatedThisMonth = evaluated.length;
     const evaluatedEmployeeIds = evaluated.map(e => e.employeeId);
 
-    // CHANGE 5: countDocuments → count
-    // Guard Op.in([]) — PostgreSQL throws on empty IN lists
-    const pendingEvaluation = employeeIds.length > 0 ? await MonthlyEvaluation.count({
-      where: { employeeId: { [Op.in]: employeeIds }, month, raId, status: "PENDING" },
-    }) : 0;
+    // FIX (permanent): pendingEvaluation must only count evaluations the RA can
+    // actually act on right now. Conditions:
+    //   1. status = PENDING  (not yet evaluated)
+    //   2. The linked plan has a SUBMITTED achievement  (employee sent their progress)
+    //   3. The linked plan is NOT REJECTED  (implicitly satisfied because submittedPlans
+    //      already excludes REJECTED — planIdsWithAchievement can only contain IDs from
+    //      non-REJECTED, non-DRAFT plans)
+    // Previously, pendingEvaluation counted ALL PENDING rows for the RA's employees,
+    // including those still awaiting progress upload — misleading the RA into thinking
+    // they had actionable work when they didn't.
+    const pendingEvaluation = planIdsWithAchievement.length > 0
+      ? await MonthlyEvaluation.count({
+          where: {
+            monthlyPlanId: { [Op.in]: planIdsWithAchievement },
+            status: "PENDING",
+          },
+        })
+      : 0;
 
+    // FIX (permanent): notYetSubmitted now correctly counts employees who either:
+    //   (a) never submitted a plan at all, OR
+    //   (b) submitted a plan that was REJECTED by the RA (must resubmit)
+    // Previously only case (a) was counted because rejectedPlans were included in
+    // submittedPlans (via status != DRAFT), understating the "not submitted" figure.
     const submittedSet = new Set(submittedEmployeeIds.map(String));
     const notSubmitted = employeeIds.filter(id => !submittedSet.has(String(id)));
-    const notYetSubmitted = notSubmitted.length;
+    const notYetSubmitted = notSubmitted.length; // includes rejected-plan employees since they're not in submittedPlans
 
     const pendingYearly = employeeIds.length > 0 ? await YearlyAppraisalReport.count({
       where: { employeeId: { [Op.in]: employeeIds }, status: "SUBMITTED" },
     }) : 0;
 
-    // CHANGE 7: { $or: [{ remarks: null }, { remarks: '' }, { remarks: { $exists: false } }] }
-    //           → Op.or with Op.is, Op.eq
     const pendingQuarterlyRemarks = await QuarterlyEvaluation.count({
       where: {
         raId,
@@ -179,7 +211,13 @@ exports.getRADashboard = async (req, res) => {
       totalEmployees, plansSubmittedThisMonth: submittedPlans.length,
       achievementsThisMonth, evaluatedThisMonth, pendingEvaluation,
       notYetSubmitted, pendingYearly, pendingQuarterlyRemarks,
-      lists: { submitted: submittedEmployeeIds, achievements: achievementEmployeeIds, evaluated: evaluatedEmployeeIds, notSubmitted: notSubmitted },
+      lists: {
+        submitted: submittedEmployeeIds,
+        achievements: achievementEmployeeIds,
+        evaluated: evaluatedEmployeeIds,
+        notSubmitted: notSubmitted,
+        rejected: rejectedEmployeeIds,  // NEW: exposes rejected-plan employees to the frontend
+      },
     });
   } catch (error) {
     res.status(500).json({ message: "Failed to load RA dashboard", error: error.message });
@@ -190,8 +228,6 @@ exports.getRADashboard = async (req, res) => {
 exports.getMonthlyTrend = async (req, res) => {
   try {
     const raId = req.user.userId;
-    const employees = await User.findAll({ where: { reportingAuthorityId: raId }, attributes: ["id"] });
-    const employeeIds = employees.map(e => e.id);
 
     const months = [];
     const now = new Date();
@@ -200,35 +236,60 @@ exports.getMonthlyTrend = async (req, res) => {
       months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
     }
 
+    // FIX (permanent): use EmployeeRAHistory per month instead of the current
+    // reportingAuthorityId snapshot. This ensures the trend accurately reflects
+    // who was under this RA in each historical month even after reassignments.
     const trendData = await Promise.all(
       months.map(async (monthStr) => {
-        if (employeeIds.length === 0) {
-          const [year, mon] = monthStr.split("-");
-          const shortMonth = new Date(parseInt(year), parseInt(mon) - 1).toLocaleDateString("en-US", { month: "short" });
+        const [selYear, selMonthNum] = monthStr.split("-").map(Number);
+        const startOfMonth = new Date(selYear, selMonthNum - 1, 1, 0, 0, 0, 0);
+        const endOfMonth   = new Date(selYear, selMonthNum, 0, 23, 59, 59, 999);
+
+        const historyRows = await EmployeeRAHistory.findAll({
+          where: {
+            raId,
+            effectiveFrom: { [Op.lte]: endOfMonth },
+            [Op.or]: [
+              { effectiveTo: null },
+              { effectiveTo: { [Op.gte]: startOfMonth } },
+            ],
+          },
+          attributes: ["employeeId"],
+        });
+        const monthEmployeeIds = [...new Set(historyRows.map(h => h.employeeId))];
+
+        const shortMonth = new Date(selYear, selMonthNum - 1)
+          .toLocaleDateString("en-US", { month: "short" });
+
+        if (monthEmployeeIds.length === 0) {
           return { month: monthStr, shortMonth, plans: 0, achievements: 0, evaluations: 0 };
         }
 
-        // FIX: exclude DRAFT plans — trend should reflect submitted plans only.
+        // Plans: count all non-DRAFT submitted plans for this month.
+        // NOTE: REJECTED plans are intentionally included here — the employee DID
+        // submit; rejection is an RA action after the fact. The trend bar represents
+        // "how many employees submitted a plan" for that month.
         const monthPlans = await MonthlyPlan.findAll({
           where: {
-            employeeId: { [Op.in]: employeeIds },
+            employeeId: { [Op.in]: monthEmployeeIds },
             month: monthStr,
-            status: { [Op.ne]: "DRAFT" },   // ← exclude drafts
+            status: { [Op.ne]: "DRAFT" },   // ← exclude only drafts
           },
           attributes: ["id"],
         });
         const planIds = monthPlans.map(p => p.id);
 
-        // FIX: only count SUBMITTED achievements — DRAFT records must not inflate the trend bars.
+        // Achievements: only SUBMITTED (not DRAFT)
         const achievements = planIds.length > 0
-          ? await MonthlyAchievement.count({ where: { monthlyPlanId: { [Op.in]: planIds }, status: "SUBMITTED" } })
+          ? await MonthlyAchievement.count({
+              where: { monthlyPlanId: { [Op.in]: planIds }, status: "SUBMITTED" },
+            })
           : 0;
-        const evaluations = await MonthlyEvaluation.count({
-          where: { employeeId: { [Op.in]: employeeIds }, month: monthStr, raId, status: "EVALUATED" },
-        });
 
-        const [year, mon] = monthStr.split("-");
-        const shortMonth = new Date(parseInt(year), parseInt(mon) - 1).toLocaleDateString("en-US", { month: "short" });
+        // Evaluations: only EVALUATED status
+        const evaluations = await MonthlyEvaluation.count({
+          where: { employeeId: { [Op.in]: monthEmployeeIds }, month: monthStr, raId, status: "EVALUATED" },
+        });
 
         return { month: monthStr, shortMonth, plans: monthPlans.length, achievements, evaluations };
       })

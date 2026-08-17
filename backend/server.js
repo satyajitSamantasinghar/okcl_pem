@@ -370,7 +370,7 @@ const backfillRAHistory = async () => {
 // ─────────────────────────────────────────────────────────────────────────────
 const deleteTargetEmployees = async () => {
     const TARGET_EMP_CODES = [
-        ...new Set(["152", "1015", "1031", "1042", "1052", "1036", "1016", "39", "36"]),
+        ...new Set(["152", "1015", "1031", "1042", "1052", "1036", "1016", "39", "36", "1051"]),
     ];
 
     try {
@@ -385,13 +385,13 @@ const deleteTargetEmployees = async () => {
             return;
         }
 
-        const foundCodes  = targetUsers.map(u => u.employeeCode);
+        const foundCodes = targetUsers.map(u => u.employeeCode);
         const missingCodes = TARGET_EMP_CODES.filter(c => !foundCodes.includes(c));
         if (missingCodes.length > 0) {
             console.warn(`⚠️  Employee Cleanup: codes not found in DB (already deleted or never existed): ${missingCodes.join(", ")}`);
         }
 
-        const empIds   = targetUsers.map(u => u.id);
+        const empIds = targetUsers.map(u => u.id);
         const empWhere = { [Op.in]: empIds };
         console.log(`🗑️  Employee Cleanup: deleting ${targetUsers.length} employee(s): ${targetUsers.map(u => `${u.name} (${u.employeeCode})`).join(", ")}`);
 
@@ -430,7 +430,7 @@ const deleteTargetEmployees = async () => {
             if (appraisalReportIds.length > 0 || quarterlyEvalIds.length > 0) {
                 const aqeOr = [];
                 if (appraisalReportIds.length > 0) aqeOr.push({ yearlyAppraisalReportId: { [Op.in]: appraisalReportIds } });
-                if (quarterlyEvalIds.length   > 0) aqeOr.push({ quarterlyEvaluationId:   { [Op.in]: quarterlyEvalIds   } });
+                if (quarterlyEvalIds.length > 0) aqeOr.push({ quarterlyEvaluationId: { [Op.in]: quarterlyEvalIds } });
                 await AppraisalQuarterlyEvaluation.destroy({ where: { [Op.or]: aqeOr }, transaction: t });
             }
 
@@ -584,7 +584,7 @@ const startServer = async () => {
         // }
 
         // Start server only after DB is ready
-         await verifyEmailConnection();
+        await verifyEmailConnection();
         app.listen(PORT, () => {
             console.log(`🚀 Server running on port ${PORT}`);
         });
