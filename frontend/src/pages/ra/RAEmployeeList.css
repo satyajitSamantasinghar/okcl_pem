@@ -42,6 +42,15 @@
     --clr-nosub-badge-text: #991B1B;
     --clr-nosub-fill-a: #FCA5A5;
     --clr-nosub-fill-b: #EF4444;
+
+    /* Plan-rejected — purple-red: distinct from "never submitted" (pure red)
+       signals "submitted but sent back", i.e. RA has already acted on it */
+    --clr-rejected-bg: #FDF4FF;
+    --clr-rejected-border: rgba(168,85,247,0.2);
+    --clr-rejected-badge-bg: #F3E8FF;
+    --clr-rejected-badge-text: #6B21A8;
+    --clr-rejected-fill-a: #D8B4FE;
+    --clr-rejected-fill-b: #A855F7;
 }
 
 /* ─── Page wrapper ─── */
@@ -290,6 +299,7 @@
 .rel-card--completed    { background: var(--clr-complete-bg); border-color: var(--clr-complete-border); }
 .rel-card--not-submitted{ background: var(--clr-nosub-bg);    border-color: var(--clr-nosub-border); }
 .rel-card--achievement-missing { background: #FFF8F1; border-color: rgba(249,115,22,0.2); }
+.rel-card--plan-rejected { background: var(--clr-rejected-bg); border-color: var(--clr-rejected-border); }
 
 /* Hover — lift only, no scale that causes overlap */
 .rel-card:hover {
@@ -300,6 +310,7 @@
 .rel-card--completed:hover    { border-color: rgba(34,197,94,0.4); }
 .rel-card--not-submitted:hover{ border-color: rgba(239,68,68,0.35); }
 .rel-card--achievement-missing:hover { border-color: rgba(249,115,22,0.38); }
+.rel-card--plan-rejected:hover { border-color: rgba(168,85,247,0.38); }
 
 /* Focus ring for keyboard nav */
 .rel-card:focus-visible {
@@ -347,6 +358,7 @@
 .rel-badge--completed     { background: var(--clr-complete-badge-bg); color: var(--clr-complete-badge-text); }
 .rel-badge--not-submitted { background: var(--clr-nosub-badge-bg);    color: var(--clr-nosub-badge-text); }
 .rel-badge--achievement-missing { background: #FFE8D1; color: #C2410C; }
+.rel-badge--plan-rejected { background: var(--clr-rejected-badge-bg); color: var(--clr-rejected-badge-text); }
 
 /* ── Identity ── */
 .rel-card-identity { margin-bottom: 6px; }
@@ -430,6 +442,7 @@
 .rel-progress-fill--completed     { background: linear-gradient(90deg, var(--clr-complete-fill-a), var(--clr-complete-fill-b)); }
 .rel-progress-fill--not-submitted { background: linear-gradient(90deg, var(--clr-nosub-fill-a),    var(--clr-nosub-fill-b)); }
 .rel-progress-fill--achievement-missing { background: linear-gradient(90deg, #FDBA74, #F97316); }
+.rel-progress-fill--plan-rejected { background: linear-gradient(90deg, var(--clr-rejected-fill-a), var(--clr-rejected-fill-b)); }
 
 .rel-progress-hint {
     font-size: 0.72rem;

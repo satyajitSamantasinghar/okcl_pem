@@ -113,7 +113,17 @@ exports.getRADashboard = async (req, res) => {
       },
       attributes: ["employeeId"],
     });
-    const employeeIds = [...new Set(historyRows.map(h => h.employeeId))];
+    const rawEmployeeIds = [...new Set(historyRows.map(h => h.employeeId))];
+    // FIX (permanent): filter to ACTIVE employees only so dashboard counts match
+    // /ra/my-employees (which already applies isActive:true). Without this, an
+    // inactive user who appears in EmployeeRAHistory would be counted in
+    // totalEmployees / stats.lists but not in the frontend's employeesList,
+    // making the KPI modal show a different set than the count card implies.
+    const activeUserRows = rawEmployeeIds.length > 0 ? await User.findAll({
+      where: { id: { [Op.in]: rawEmployeeIds }, isActive: true },
+      attributes: ["id"],
+    }) : [];
+    const employeeIds = activeUserRows.map(u => u.id);
     const totalEmployees = employeeIds.length;
 
     // FIX (permanent): exclude BOTH DRAFT and REJECTED plans from the "submitted" count.
@@ -352,26 +362,49 @@ exports.getMyEmployees = async (req, res) => {
         const [totalPlans, totalEvaluated, totalAchievements, currentMonthPlan, currentMonthAchievement, currentMonthEvaluation] = await Promise.all([
           MonthlyPlan.count({ where: { employeeId: emp.id } }),
           MonthlyEvaluation.count({ where: { employeeId: emp.id, raId, status: "EVALUATED" } }),
-          // FIX: only count achievements the employee has actually submitted (not drafts).
+          // Count only SUBMITTED achievements (not drafts)
           MonthlyAchievement.count({ where: { employeeId: emp.id, status: "SUBMITTED" } }),
-          // CHANGE 7: { status: { $ne: "DRAFT" } } → Op.ne
-          MonthlyPlan.findOne({ where: { employeeId: emp.id, month: currentMonth, status: { [Op.ne]: "DRAFT" } }, attributes: ["id"] }),
-          // FIX: currentMonthAchievementSubmitted must be false for DRAFT achievements.
-          // Previously this had no status filter, so a DRAFT record would set the flag to true
-          // and the My Employees card would wrongly read "Plan & progress submitted".
-          MonthlyAchievement.findOne({ where: { employeeId: emp.id, status: "SUBMITTED" }, attributes: ["id"] }),
+          // FIX: fetch the current month plan including its status so we can detect REJECTED.
+          // Previously used status != DRAFT which included REJECTED plans, causing
+          // a rejected plan to count as "submitted" → wrong card status for Sushant.
+          MonthlyPlan.findOne({
+            where: { employeeId: emp.id, month: currentMonth, status: { [Op.ne]: "DRAFT" } },
+            attributes: ["id", "status"],   // include status so frontend knows if REJECTED
+          }),
+          // FIX (permanent): scope achievement lookup to the CURRENT MONTH.
+          // Previously had no month filter — any SUBMITTED achievement from a prior month
+          // (e.g. July) would set currentMonthAchievementSubmitted=true for August,
+          // making the card show "Evaluation is Pending" even when no progress was uploaded
+          // for the current month (bug seen with Satyajit Samantasinghar).
+          MonthlyAchievement.findOne({
+            where: { employeeId: emp.id, status: "SUBMITTED" },
+            // The achievement is linked to a plan for the current month — join via monthlyPlanId
+            include: [{
+              model: MonthlyPlan,
+              as: "monthlyPlan",
+              where: { month: currentMonth },
+              attributes: [],
+            }],
+            attributes: ["id"],
+          }),
           MonthlyEvaluation.findOne({ where: { employeeId: emp.id, raId, month: currentMonth, status: "EVALUATED" }, attributes: ["id"] }),
         ]);
+
+        // Determine if current month plan is active (not rejected)
+        const planStatus = currentMonthPlan?.status || null;
+        const currentMonthPlanActive = !!currentMonthPlan && planStatus !== "REJECTED";
+        const currentMonthPlanRejected = !!currentMonthPlan && planStatus === "REJECTED";
 
         return {
           id: emp.id, name: emp.name, employeeCode: emp.employeeCode,
           department: emp.department, email: emp.email,
-          // 'role' is included so the frontend can apply the correct role-scoped
-          // deadline config per team member (EMPLOYEE vs RA deadlines differ).
           role: emp.role,
           joinedAt: emp.createdAt,
           totalPlans, totalEvaluated, totalAchievements, currentMonth,
-          currentMonthPlanSubmitted: !!currentMonthPlan,
+          // currentMonthPlanSubmitted is true only for ACTIVE (non-rejected) plans
+          currentMonthPlanSubmitted: currentMonthPlanActive,
+          // NEW: expose rejection state so frontend can show "Plan Rejected" card
+          currentMonthPlanRejected,
           currentMonthAchievementSubmitted: !!currentMonthAchievement,
           currentMonthEvaluated: !!currentMonthEvaluation,
         };
@@ -535,79 +568,109 @@ exports.getMonthlyEvaluations = async (req, res) => {
         where.employeeId = req.user.userId;
         excludeScore = true;   // ← hide score just like any other employee
       } else {
-        // RA as evaluator: find records where I am the RA
-        where.raId = req.user.userId;
+        // ── RA as evaluator: scope to employees under this RA for the selected month ──
+        //
+        // FIX (permanent): previously used `where.raId = req.user.userId`, which is
+        // too narrow in two scenarios:
+        //
+        //  a) RA role temporarily lost (e.g. ishod=null in HRMS) → employee's plan was
+        //     submitted and MonthlyEvaluation created while the RA had a wrong role in DB.
+        //     The raId on those records is still correct (set at plan-submission time by
+        //     the employee's reportingAuthorityId), but if the RA's own raId field ever
+        //     diverged temporarily, raId filter would miss those records.
+        //
+        //  b) Employee reassigned between RAs → old evaluation record still carries the
+        //     previous RA's UUID in raId. The new RA cannot see it until the auto-create
+        //     loop reassigns it. But the auto-create loop previously used
+        //     reportingAuthorityId (current DB snapshot), not EmployeeRAHistory, so it
+        //     could miss employees who were historically under this RA for the month.
+        //
+        // FIX: resolve employees via EmployeeRAHistory (same logic as getRADashboard and
+        // getMyEmployees), then filter by employeeId. The auto-create/reassign loop
+        // corrects raId for any PENDING records that still carry an old RA's UUID.
+        //
+        // Fallback: if no month is provided, use raId filter for backwards compatibility.
 
-        // Auto-create missing evaluation records for RA's employees this month
-        // IMPORTANT: exclude the RA themselves from this loop
         if (req.query.month) {
-          const myEmps = await User.findAll({
-            where: { reportingAuthorityId: req.user.userId },
-            attributes: ["id"],
-          });
-          // Exclude RA's own userId so we never auto-create a team-eval for themselves
-          const myEmpIds = myEmps.map(e => e.id).filter(id => id !== req.user.userId);
+          // ── Resolve employees under this RA for the selected month ──────────────────
+          const [evalSelYear, evalSelMonth] = req.query.month.split("-").map(Number);
+          const evalStartOfMonth = new Date(evalSelYear, evalSelMonth - 1, 1, 0, 0, 0, 0);
+          const evalEndOfMonth   = new Date(evalSelYear, evalSelMonth, 0, 23, 59, 59, 999);
 
-          // Guard: skip if no employees — Op.in([]) causes invalid SQL in some DB drivers
-          if (myEmpIds.length > 0) {
-            // CRITICAL FIX: Only include plans that have actually been submitted
-            // (status !== "DRAFT"). A DRAFT plan means the employee has saved their
-            // work locally but has NOT submitted it for RA review. Previously, this
-            // query fetched ALL plans including DRAFTs, which caused draft plans to
-            // appear in the RA's evaluation queue — a clear business-logic violation.
-            const plans = await MonthlyPlan.findAll({
-              where: {
-                employeeId: { [Op.in]: myEmpIds },
-                month: req.query.month,
-                status: { [Op.ne]: "DRAFT" },   // ← exclude drafts
-              },
-              attributes: ["id", "employeeId", "month"],
+          const evalHistRows = await EmployeeRAHistory.findAll({
+            where: {
+              raId: req.user.userId,
+              effectiveFrom: { [Op.lte]: evalEndOfMonth },
+              [Op.or]: [
+                { effectiveTo: null },
+                { effectiveTo: { [Op.gte]: evalStartOfMonth } },
+              ],
+            },
+            attributes: ["employeeId"],
+          });
+          // Exclude the RA themselves — never create a team-eval for the RA's own plan
+          const historyEmpIds = [...new Set(evalHistRows.map(h => h.employeeId))]
+            .filter(id => String(id) !== String(req.user.userId));
+
+          if (historyEmpIds.length === 0) {
+            // No employees under this RA for this month — return empty immediately
+            return res.json({ page: 1, limit, totalRecords: 0, totalPages: 0, data: [] });
+          }
+
+          // ── Scope main query to these employees ──────────────────────────────────────
+          where.employeeId = { [Op.in]: historyEmpIds };
+
+          // ── Auto-create / reassign MonthlyEvaluation records ─────────────────────────
+          //
+          //  Only include plans that have actually been submitted (status !== "DRAFT").
+          //  A DRAFT plan has not been sent for RA review.
+          //
+          //  Look up by monthlyPlanId (UNIQUE key) to avoid duplicate-key crashes:
+          //    • No record exists            → create one for this RA
+          //    • Record exists, same raId    → no action needed
+          //    • Record exists, diff raId, PENDING → reassign to this RA (employee moved)
+          //    • Record exists, EVALUATED    → leave it alone; evaluation is done
+          const plans = await MonthlyPlan.findAll({
+            where: {
+              employeeId: { [Op.in]: historyEmpIds },
+              month: req.query.month,
+              status: { [Op.ne]: "DRAFT" },
+            },
+            attributes: ["id", "employeeId", "month"],
+          });
+
+          for (const plan of plans) {
+            const existsByPlan = await MonthlyEvaluation.findOne({
+              where: { monthlyPlanId: plan.id },
             });
 
-            for (const plan of plans) {
-              // ── Look up by monthlyPlanId (UNIQUE key), NOT by (employeeId, month, raId).
-              //
-              //  Why: monthlyPlanId has a UNIQUE constraint — only ONE MonthlyEvaluation
-              //  can exist per plan. If an employee is reassigned from RA_A → RA_B:
-              //    • The old record has  { monthlyPlanId: X, raId: RA_A }
-              //    • findOne({ raId: RA_B }) returns null
-              //    • create({ monthlyPlanId: X, raId: RA_B }) → unique-constraint crash (500)
-              //
-              //  Correct approach: find the record by the plan's unique id.
-              //  • No record exists  → create fresh for this RA.
-              //  • Record exists, same RA, wrong planId → update planId (plan was resubmitted).
-              //  • Record exists, different RA, PENDING → reassign to this RA (employee moved).
-              //  • Record exists, EVALUATED → leave it alone; evaluation is done.
-              const existsByPlan = await MonthlyEvaluation.findOne({
-                where: { monthlyPlanId: plan.id },
+            if (!existsByPlan) {
+              await MonthlyEvaluation.create({
+                employeeId: plan.employeeId,
+                monthlyPlanId: plan.id,
+                raId: req.user.userId,
+                evaluatorId: null,
+                month: plan.month,
+                score: 0,
+                remarks: "",
               });
-
-              if (!existsByPlan) {
-                // No evaluation record for this plan at all — create one.
-                await MonthlyEvaluation.create({
-                  employeeId: plan.employeeId,
-                  monthlyPlanId: plan.id,
-                  raId: req.user.userId,
-                  evaluatorId: null,
-                  month: plan.month,
-                  score: 0,
-                  remarks: "",
-                });
-              } else if (
-                existsByPlan.raId !== req.user.userId &&
-                existsByPlan.status === "PENDING"
-              ) {
-                // Record belongs to a different RA (employee was reassigned) and is
-                // still pending — reassign to the current RA so they can evaluate it.
-                await existsByPlan.update({
-                  raId: req.user.userId,
-                  score: 0,
-                  remarks: "",
-                });
-              }
-              // If status === "EVALUATED" or raId already matches: no action needed.
+            } else if (
+              existsByPlan.raId !== req.user.userId &&
+              existsByPlan.status === "PENDING"
+            ) {
+              // Employee reassigned (or RA role was temporarily wrong) — update raId
+              // so this RA can now see and act on the evaluation record.
+              await existsByPlan.update({
+                raId: req.user.userId,
+                score: 0,
+                remarks: "",
+              });
             }
+            // raId already matches, or EVALUATED → no action needed.
           }
+        } else {
+          // No month param — fall back to raId filter (backwards compatible)
+          where.raId = req.user.userId;
         }
       }
     } else if (req.user.role === "MD") {

@@ -954,7 +954,13 @@ const RAMonthlyEvaluationPage = () => {
         setLoading(true);
         try {
             const [evalRes, empRes] = await Promise.all([
-                api.get('/ra/monthly-evaluations', { params: { month: filterMonth } }),
+                // FIX (permanent): use limit=200 to fetch ALL evaluations for the selected
+                // month in a single call. The default limit of 10 caused missedEvaluations
+                // to only build submittedSet from the first 10 records, incorrectly flagging
+                // employees on page 2+ as "missed deadline" even when they had submitted.
+                // Client-side pagination (ROWS_PER_PAGE=10) still handles the table display;
+                // this only changes how many records the API returns per request.
+                api.get('/ra/monthly-evaluations', { params: { month: filterMonth, limit: 200 } }),
                 // Pass filterMonth so the backend uses EmployeeRAHistory and returns
                 // only employees who were under this RA in the selected month.
                 api.get('/ra/my-employees', { params: { month: filterMonth } })

@@ -18,32 +18,49 @@ function getInitials(name) {
 /**
  * Status is based on the CURRENT MONTH only, using dedicated flags
  * returned by the backend /ra/my-employees endpoint.
+ *
+ * Priority order matters:
+ *  1. not-submitted  — no plan at all (never submitted)
+ *  2. plan-rejected  — plan was submitted but RA rejected it (must resubmit)
+ *                      checked BEFORE achievement-missing so a rejected employee
+ *                      doesn't fall through to "Progress is Missing" incorrectly
+ *  3. completed      — fully evaluated
+ *  4. achievement-missing — plan active but no progress yet
+ *  5. pending        — plan + progress ready, awaiting RA evaluation
  */
 function getCardStatus(emp) {
-    if (!emp.currentMonthPlanSubmitted)        return 'not-submitted';
-    if (emp.currentMonthEvaluated)             return 'completed';
-    if (!emp.currentMonthAchievementSubmitted) return 'achievement-missing';
+    if (!emp.currentMonthPlanSubmitted && !emp.currentMonthPlanRejected) return 'not-submitted';
+    if (emp.currentMonthPlanRejected)              return 'plan-rejected';
+    if (emp.currentMonthEvaluated)                 return 'completed';
+    if (!emp.currentMonthAchievementSubmitted)      return 'achievement-missing';
     return 'pending';
 }
 
 function getStatusLabel(status) {
-    if (status === 'not-submitted')        return 'Monthly Plan Not Submitted';
-    if (status === 'completed')            return 'Evaluated';
-    if (status === 'achievement-missing')  return 'Progress is Missing';
+    if (status === 'not-submitted')       return 'Monthly Plan Not Submitted';
+    if (status === 'plan-rejected')       return 'Plan Rejected';
+    if (status === 'completed')           return 'Evaluated';
+    if (status === 'achievement-missing') return 'Progress is Missing';
     return 'Evaluation is Pending';
 }
 
 function getProgressPct(emp) {
-    if (!emp.currentMonthPlanSubmitted) return 0;
-    if (emp.currentMonthEvaluated)      return 100;
-    if (emp.currentMonthAchievementSubmitted) return 66;
+    if (!emp.currentMonthPlanSubmitted && !emp.currentMonthPlanRejected) return 0;
+    if (emp.currentMonthPlanRejected)          return 33;  // plan was submitted once (1/3)
+    if (emp.currentMonthEvaluated)             return 100;
+    if (emp.currentMonthAchievementSubmitted)  return 66;
     return 33;
 }
 
 function getProgressHint(emp) {
-    if (!emp.currentMonthPlanSubmitted)        return 'No monthly plan submitted for this month yet';
-    if (emp.currentMonthEvaluated)             return 'This month is fully evaluated — plan, progress & evaluation done';
-    if (!emp.currentMonthAchievementSubmitted) return 'Plan submitted — waiting for employee to submit this month\'s progress';
+    if (!emp.currentMonthPlanSubmitted && !emp.currentMonthPlanRejected)
+        return 'No monthly plan submitted for this month yet';
+    if (emp.currentMonthPlanRejected)
+        return 'Plan was rejected — employee must resubmit their monthly plan';
+    if (emp.currentMonthEvaluated)
+        return 'This month is fully evaluated — plan, progress & evaluation done';
+    if (!emp.currentMonthAchievementSubmitted)
+        return "Plan submitted — waiting for employee to submit this month's progress";
     return 'Plan & progress submitted — awaiting your evaluation for this month';
 }
 
@@ -77,7 +94,8 @@ const RAEmployeeListPage = () => {
     /* ── Derived stats ── */
     const total        = employees.length;
     const evaluated    = employees.filter(e => getCardStatus(e) === 'completed').length;
-    const pending      = employees.filter(e => ['pending', 'achievement-missing'].includes(getCardStatus(e))).length;
+    // plan-rejected counts toward "pending action needed" — the employee must resubmit
+    const pending      = employees.filter(e => ['pending', 'achievement-missing', 'plan-rejected'].includes(getCardStatus(e))).length;
     const notSubmitted = employees.filter(e => getCardStatus(e) === 'not-submitted').length;
 
     /* ── Filtering ── */
@@ -181,6 +199,7 @@ const RAEmployeeListPage = () => {
                             <option value="pending">Pending Evaluation</option>
                             <option value="completed">Fully Evaluated</option>
                             <option value="achievement-missing">Progress Missing</option>
+                            <option value="plan-rejected">Plan Rejected</option>
                             <option value="not-submitted">Not Submitted</option>
                         </select>
                     </div>
