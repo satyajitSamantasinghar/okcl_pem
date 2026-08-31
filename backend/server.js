@@ -1,4 +1,3 @@
-
 const dotenv = require('dotenv');
 dotenv.config();
 const app = require("./src/app");
@@ -88,6 +87,96 @@ const runMigrations = async () => {
         console.log("✅ Migration: email column set to nullable");
     }
 
+    // Migration 7: Add addedVia/addedAt origin-tracking to MonthlyPlanItem and
+    // MonthlyAchievementItem rows — lets the RA/HRD/MD evaluation views tell a
+    // plan/progress item added via the mid-cycle "Add More Plans"/"Add More
+    // Progress" flow apart from one submitted with the original monthly plan.
+    //
+    // added_via is a plain constant default ('INITIAL_SUBMISSION'), so
+    // Postgres can add it as NOT NULL in one step — same pattern as
+    // auth_provider in Migration 1 above.
+    //
+    // added_at needs a *value*, not a constant, so it's added in three steps
+    // (nullable → backfill existing rows → enforce NOT NULL) instead of one
+    // addColumn with a DEFAULT CURRENT_TIMESTAMP. A volatile default like
+    // that can't use Postgres 11+'s fast metadata-only column add — it forces
+    // a full table rewrite under an ACCESS EXCLUSIVE lock for however long
+    // that takes. Splitting it out means the schema change itself is always
+    // instant, and the one-time backfill UPDATE is a normal write the table
+    // already handles every day. The app itself never depends on a DB-level
+    // default for added_at — employeeController.js always stamps it
+    // explicitly on every insert — so once existing rows are backfilled this
+    // column never needs a default at all.
+    const planItemDesc = await qi.describeTable("monthly_plan_items");
+    if (!planItemDesc.added_via) {
+        await qi.addColumn("monthly_plan_items", "added_via", {
+            type: DataTypes.ENUM("INITIAL_SUBMISSION", "ADD_MORE"),
+            allowNull: false,
+            defaultValue: "INITIAL_SUBMISSION",
+        });
+        console.log("✅ Migration: added added_via column to monthly_plan_items table");
+    }
+    if (!planItemDesc.added_at) {
+        await qi.addColumn("monthly_plan_items", "added_at", {
+            type: DataTypes.DATE,
+            allowNull: true,
+        });
+        await sequelize.query(
+            `UPDATE monthly_plan_items SET added_at = NOW() WHERE added_at IS NULL`
+        );
+        await qi.changeColumn("monthly_plan_items", "added_at", {
+            type: DataTypes.DATE,
+            allowNull: false,
+        });
+        console.log("✅ Migration: added added_at column to monthly_plan_items table (backfilled existing rows, then set NOT NULL)");
+    }
+
+    const achievementItemDesc = await qi.describeTable("monthly_achievement_items");
+    if (!achievementItemDesc.added_via) {
+        await qi.addColumn("monthly_achievement_items", "added_via", {
+            type: DataTypes.ENUM("INITIAL_SUBMISSION", "ADD_MORE"),
+            allowNull: false,
+            defaultValue: "INITIAL_SUBMISSION",
+        });
+        console.log("✅ Migration: added added_via column to monthly_achievement_items table");
+    }
+    if (!achievementItemDesc.added_at) {
+        await qi.addColumn("monthly_achievement_items", "added_at", {
+            type: DataTypes.DATE,
+            allowNull: true,
+        });
+        await sequelize.query(
+            `UPDATE monthly_achievement_items SET added_at = NOW() WHERE added_at IS NULL`
+        );
+        await qi.changeColumn("monthly_achievement_items", "added_at", {
+            type: DataTypes.DATE,
+            allowNull: false,
+        });
+        console.log("✅ Migration: added added_at column to monthly_achievement_items table (backfilled existing rows, then set NOT NULL)");
+    }
+
+    // Migration 8: Add planItemId (FK → monthly_plan_items) to
+    // MonthlyAchievementItem — replaces positional (planIndex-based) linking
+    // between plan items and their progress entries with a real foreign
+    // key. planIndex is kept as a legacy/audit field only; it's never used
+    // for matching once this column is populated. Nullable because a
+    // handful of very old rows may have no MonthlyPlanItem to point at
+    // (e.g. a plan that predates MonthlyPlanItem existing at all) — those
+    // stay unlinked rather than blocking the migration. See
+    // linkAchievementItemsToPlanItems() below for the one-time backfill
+    // that populates this for existing rows, and employeeController.js for
+    // where newly created rows set it directly going forward.
+    const achievementItemDescForFk = await qi.describeTable("monthly_achievement_items");
+    if (!achievementItemDescForFk.plan_item_id) {
+        await qi.addColumn("monthly_achievement_items", "plan_item_id", {
+            type: DataTypes.UUID,
+            allowNull: true,
+            references: { model: "monthly_plan_items", key: "id" },
+            onDelete: "CASCADE",
+        });
+        console.log("✅ Migration: added plan_item_id column (FK → monthly_plan_items) to monthly_achievement_items table");
+    }
+
     // ── One-time DB cleanup ────────────────────────────────────────────────────
     //  Set DB_TRUNCATE_ON_STARTUP=true in .env to wipe all user data (CASCADE).
     //  USE ONLY ONCE to fix data mismatches. Remove the env var after restart.
@@ -108,6 +197,182 @@ const runMigrations = async () => {
     // if (mdToRaCount?.rowCount > 0) {
     //     console.log("✅ Migration 6: emp_code '1686011' role updated MD → RA");
     // }
+};
+
+// ─── One-time Data Repair: normalize itemOrder / planIndex ──────────────────
+//  Fixes rows affected by a bug in employeeController.js's "Add More
+//  Plans"/"Add More Progress" append logic: the next itemOrder/planIndex was
+//  computed from existingItems.length (a row COUNT) instead of
+//  MAX(itemOrder)/MAX(planIndex). Those two only agree when the existing
+//  values happen to be a perfectly gapless 0..n-1 sequence — not guaranteed
+//  (a concurrent append, a historical edge case, etc.). When they disagreed,
+//  a newly appended item could receive an itemOrder LOWER than items already
+//  in the plan, so it sorted first instead of last, and — because
+//  MonthlyAchievementItem is linked to MonthlyPlanItem purely by array
+//  POSITION, not a foreign key — every achievement entry after that point
+//  silently paired with the wrong plan item. The append logic itself is
+//  already fixed to use MAX going forward; this repairs rows written before
+//  that fix.
+//
+//  Repair rule, per plan / per achievement: group items into
+//  INITIAL_SUBMISSION (always first) and ADD_MORE (always after), preserving
+//  relative order WITHIN each group — INITIAL_SUBMISSION rows by their
+//  current itemOrder/planIndex (never touched by the bug, so still correct
+//  relative to each other), ADD_MORE rows by addedAt (a real timestamp,
+//  unaffected by the bug, so still chronologically correct even across
+//  multiple separate append calls) — then rewrite itemOrder/planIndex as a
+//  clean dense 0..n-1 sequence in that order.
+//
+//  Idempotent: a group already in the correct order is rewritten to the same
+//  values, so re-running this on every restart is a safe no-op. Safe to
+//  leave running indefinitely, but can be removed once you've confirmed (via
+//  its log output) that a run found nothing left to repair.
+// ─────────────────────────────────────────────────────────────────────────────
+const repairItemOrdering = async () => {
+    const repairTable = async (Model, parentKey, orderField) => {
+        const rows = await Model.findAll({
+            attributes: ["id", parentKey, orderField, "addedVia", "addedAt"],
+            raw: true,
+        });
+
+        const byParent = new Map();
+        for (const row of rows) {
+            const key = String(row[parentKey]);
+            if (!byParent.has(key)) byParent.set(key, []);
+            byParent.get(key).push(row);
+        }
+
+        let repairedGroups = 0;
+        let repairedRows = 0;
+
+        for (const items of byParent.values()) {
+            const sorted = [...items].sort((a, b) => {
+                if (a.addedVia !== b.addedVia) {
+                    return a.addedVia === "ADD_MORE" ? 1 : -1;
+                }
+                if (a.addedVia === "ADD_MORE") {
+                    return new Date(a.addedAt) - new Date(b.addedAt);
+                }
+                return a[orderField] - b[orderField];
+            });
+
+            let changedInGroup = false;
+            for (let i = 0; i < sorted.length; i++) {
+                if (sorted[i][orderField] !== i) {
+                    await Model.update({ [orderField]: i }, { where: { id: sorted[i].id } });
+                    changedInGroup = true;
+                    repairedRows++;
+                }
+            }
+            if (changedInGroup) repairedGroups++;
+        }
+
+        return { repairedGroups, repairedRows };
+    };
+
+    const planResult = await repairTable(MonthlyPlanItem, "monthlyPlanId", "itemOrder");
+    if (planResult.repairedRows > 0) {
+        console.log(`✅ Data Repair: fixed itemOrder for ${planResult.repairedRows} MonthlyPlanItem row(s) across ${planResult.repairedGroups} plan(s)`);
+    } else {
+        console.log("✅ Data Repair: MonthlyPlanItem.itemOrder already correct — nothing to fix");
+    }
+
+    const achResult = await repairTable(MonthlyAchievementItem, "monthlyAchievementId", "planIndex");
+    if (achResult.repairedRows > 0) {
+        console.log(`✅ Data Repair: fixed planIndex for ${achResult.repairedRows} MonthlyAchievementItem row(s) across ${achResult.repairedGroups} achievement(s)`);
+    } else {
+        console.log("✅ Data Repair: MonthlyAchievementItem.planIndex already correct — nothing to fix");
+    }
+};
+
+// ─── One-time Data Backfill: link MonthlyAchievementItem → MonthlyPlanItem ───
+//  Populates plan_item_id for MonthlyAchievementItem rows that predate the
+//  column (see Migration 8 above). Must run AFTER repairItemOrdering() —
+//  the backfill pairs each achievement row with a plan item by matching
+//  their (now-correct) relative position, so it depends on plan item
+//  ordering already being trustworthy.
+//
+//  Pairing rule, per achievement: sort its rows by planIndex, sort the
+//  parent plan's items by itemOrder, and pair position-for-position (1st
+//  achievement row → 1st plan item, 2nd → 2nd, ...). This is the same
+//  correspondence the app has always implicitly relied on — the point of
+//  this backfill isn't to guess anything new, it's to convert that implicit,
+//  order-dependent correspondence into an explicit, order-independent one,
+//  exactly once, so nothing has to rely on array position ever again.
+//
+//  Defensive: if pairing would assign the same plan item to two different
+//  achievement rows (only possible from already-corrupted historical data,
+//  e.g. duplicate planIndex values), only the first is linked — the rest
+//  are left unlinked (plan_item_id stays NULL) and logged for manual review,
+//  rather than guessed at or silently overwritten.
+//
+//  Idempotent: only rows with plan_item_id IS NULL are touched, so
+//  re-running after the first successful pass is a fast no-op.
+// ─────────────────────────────────────────────────────────────────────────────
+const linkAchievementItemsToPlanItems = async () => {
+    const unlinked = await MonthlyAchievementItem.findAll({
+        where: { planItemId: null },
+        raw: true,
+    });
+    if (unlinked.length === 0) {
+        console.log("✅ Data Backfill: MonthlyAchievementItem.planItemId already populated — nothing to link");
+        return;
+    }
+
+    const achievementIds = [...new Set(unlinked.map(r => r.monthlyAchievementId))];
+    const achievements = await MonthlyAchievement.findAll({
+        where: { id: { [Op.in]: achievementIds } },
+        attributes: ["id", "monthlyPlanId"],
+        raw: true,
+    });
+    const planIdByAchievementId = new Map(achievements.map(a => [a.id, a.monthlyPlanId]));
+
+    const planIds = [...new Set(achievements.map(a => a.monthlyPlanId))];
+    const planItems = await MonthlyPlanItem.findAll({
+        where: { monthlyPlanId: { [Op.in]: planIds } },
+        attributes: ["id", "monthlyPlanId", "itemOrder"],
+        order: [["itemOrder", "ASC"]],
+        raw: true,
+    });
+    const planItemsByPlanId = new Map();
+    for (const item of planItems) {
+        const key = item.monthlyPlanId;
+        if (!planItemsByPlanId.has(key)) planItemsByPlanId.set(key, []);
+        planItemsByPlanId.get(key).push(item);
+    }
+
+    const byAchievement = new Map();
+    for (const row of unlinked) {
+        const key = row.monthlyAchievementId;
+        if (!byAchievement.has(key)) byAchievement.set(key, []);
+        byAchievement.get(key).push(row);
+    }
+
+    let linkedCount = 0;
+    let skippedCount = 0;
+    for (const [achievementId, rows] of byAchievement.entries()) {
+        const planId = planIdByAchievementId.get(achievementId);
+        const items = planId ? (planItemsByPlanId.get(planId) || []) : [];
+        const sortedRows = [...rows].sort((a, b) => a.planIndex - b.planIndex);
+
+        const usedPlanItemIds = new Set();
+        for (let i = 0; i < sortedRows.length; i++) {
+            const planItem = items[i];
+            if (!planItem || usedPlanItemIds.has(planItem.id)) {
+                skippedCount++;
+                continue;
+            }
+            usedPlanItemIds.add(planItem.id);
+            await MonthlyAchievementItem.update(
+                { planItemId: planItem.id },
+                { where: { id: sortedRows[i].id } }
+            );
+            linkedCount++;
+        }
+    }
+
+    console.log(`✅ Data Backfill: linked ${linkedCount} MonthlyAchievementItem row(s) to their MonthlyPlanItem`
+        + (skippedCount > 0 ? ` (${skippedCount} row(s) left unlinked — no matching plan item found, needs manual review)` : ""));
 };
 
 // ─── Backfill EmployeeRAHistory ───────────────────────────────────────────────
@@ -534,6 +799,17 @@ const startServer = async () => {
         // Run schema migrations before syncing
         await runMigrations();
 
+        // Repair any itemOrder/planIndex rows corrupted by the "Add More"
+        // append bug described above. Must run after runMigrations() (needs
+        // the added_via/added_at columns) and is safe to run before sync().
+        await repairItemOrdering();
+
+        // Backfill the new plan_item_id FK for existing MonthlyAchievementItem
+        // rows. Must run after both runMigrations() (needs the plan_item_id
+        // column) and repairItemOrdering() (needs trustworthy item ordering
+        // to pair rows correctly).
+        await linkAchievementItemsToPlanItems();
+
         // Sync models → tables
         // alter: true  → ⚠️  AVOID: drops & re-adds FK constraints every restart,
         //                    causing "Unknown constraint" errors in PostgreSQL.
@@ -596,6 +872,3 @@ const startServer = async () => {
 };
 
 startServer();
-
-
-

@@ -55,6 +55,26 @@ function submissionTemplate({ employeeName, raName, period, type }) {
     ctaUrl: `${process.env.FRONTEND_URL}/ra/monthly-evaluation`,
   });
 }
+// Fired when an employee appends new items to an ALREADY-SUBMITTED Monthly
+// Plan/Achievement ("Add More Plans" mid-cycle flow). Deliberately a separate
+// template from submissionTemplate: the plan/achievement itself was already
+// submitted and already triggered that email once — this is a follow-up
+// notice about newly appended items only, and should read that way to the RA
+// instead of implying a fresh, first-time submission.
+function additionalItemsTemplate({ employeeName, raName, period, type, itemCount }) {
+  const itemWord = itemCount === 1 ? "item" : "items";
+  return baseTemplate({
+    title: `New Items Added to a Submitted ${type}`,
+    bodyHtml: `
+      <p>Hi ${escapeHtml(raName)},</p>
+      <p><strong>${escapeHtml(employeeName)}</strong> has added <strong>${itemCount} new ${itemWord}</strong> to their already-submitted <strong>${escapeHtml(type)}</strong> for <strong>${escapeHtml(period)}</strong>.</p>
+      <p>The original submission is unchanged — please log in to KRMS to review the newly added ${itemWord}.</p>
+    `,
+    ctaText: "Review Now",
+    ctaUrl: `${process.env.FRONTEND_URL}/ra/monthly-evaluation`,
+  });
+}
+
 function evaluationTemplate({ employeeName, raName, period, type, remarks }) {
   return baseTemplate({
     title: `Your ${type} Has Been Evaluated`,
@@ -96,4 +116,4 @@ function deadlineExtensionTemplate({ employeeName, raName, type, period, newDead
 }
 
 
-module.exports = { baseTemplate, submissionTemplate, evaluationTemplate, rejectionTemplate, deadlineExtensionTemplate };
+module.exports = { baseTemplate, submissionTemplate, additionalItemsTemplate, evaluationTemplate, rejectionTemplate, deadlineExtensionTemplate };

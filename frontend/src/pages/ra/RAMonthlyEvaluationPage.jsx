@@ -19,12 +19,43 @@ import { FaFile } from 'react-icons/fa';
 /* ─────────────────────────────────────────
    HELPERS — per spec
 ───────────────────────────────────────── */
+// Returns an array of { text, addedVia, addedAt } — never bare strings —
+// so callers can tell a plan item that was appended via the "Add More
+// Plans" flow (addedVia === 'ADD_MORE') apart from one submitted with the
+// original plan (addedVia === 'INITIAL_SUBMISSION'). Legacy plans (rows
+// with no addedVia column yet, or the old newline-joined planDetails
+// fallback) default to INITIAL_SUBMISSION with a null addedAt — they
+// predate this feature, so there's nothing to flag.
 function getPlanItems(plan) {
     if (!plan) return [];
-    if (Array.isArray(plan.planItems) && plan.planItems.length > 0)
-        return plan.planItems.map(p => typeof p === 'string' ? p : p.itemText).filter(Boolean);
+    if (Array.isArray(plan.planItems) && plan.planItems.length > 0) {
+        // Defensive sort: the backend can return MonthlyPlanItem rows out of
+        // itemOrder (a nested Sequelize `include` order clause is silently
+        // ignored unless paired with `separate: true` or a server-side JS
+        // sort — see getEffectivePlanAch's identical comment below for
+        // planAchievements). Re-deriving the sequence here — instead of
+        // trusting array position — means a late-added ("Add More Plans")
+        // item always renders at the tail, not wherever the JOIN put it.
+        const sortedItems = plan.planItems.every(p => p && typeof p === 'object')
+            ? [...plan.planItems].sort((a, b) => (a.itemOrder ?? 0) - (b.itemOrder ?? 0))
+            : plan.planItems;
+        return sortedItems
+            .map(p => {
+                if (typeof p === 'string') {
+                    return { id: null, text: p, addedVia: 'INITIAL_SUBMISSION', addedAt: null };
+                }
+                return {
+                    id: p.id,
+                    text: p.itemText,
+                    addedVia: p.addedVia === 'ADD_MORE' ? 'ADD_MORE' : 'INITIAL_SUBMISSION',
+                    addedAt: p.addedAt || null,
+                };
+            })
+            .filter(item => item.text);
+    }
     if (plan.planDetails)
-        return plan.planDetails.split('\n').map(s => s.trim()).filter(Boolean);
+        return plan.planDetails.split('\n').map(s => s.trim()).filter(Boolean)
+            .map(text => ({ id: null, text, addedVia: 'INITIAL_SUBMISSION', addedAt: null }));
     return [];
 }
 
@@ -86,6 +117,14 @@ function getProgressTokens(progress) {
     if (p >= 25) return { label: 'Just started', color: '#BA7517', bg: '#FAEEDA', text: '#633806', border: '#BA7517' };
     return { label: 'Not started', color: '#A32D2D', bg: '#FCEBEB', text: '#791F1F', border: '#A32D2D' };
 }
+
+// Distinct (indigo, non-alarming) token set for a plan item that was
+// appended post-submission and has no progress yet. Deliberately NOT the
+// same red used by getProgressTokens' 0% state — a brand-new item with no
+// progress is expected and different from an old item the employee has
+// neglected, and the RA shouldn't have to guess which one they're looking
+// at from color alone.
+const NEW_ITEM_TOKENS = { label: 'New — not started', color: '#4F46E5', bg: '#EEF2FF', text: '#3730A3', border: '#4F46E5' };
 
 function parseAdditionalAch(raw) {
     if (!raw) return [];
@@ -233,6 +272,27 @@ const PlanContextPanel = ({ plan, achievement, className = '' }) => {
     const effectivePlanAch = getEffectivePlanAch(achievement, planItems.length);
     const additionalItems = parseAdditionalAch(achievement?.additionalAchievement || '');
 
+    // Authoritative match: a progress entry belongs to the plan item whose id
+    // equals its planItemId — not "whichever one sits at the same array
+    // index." planIndex/array-position is kept only as a fallback for
+    // achievement rows written before planItemId existed (pre-migration
+    // data not yet backfilled) — see server.js's linkAchievementItemsToPlanItems.
+    const achByPlanItemId = new Map();
+    if (Array.isArray(effectivePlanAch)) {
+        effectivePlanAch.forEach(a => { if (a.planItemId) achByPlanItemId.set(a.planItemId, a); });
+    }
+    // Only trust position when EVERY row in this achievement predates the
+    // planItemId FK (true legacy data). Falling back per-item regardless of
+    // the rest of the data was the root cause of a newly appended plan item
+    // (no id-match yet because it genuinely has no progress) displaying an
+    // unrelated older item's achievement text/progress in the RA view.
+    const isLegacyAchData = Array.isArray(effectivePlanAch) && effectivePlanAch.length > 0
+        && effectivePlanAch.every(a => !a.planItemId);
+    const getPlanAch = (item, i) => {
+        if (item.id && achByPlanItemId.has(item.id)) return achByPlanItemId.get(item.id);
+        return isLegacyAchData ? (effectivePlanAch?.[i] || null) : null;
+    };
+
     const hasAch = !!achievement && achievement.status !== 'DRAFT';
 
     const overallProg = effectivePlanAch
@@ -276,10 +336,24 @@ const PlanContextPanel = ({ plan, achievement, className = '' }) => {
 
             {/* Plans */}
             <div className="meval-ctx-plan-list">
-                {planItems.map((planText, i) => {
-                    const pa = effectivePlanAch?.[i] || { achievementDetails: '', progress: 0 };
+                {planItems.map((item, i) => {
+                    const isLateAddition = item.addedVia === 'ADD_MORE';
+                    const addedLaterBadge = isLateAddition && (
+                        <span
+                            className="meval-ctx-plan-badge meval-ctx-plan-badge--added-later"
+                            title={item.addedAt ? `Added on ${formatDate(item.addedAt)}, after the original plan was submitted` : 'Added after the original plan was submitted'}
+                        >
+                            <FiClock size={9} /> Added Later
+                        </span>
+                    );
+                    const addedLaterMeta = isLateAddition && item.addedAt && (
+                        <div className="meval-ctx-plan-added-meta">
+                            <FiClock size={9} /> Added on {formatDate(item.addedAt)} — after the original plan was submitted
+                        </div>
+                    );
+
+                    const pa = getPlanAch(item, i) || { achievementDetails: '', progress: 0 };
                     const p = Math.min(100, pa.progress || 0);
-                    const tk = getProgressTokens(p);
 
                     if (!hasAch || !effectivePlanAch) {
                         return (
@@ -290,16 +364,23 @@ const PlanContextPanel = ({ plan, achievement, className = '' }) => {
                                         <div className="meval-ctx-plan-name-row">
                                             <span className="meval-ctx-plan-name">Plan {i + 1}</span>
                                             <span className="meval-ctx-plan-badge meval-ctx-plan-badge--idle">Pending</span>
+                                            {addedLaterBadge}
                                         </div>
-                                        <p className="meval-ctx-plan-text">{planText}</p>
+                                        <p className="meval-ctx-plan-text">{item.text}</p>
+                                        {addedLaterMeta}
                                     </div>
                                 </div>
                             </div>
                         );
                     }
 
-                    const statusLabel = p === 100 ? 'Completed' : p > 0 ? 'In Progress' : 'Not Started';
-                    const statusCls = p === 100 ? 'done' : p > 0 ? 'partial' : 'none';
+                    // A late-added item with no progress yet is expected, not a red
+                    // flag — give it its own neutral treatment instead of reusing
+                    // the "Not started" (0%) state that otherwise reads as neglect.
+                    const isNewNoProgress = isLateAddition && p === 0 && !pa.achievementDetails;
+                    const tk = isNewNoProgress ? NEW_ITEM_TOKENS : getProgressTokens(p);
+                    const statusLabel = isNewNoProgress ? 'New — Not Started' : p === 100 ? 'Completed' : p > 0 ? 'In Progress' : 'Not Started';
+                    const statusCls = isNewNoProgress ? 'new' : p === 100 ? 'done' : p > 0 ? 'partial' : 'none';
 
                     return (
                         <div key={i} className="meval-ctx-plan-card" style={{ borderLeftColor: tk.border }}>
@@ -310,14 +391,16 @@ const PlanContextPanel = ({ plan, achievement, className = '' }) => {
                                         <span className="meval-ctx-plan-idx">{i + 1}</span>
                                         <span className="meval-ctx-plan-name">Plan {i + 1}</span>
                                         <span className={`meval-ctx-plan-badge meval-ctx-plan-badge--${statusCls}`}>{statusLabel}</span>
+                                        {addedLaterBadge}
                                     </div>
-                                    <p className="meval-ctx-plan-text">{planText}</p>
+                                    <p className="meval-ctx-plan-text">{item.text}</p>
+                                    {addedLaterMeta}
                                 </div>
                             </div>
                             <div className="meval-ctx-prog-section">
                                 <div className="meval-ctx-prog-labels">
                                     <span>Progress</span>
-                                    <span style={{ color: tk.color, fontWeight: 700 }}>{p}%{p === 100 ? ' — Done' : p > 0 ? ' — In Progress' : ' — Not Started'}</span>
+                                    <span style={{ color: tk.color, fontWeight: 700 }}>{p}%{p === 100 ? ' — Done' : p > 0 ? ' — In Progress' : isNewNoProgress ? ' — New, Not Started' : ' — Not Started'}</span>
                                 </div>
                                 <div className="meval-ctx-prog-track">
                                     <div className="meval-ctx-prog-fill" style={{ width: `${p}%`, background: tk.color }} />
@@ -333,7 +416,9 @@ const PlanContextPanel = ({ plan, achievement, className = '' }) => {
                                 <div className="meval-ctx-ach-lbl"><FiTrendingUp size={10} /> Progress Details</div>
                                 {pa.achievementDetails
                                     ? <div className="meval-ctx-ach-text">{pa.achievementDetails}</div>
-                                    : <div className="meval-ctx-ach-empty">No details provided</div>}
+                                    : isNewNoProgress
+                                        ? <div className="meval-ctx-ach-empty meval-ctx-ach-empty--new">Newly added plan — progress not yet reported</div>
+                                        : <div className="meval-ctx-ach-empty">No details provided</div>}
                             </div>
                         </div>
                     );
@@ -413,7 +498,19 @@ const DetailModal = ({ ev, detail, detailLoading, onClose, onEvaluate, onReject,
     if (!ev) return null;
 
     const planItems = detail ? getPlanItems(detail.plan) : [];
-    const hasAch = !!detail?.achievement && detail.achievement.status !== 'DRAFT';
+    // FIX: hasAch must mean "the RA is allowed to evaluate", not just "some
+    // achievement was submitted". "Add More Plans" lets an employee append
+    // plan items to an already-submitted plan at any point before
+    // evaluation — if that happens after progress was already submitted,
+    // the achievement's own status stays SUBMITTED from that earlier,
+    // smaller submission even though the new item(s) have no progress
+    // reported yet. `achievementComplete` (computed server-side in
+    // getMonthlyEvaluationById) is true only when the SUBMITTED
+    // achievement's items cover every current plan item, so it's the
+    // correct signal for whether the Evaluate button, the stepper's
+    // "Progress" step, and the "Awaiting RA review" footer label should
+    // treat progress as done.
+    const hasAch = !!detail?.status?.achievementComplete;
     const isEvaluated = detail?.status?.evaluated || ev.status === 'EVALUATED';
 
     const stepperPlan = 'done';
@@ -909,13 +1006,11 @@ const GO_LIVE = { year: 2026, month: 5 }; // June 2026
 
 const RAMonthlyEvaluationPage = () => {
     const location = useLocation();
-    // CENTRALIZED DEADLINE CONFIG — plan & achievement days from .env via API.
-    // getPlanDeadlineForRole / getAchievementDeadlineForRole are called per team
-    // member with their own role so an RA reportee gets the RA deadline, not EMPLOYEE.
-    const {
-        getPlanDeadlineForRole,
-        getAchievementDeadlineForRole,
-    } = useDeadlines();
+    // useDeadlines is kept for other helpers consumed by ExtendDeadlineModal.
+    // The missed-deadline logic now uses the server's /ra/missed-deadlines response
+    // directly, so the base-deadline helpers getPlanDeadlineForRole /
+    // getAchievementDeadlineForRole are no longer needed in this component.
+    useDeadlines();
     const [evaluations, setEvaluations] = useState([]);
     const [employeesList, setEmployeesList] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -946,8 +1041,11 @@ const RAMonthlyEvaluationPage = () => {
     const [isMissedSectionOpen, setIsMissedSectionOpen] = useState(false);
     const [isExtendModalOpen, setIsExtendModalOpen] = useState(false);
     const [selectedEmployeeForExtension, setSelectedEmployeeForExtension] = useState(null);
-    /* Track rows that have been extended: { [employeeId+type]: { newDate } } */
-    const [extendedRows, setExtendedRows] = useState({});
+    /* Server-driven missed deadlines — extension-aware, single source of truth.
+       Replaces the old optimistic extendedRows + useMemo approach that used
+       base deadlines and never reflected extensions saved in the database. */
+    const [missedDeadlinesData, setMissedDeadlinesData] = useState({ items: [], totalCount: 0 });
+    const [missedDeadlinesLoading, setMissedDeadlinesLoading] = useState(false);
     const missedSectionRef = useRef(null);
 
     const fetchEvaluations = useCallback(async () => {
@@ -974,6 +1072,26 @@ const RAMonthlyEvaluationPage = () => {
 
     useEffect(() => { fetchEvaluations(); }, [fetchEvaluations]);
 
+    /* ── Fetch missed deadlines from server (extension-aware) ───────────────────
+       Uses the same GET /ra/missed-deadlines endpoint as ExtendDeadlineManagementPage.
+       This is the single source of truth: the backend resolves effective deadlines
+       (base + any DeadlineExtension row) so the result is always accurate after
+       an RA extends a deadline — no stale client-side optimistic state needed. */
+    const fetchMissedDeadlines = useCallback(async () => {
+        setMissedDeadlinesLoading(true);
+        try {
+            const res = await api.get('/ra/missed-deadlines');
+            setMissedDeadlinesData(res.data || { items: [], totalCount: 0 });
+        } catch {
+            // Degrade gracefully — the missed section simply won't show
+            setMissedDeadlinesData({ items: [], totalCount: 0 });
+        } finally {
+            setMissedDeadlinesLoading(false);
+        }
+    }, []);
+
+    useEffect(() => { fetchMissedDeadlines(); }, [fetchMissedDeadlines]);
+
     /* ── Auto-expand missed section if ?filter=missed in URL ── */
     useEffect(() => {
         const params = new URLSearchParams(location.search);
@@ -988,85 +1106,52 @@ const RAMonthlyEvaluationPage = () => {
         }
     }, [location.search]);
 
-    /* ── Missed deadline employees derived from all employees ── */
-    /* Each team member's deadline is resolved from their OWN role (emp.role)
-       so an RA reportee (e.g. Sushant das, role=RA) gets checked against the
-       RA deadline (27th) instead of the EMPLOYEE deadline (26th). This also
-       means the Extend button is hidden when the member's own-role deadline
-       hasn't passed yet. */
+    /* ── Missed deadline employees — SERVER-DRIVEN (extension-aware) ────────────
+       Derived from missedDeadlinesData fetched from GET /ra/missed-deadlines.
+       The backend resolves effective deadlines (accounting for any DB extension)
+       so this list is always consistent with DeadlineManagement:
+       - An employee whose deadline was extended will NOT appear here if today
+         is before their new effective deadline.
+       - isExtended / effectiveDeadline are passed through for the UI to display.
+       - isStillExtendable gates the Extend button (false = window closed by backend). */
     const missedEvaluations = useMemo(() => {
-        const today = new Date();
-        const [selYear, selMonth] = filterMonth.split('-').map(Number);
-        if (!selYear || !selMonth) return [];
+        const allItems = missedDeadlinesData?.items || [];
+        // Filter to the month currently selected in the month picker
+        const monthItems = allItems.filter(item => item.month === filterMonth);
 
         const q = search.trim().toLowerCase();
-
-        // Sets for O(1) lookups
-        const submittedSet = new Set();
-        const achievementsSet = new Set();
-
-        evaluations.forEach(ev => {
-            const empId = ev.employee?.id?.toString();
-            if (!empId) return;
-            // Treat any employee who has a monthlyPlanId (whether SUBMITTED, REJECTED, or
-            // otherwise) as having a "plan on record" for the missed-deadline check.
-            // Reason: a rejected plan means the employee DID submit within the deadline;
-            // the RA rejected it afterwards. The dateMiddleware already allows the employee
-            // to resubmit after a rejection regardless of the deadline, so they do NOT need
-            // a deadline extension and must NOT appear in the missed-deadline section.
-            if (ev.monthlyPlanId) submittedSet.add(empId);
-            if (ev.hasAchievement || ev.status === 'EVALUATED') achievementsSet.add(empId);
-        });
-
-
-        return employeesList.map(emp => {
-            const empId = emp.id?.toString();
-            const hasPlan = submittedSet.has(empId);
-            const hasAch = achievementsSet.has(empId);
-
-            // Resolve deadlines per this specific person's role.
-            // Falls back to 'EMPLOYEE' for any unrecognised role (HRD, MD, etc.).
-            const memberRole = emp.role || 'EMPLOYEE';
-            const memberPlanDeadline = getPlanDeadlineForRole(filterMonth, memberRole);
-            const memberAchDeadline  = getAchievementDeadlineForRole(filterMonth, memberRole);
-
-            if (!memberPlanDeadline || !memberAchDeadline) return null;
-
-            let missingType = null;
-            let originalDeadline = null;
-
-            if (!hasPlan && today > memberPlanDeadline) {
-                missingType = 'plan';
-                originalDeadline = memberPlanDeadline;
-            } else if (hasPlan && !hasAch && today > memberAchDeadline) {
-                missingType = 'achievement';
-                originalDeadline = memberAchDeadline;
-            }
-
-            if (!missingType) return null;
-
-            // Apply search filter
-            if (q) {
-                const matchable = [
-                    emp.name,
-                    emp.employeeCode,
-                    emp.department,
-                ].filter(Boolean);
-                if (!matchable.some(v => v.toLowerCase().includes(q))) return null;
-            }
-
-            // Return shape expected by table and ExtendModal
-            const existingEv = evaluations.find(e => e.employee?.id?.toString() === empId) || {};
-
-            return {
-                ...existingEv,
-                _id: existingEv.id || `missed-${empId}`,
-                employee: emp,
-                missingType,
-                originalDeadline
-            };
-        }).filter(Boolean);
-    }, [employeesList, evaluations, filterMonth, search, getPlanDeadlineForRole, getAchievementDeadlineForRole]);
+        return monthItems
+            .filter(item => {
+                if (!q) return true;
+                return [item.employeeName, item.employeeCode, item.department]
+                    .filter(Boolean)
+                    .some(v => v.toLowerCase().includes(q));
+            })
+            .map(item => ({
+                // Unique key for the missed-section row
+                _id: `missed-${item.employeeId}-${item.type}`,
+                // Normalise employee sub-object to match shape expected by ExtendModal
+                employee: {
+                    id: item.employeeId,
+                    name: item.employeeName,
+                    employeeCode: item.employeeCode,
+                    department: item.department,
+                },
+                // 'plan' | 'achievement'  (lower-case, matches legacy shape)
+                missingType: item.type === 'PLAN' ? 'plan' : 'achievement',
+                // originalDeadline = base (config) deadline before any extension
+                originalDeadline: item.baseDeadline
+                    ? new Date(item.baseDeadline + 'T23:59:59')
+                    : null,
+                // effectiveDeadline = actual deadline after extension (or same as base)
+                effectiveDeadline: item.effectiveDeadline
+                    ? new Date(item.effectiveDeadline + 'T23:59:59')
+                    : null,
+                isExtended: item.isExtended,
+                extensionCount: item.extensionCount,
+                isStillExtendable: item.isStillExtendable,
+            }));
+    }, [missedDeadlinesData, filterMonth, search]);
 
 
     /* ── Parsed filterMonth for the modal ── */
@@ -1353,8 +1438,11 @@ const RAMonthlyEvaluationPage = () => {
                                 {pageRows.map((ev, idx) => {
                                     const planCount = getPlanCount(ev);
                                     // hasAchievement is set by the backend: true only when a SUBMITTED
-                                    // (not DRAFT) MonthlyAchievement exists for this plan.
-                                    // Evaluation is only permitted AFTER the employee submits their progress.
+                                    // MonthlyAchievement exists for this plan AND its achievement items
+                                    // cover every current plan item — including any appended later via
+                                    // "Add More Plans" that the employee hasn't yet reported progress
+                                    // for. Evaluation is only permitted once progress has been
+                                    // submitted for every plan item, not just the original ones.
                                     const hasAch = !!ev.hasAchievement;
 
                                     return (
@@ -1565,13 +1653,12 @@ const RAMonthlyEvaluationPage = () => {
 
                             {/* Table rows */}
                             {missedEvaluations.map(ev => {
-                                const empId = ev.employee?.id?.toString() || ev.id?.toString();
-                                const rowKey = `${empId}-${ev.missingType}`;
-                                const extended = extendedRows[rowKey];
+                                // _id is set by the useMemo above; fall back to employee id for the key
+                                const rowKey = ev._id || ev.employee?.id?.toString();
 
                                 return (
                                     <div
-                                        key={ev.id}
+                                        key={rowKey}
                                         style={{
                                             display: 'grid',
                                             gridTemplateColumns: 'minmax(200px,2.5fr) minmax(130px,1fr) minmax(140px,1fr) minmax(160px,1.2fr) minmax(160px,1.2fr)',
@@ -1623,26 +1710,31 @@ const RAMonthlyEvaluationPage = () => {
                                             </span>
                                         </div>
 
-                                        {/* Original deadline */}
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.83rem', color: '#B91C1C', fontWeight: 500 }}>
-                                            <span style={{ fontSize: '0.8rem' }}>🔴</span>
-                                            {ev.originalDeadline
-                                                ? new Date(ev.originalDeadline).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })
-                                                : '—'}
+                                        {/* Deadline column — shows base deadline; if extended, shows badge + new effective date */}
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.83rem', color: '#B91C1C', fontWeight: 500 }}>
+                                                <span style={{ fontSize: '0.8rem' }}>🔴</span>
+                                                {ev.originalDeadline
+                                                    ? new Date(ev.originalDeadline).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })
+                                                    : '—'}
+                                            </div>
+                                            {ev.isExtended && ev.effectiveDeadline && (
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', color: '#065F46', fontWeight: 600 }}>
+                                                    <span>↪</span>
+                                                    <span style={{
+                                                        background: '#D1FAE5', color: '#065F46',
+                                                        borderRadius: '4px', padding: '0 5px', fontSize: '0.72rem',
+                                                    }}>Extended</span>
+                                                    {new Date(ev.effectiveDeadline).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                                </div>
+                                            )}
                                         </div>
 
-                                        {/* Action */}
+                                        {/* Action — Extend button only when the RA's extension window is still open.
+                                             isStillExtendable comes from the server (backend checks today <= ceiling).
+                                             Employees that can no longer be extended show a locked-window badge instead. */}
                                         <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                                            {extended ? (
-                                                <span style={{
-                                                    background: '#F0FDF4', color: '#166534',
-                                                    border: '1px solid #BBF7D0', borderRadius: '6px',
-                                                    padding: '4px 10px', fontSize: '12px', fontWeight: 600,
-                                                    whiteSpace: 'nowrap',
-                                                }}>
-                                                    ✅ Extended → {new Date(extended.newDate).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}
-                                                </span>
-                                            ) : (
+                                            {ev.isStillExtendable ? (
                                                 <button
                                                     onClick={() => openExtendModal(ev.employee, ev.missingType, ev.originalDeadline)}
                                                     style={{
@@ -1658,6 +1750,15 @@ const RAMonthlyEvaluationPage = () => {
                                                 >
                                                     ⏱ Extend Deadline
                                                 </button>
+                                            ) : (
+                                                <span style={{
+                                                    background: '#F3F4F6', color: '#6B7280',
+                                                    border: '1px solid #D1D5DB', borderRadius: '6px',
+                                                    padding: '4px 10px', fontSize: '12px', fontWeight: 500,
+                                                    whiteSpace: 'nowrap',
+                                                }}>
+                                                    🔒 Window closed
+                                                </span>
                                             )}
                                         </div>
                                     </div>
@@ -1724,12 +1825,12 @@ const RAMonthlyEvaluationPage = () => {
                     missingType={selectedEmployeeForExtension.missingType || 'plan'}
                     originalDeadline={selectedEmployeeForExtension.originalDeadline || null}
                     onClose={closeExtendModal}
-                    onConfirm={(newDeadline, reason, notify, empName) => {
-                        // Mark row as extended (optimistic UI)
-                        const empId = selectedEmployeeForExtension.id?.toString();
-                        const rowKey = `${empId}-${selectedEmployeeForExtension.missingType}`;
-                        setExtendedRows(prev => ({ ...prev, [rowKey]: { newDate: newDeadline } }));
+                    onConfirm={() => {
+                        // Re-fetch from server after extension — the employee will no longer
+                        // appear in the list once their effective deadline is in the future.
+                        // This guarantees consistency with DeadlineManagement on any page refresh.
                         closeExtendModal();
+                        fetchMissedDeadlines();
                     }}
                 />
             )}

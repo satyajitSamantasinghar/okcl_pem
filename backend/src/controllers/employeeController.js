@@ -48,7 +48,7 @@ const { Op } = require("sequelize");
 const { parseDeadlineConfig, normalizeRole, getExtensionCeiling } = require("./configController");
 const { getEffectiveDeadline } = require("../utils/deadlineResolver");
 const { buildDeadlineDate } = require("../utils/dateHelpers");
-const { notifySubmission } = require("../services/notificationService");
+const { notifySubmission, notifyAddition } = require("../services/notificationService");
 
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -76,6 +76,29 @@ async function notifyRAOfSubmission(employeeId, period, type) {
     await notifySubmission({ employee, reportingAuthority, period, type });
   } catch (err) {
     console.error(`[notification] ${type} submission notice failed for employee ${employeeId}:`, err.message);
+  }
+}
+
+// Sibling of notifyRAOfSubmission, but for the "Add More Plans" mid-cycle
+// flow: items appended to a Plan/Achievement that was already submitted
+// (and already triggered notifyRAOfSubmission once). Deliberately routed
+// through notifyAddition/additionalItemsTemplate instead of notifySubmission
+// so the RA gets a "new items added" notice, not a duplicate "submitted"
+// notice implying a fresh first-time submission.
+async function notifyRAOfAddition(employeeId, period, type, itemCount) {
+  try {
+    const employee = await User.findByPk(employeeId, {
+      attributes: ["id", "name", "email", "reportingAuthorityId"],
+    });
+    if (!employee?.reportingAuthorityId) return; // no RA assigned — nothing to notify
+
+    const reportingAuthority = await User.findByPk(employee.reportingAuthorityId, {
+      attributes: ["id", "name", "email"],
+    });
+
+    await notifyAddition({ employee, reportingAuthority, period, type, itemCount });
+  } catch (err) {
+    console.error(`[notification] ${type} addition notice failed for employee ${employeeId}:`, err.message);
   }
 }
 
@@ -125,6 +148,11 @@ exports.submitMonthlyPlan = async (req, res) => {
               monthlyPlanId: existingPlan.id,
               itemText: text,
               itemOrder: idx,
+              // A REJECTED→resubmit replaces the entire item set from
+              // scratch, so every row here is an "original" item for the
+              // new version — never ADD_MORE.
+              addedVia: "INITIAL_SUBMISSION",
+              addedAt: new Date(),
             })),
             { transaction: t }
           );
@@ -173,7 +201,15 @@ exports.submitMonthlyPlan = async (req, res) => {
         if (Array.isArray(planItems) && planItems.length > 0) {
           await MonthlyPlanItem.destroy({ where: { monthlyPlanId: existingPlan.id }, transaction: t });
           await MonthlyPlanItem.bulkCreate(
-            planItems.filter(Boolean).map((text, idx) => ({ monthlyPlanId: existingPlan.id, itemText: text, itemOrder: idx })),
+            planItems.filter(Boolean).map((text, idx) => ({
+              monthlyPlanId: existingPlan.id,
+              itemText: text,
+              itemOrder: idx,
+              // Draft → submit still replaces the whole set; these are all
+              // part of the original submission, not later additions.
+              addedVia: "INITIAL_SUBMISSION",
+              addedAt: new Date(),
+            })),
             { transaction: t }
           );
         }
@@ -238,6 +274,13 @@ exports.submitMonthlyPlan = async (req, res) => {
       // deadline checks" rule in dateMiddleware, which is meant only for
       // genuine post-rejection resubmissions.
       if (existingPlan.status === "PENDING") {
+        // Lock the plan row for the rest of this transaction so two
+        // concurrent "Add More Plans" submissions for the same plan can't
+        // both read the same existingItems snapshot and compute the same
+        // itemOrder for their new tail — the second request blocks here
+        // until the first commits, then sees the first's new row(s).
+        await existingPlan.reload({ transaction: t, lock: t.LOCK.UPDATE });
+
         const evaluation = await MonthlyEvaluation.findOne({
           where: { employeeId: req.user.userId, month },
           transaction: t,
@@ -260,21 +303,68 @@ exports.submitMonthlyPlan = async (req, res) => {
           return res.status(400).json({ message: "No new plans to add." });
         }
 
-        // Existing items must arrive unchanged, in the same order — additions
-        // only ever land at the tail. This keeps MonthlyAchievementItem's
-        // positional planIndex linkage to MonthlyPlanItem intact.
-        const prefixUnchanged = existingItems.every((row, idx) => incoming[idx] === row.itemText);
+        // The client always appends new (as-yet-unsaved) plan text at the
+        // very end and never reorders the locked/already-submitted boxes it
+        // rendered, so positionally slicing at existingItems.length still
+        // correctly separates "what the client believes is existing" from
+        // "what's genuinely new" — that part of the original design holds.
+        //
+        // What must NOT be position-based is verifying nothing existing was
+        // edited or removed: comparing incoming[idx] === existingItems[idx]
+        // one-to-one assumes the client's snapshot of existing items is in
+        // the exact same order the DB has them in RIGHT NOW. That's not
+        // guaranteed — repairItemOrdering() and linkAchievementItemsToPlanItems()
+        // in server.js can both legitimately renumber itemOrder on a restart
+        // without changing any text, and a browser that loaded this plan
+        // before such a restart would then fail this check for existing
+        // items it never touched. Comparing as a multiset (same texts, same
+        // counts, any order) instead of position-by-position still catches
+        // a real edit or removal, but is immune to reordering that changed
+        // nothing about the content.
+        const lockedPrefix = incoming.slice(0, existingItems.length);
+        const remainingCounts = new Map();
+        for (const row of existingItems) {
+          remainingCounts.set(row.itemText, (remainingCounts.get(row.itemText) || 0) + 1);
+        }
+        let prefixUnchanged = true;
+        for (const text of lockedPrefix) {
+          const remaining = remainingCounts.get(text) || 0;
+          if (remaining === 0) { prefixUnchanged = false; break; }
+          remainingCounts.set(text, remaining - 1);
+        }
         if (!prefixUnchanged) {
           await t.rollback();
           return res.status(400).json({ message: "Existing plans can't be edited or removed once submitted — you can only add new plans below them." });
         }
 
         const newTail = incoming.slice(existingItems.length);
+        const addedAt = new Date();
+
+        // Root-cause fix: the tail's itemOrder must start strictly after the
+        // HIGHEST itemOrder already in the table, not after the existing
+        // ROW COUNT. Those are only the same number when itemOrder happens
+        // to be a perfectly gapless 0..n-1 sequence — true in the common
+        // case, but not guaranteed (a prior race, a partial historical
+        // state, etc.), and when it's not, count-based numbering assigns
+        // the new tail an itemOrder LOWER than existing rows, which sorts
+        // it first instead of last and silently breaks
+        // MonthlyAchievementItem's positional (planIndex) linkage to it.
+        const nextItemOrder = existingItems.length > 0
+          ? Math.max(...existingItems.map(row => row.itemOrder)) + 1
+          : 0;
+
         await MonthlyPlanItem.bulkCreate(
           newTail.map((text, i) => ({
             monthlyPlanId: existingPlan.id,
             itemText: text,
-            itemOrder: existingItems.length + i,
+            itemOrder: nextItemOrder + i,
+            // Marks these rows as a post-submission addition (as opposed to
+            // part of the employee's original monthly plan) so the RA/MD
+            // views can visually distinguish them and explain any progress
+            // gap — see getMonthlyEvaluationById / getEmployeeDetail, which
+            // already return these columns since they select full rows.
+            addedVia: "ADD_MORE",
+            addedAt,
           })),
           { transaction: t }
         );
@@ -290,7 +380,7 @@ exports.submitMonthlyPlan = async (req, res) => {
         );
 
         await t.commit();
-        notifyRAOfSubmission(req.user.userId, month, "Monthly Plan");
+        notifyRAOfAddition(req.user.userId, month, "Monthly Plan", newTail.length);
         return res.json({ message: `${newTail.length} new plan${newTail.length !== 1 ? "s" : ""} added`, monthlyPlanId: existingPlan.id });
       }
       // ─────────────────────────────────────────────────────────────────────────
@@ -317,7 +407,13 @@ exports.submitMonthlyPlan = async (req, res) => {
     // CHANGE I: create planItems rows
     if (Array.isArray(planItems) && planItems.length > 0) {
       await MonthlyPlanItem.bulkCreate(
-        planItems.filter(Boolean).map((text, idx) => ({ monthlyPlanId: plan.id, itemText: text, itemOrder: idx })),
+        planItems.filter(Boolean).map((text, idx) => ({
+          monthlyPlanId: plan.id,
+          itemText: text,
+          itemOrder: idx,
+          addedVia: "INITIAL_SUBMISSION",
+          addedAt: new Date(),
+        })),
         { transaction: t }
       );
     }
@@ -417,6 +513,24 @@ exports.submitMonthlyAchievement = async (req, res) => {
       transaction: t,
     });
 
+    // Plan items for this plan, sorted by itemOrder — the source used to
+    // resolve which real MonthlyPlanItem each incoming planAchievements
+    // entry belongs to. Prefer the planItemId the client sends (validated
+    // against this list, so a stale/wrong id can never attach a progress
+    // entry to a plan item outside this plan); fall back to positional
+    // pairing only for older clients that don't send planItemId yet — the
+    // same correspondence the app has always implicitly relied on.
+    const planItemRows = await MonthlyPlanItem.findAll({
+      where: { monthlyPlanId: plan.id },
+      order: [["itemOrder", "ASC"]],
+      transaction: t,
+    });
+    const validPlanItemIds = new Set(planItemRows.map(r => r.id));
+    const resolvePlanItemId = (entry, positionalIndex) => {
+      if (entry?.planItemId && validPlanItemIds.has(entry.planItemId)) return entry.planItemId;
+      return planItemRows[positionalIndex]?.id || null;
+    };
+
     if (existingAchievement) {
       if (existingAchievement.status === "SUBMITTED") {
         // ── NEW: ADD MORE PROGRESS ─────────────────────────────────────────────
@@ -425,6 +539,11 @@ exports.submitMonthlyAchievement = async (req, res) => {
         // add progress for just the new items — but only until the RA/MD has
         // evaluated this month's plan. Existing (already-submitted) progress
         // entries cannot be edited or removed, only appended to.
+
+        // Same reasoning as the plan-items lock above: serializes concurrent
+        // "Add More Progress" submissions for the same achievement.
+        await existingAchievement.reload({ transaction: t, lock: t.LOCK.UPDATE });
+
         const evaluation = await MonthlyEvaluation.findOne({
           where: { employeeId: req.user.userId, month: plan.month },
           transaction: t,
@@ -440,17 +559,32 @@ exports.submitMonthlyAchievement = async (req, res) => {
           transaction: t,
         });
 
-        const incoming = Array.isArray(planAchievements)
-          ? [...planAchievements].sort((a, b) => (a.planIndex ?? 0) - (b.planIndex ?? 0))
-          : [];
+        const incoming = Array.isArray(planAchievements) ? planAchievements : [];
 
         if (incoming.length <= existingItems.length) {
           await t.rollback();
           return res.status(400).json({ message: "No new plan items to add progress for." });
         }
 
+        // Identity-based, not sort-order-based: match each existing row to
+        // its incoming counterpart by planItemId — the real FK, immune to
+        // any reordering that happened between when the client loaded this
+        // data and now (see the matching comment on the plan-items check
+        // above; the exact same fragility applied here via planIndex before
+        // planItemId existed). Falls back to planIndex only for legacy rows
+        // that predate planItemId and haven't been backfilled yet.
+        const incomingByPlanItemId = new Map();
+        const incomingByPlanIndex = new Map();
+        incoming.forEach((entry, idx) => {
+          if (entry?.planItemId) incomingByPlanItemId.set(entry.planItemId, entry);
+          const key = (entry?.planIndex !== undefined && entry?.planIndex !== null) ? entry.planIndex : idx;
+          if (!incomingByPlanIndex.has(key)) incomingByPlanIndex.set(key, entry);
+        });
+
         const prefixUnchanged = existingItems.every((row, idx) => {
-          const match = incoming[idx];
+          const match = (row.planItemId && incomingByPlanItemId.get(row.planItemId))
+            || incomingByPlanIndex.get(row.planIndex)
+            || incomingByPlanIndex.get(idx);
           return match
             && (match.achievementDetails || "") === (row.achievementDetails || "")
             && (match.progress || 0) === (row.progress || 0);
@@ -461,12 +595,29 @@ exports.submitMonthlyAchievement = async (req, res) => {
         }
 
         const newTail = incoming.slice(existingItems.length);
+
+        // Same root-cause fix as MonthlyPlanItem above: next planIndex comes
+        // from the current MAX(planIndex), not existingItems.length.
+        const nextPlanIndex = existingItems.length > 0
+          ? Math.max(...existingItems.map(row => row.planIndex)) + 1
+          : 0;
+
         await MonthlyAchievementItem.bulkCreate(
           newTail.map((a, i) => ({
             monthlyAchievementId: existingAchievement.id,
-            planIndex: existingItems.length + i,
+            // Authoritative link — the whole reason this bug class existed
+            // is that planIndex/array-position was the only thing tying a
+            // progress entry to a plan item. planItemId now does that job
+            // directly; existingItems.length + i is only used to find the
+            // right positional fallback when the client omits planItemId.
+            planItemId: resolvePlanItemId(a, existingItems.length + i),
+            planIndex: nextPlanIndex + i,
             achievementDetails: a.achievementDetails || "",
             progress: a.progress || 0,
+            // Same origin-tracking as MonthlyPlanItem: this progress entry
+            // was appended after the achievement was already SUBMITTED.
+            addedVia: "ADD_MORE",
+            addedAt: new Date(),
           })),
           { transaction: t }
         );
@@ -484,7 +635,7 @@ exports.submitMonthlyAchievement = async (req, res) => {
         );
 
         await t.commit();
-        notifyRAOfSubmission(req.user.userId, plan.month, "Monthly Achievement");
+        notifyRAOfAddition(req.user.userId, plan.month, "Monthly Achievement", newTail.length);
         return res.json({ message: `${newTail.length} new progress item${newTail.length !== 1 ? "s" : ""} added` });
       }
       // ─────────────────────────────────────────────────────────────────────────
@@ -505,9 +656,14 @@ exports.submitMonthlyAchievement = async (req, res) => {
           await MonthlyAchievementItem.bulkCreate(
             planAchievements.map((a, idx) => ({
               monthlyAchievementId: existingAchievement.id,
+              planItemId: resolvePlanItemId(a, idx),
               planIndex: a.planIndex ?? idx,
               achievementDetails: a.achievementDetails || "",
               progress: a.progress || 0,
+              // Full replace (draft save / non-append resubmit) — every
+              // row here is treated as part of the current, original set.
+              addedVia: "INITIAL_SUBMISSION",
+              addedAt: new Date(),
             })),
             { transaction: t }
           );
@@ -543,9 +699,12 @@ exports.submitMonthlyAchievement = async (req, res) => {
       await MonthlyAchievementItem.bulkCreate(
         planAchievements.map((a, idx) => ({
           monthlyAchievementId: achievement.id,
+          planItemId: resolvePlanItemId(a, idx),
           planIndex: a.planIndex ?? idx,
           achievementDetails: a.achievementDetails || "",
           progress: a.progress || 0,
+          addedVia: "INITIAL_SUBMISSION",
+          addedAt: new Date(),
         })),
         { transaction: t }
       );
@@ -784,9 +943,25 @@ exports.getMonthlyPlans = async (req, res) => {
       where,
       include: [
         { model: User, as: "employee", attributes: ["id", "name", "employeeCode", "department"] },
-        { model: MonthlyPlanItem, as: "planItems", order: [["itemOrder", "ASC"]] },
+        // NOTE: Sequelize v6 silently ignores `order` inside a nested `include`
+        // (identical gotcha to the one already documented in
+        // getMonthlyAchievements below). Leaving an order clause here gave the
+        // false impression planItems came back sorted — they didn't, which is
+        // why a plan item appended via "Add More Plans" could render (and,
+        // downstream, get achievement-matched) at the wrong position instead
+        // of at the tail. Ordering is applied in JS after the query instead.
+        { model: MonthlyPlanItem, as: "planItems" },
       ],
       order: [["submittedAt", "DESC"]],
+    });
+
+    // Sort planItems by itemOrder (0-based) so the frontend always receives
+    // items in the correct plan order regardless of DB insertion/JOIN order —
+    // mirrors the planAchievements sort in getMonthlyAchievements below.
+    plans.forEach((plan) => {
+      if (Array.isArray(plan.planItems)) {
+        plan.planItems.sort((a, b) => (a.itemOrder ?? 0) - (b.itemOrder ?? 0));
+      }
     });
 
     res.json(plans);

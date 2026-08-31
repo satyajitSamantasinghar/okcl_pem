@@ -1,7 +1,7 @@
 'use strict';
 
 const { sendMail } = require('./email');
-const { submissionTemplate, evaluationTemplate, rejectionTemplate, deadlineExtensionTemplate } = require("./emailTemplates");
+const { submissionTemplate, additionalItemsTemplate, evaluationTemplate, rejectionTemplate, deadlineExtensionTemplate } = require("./emailTemplates");
 const { formatPeriod, formatDeadline } = require('../utils/dateHelpers');
 
 /**
@@ -26,6 +26,36 @@ async function notifySubmission({ employee, reportingAuthority, period, type }) 
             type,
         }),
         logLabel: `${type} Submission`,
+    });
+}
+
+/**
+ * Fired when an employee appends new items to a Plan/Achievement that was
+ * ALREADY submitted ("Add More Plans" mid-cycle flow). Notifies the assigned
+ * Reporting Authority — but with additionalItemsTemplate, not
+ * submissionTemplate, since this is a follow-up about newly added items on
+ * top of a submission the RA was already notified about, not a new
+ * first-time submission.
+ */
+async function notifyAddition({ employee, reportingAuthority, period, type, itemCount }) {
+    if (!reportingAuthority?.email) {
+        console.warn(`[notification] No RA email on file — skipped addition notice for employee ${employee?.id}`);
+        return { success: false, error: 'RA email missing' };
+    }
+
+    const periodLabel = formatPeriod(period);
+
+    return sendMail({
+        to: reportingAuthority.email,
+        subject: `${itemCount} New Item${itemCount !== 1 ? "s" : ""} Added — ${employee.name} (${periodLabel})`,
+        html: additionalItemsTemplate({
+            employeeName: employee.name,
+            raName: reportingAuthority.name,
+            period: periodLabel,
+            type,
+            itemCount,
+        }),
+        logLabel: `${type} Addition`,
     });
 }
 
@@ -100,4 +130,4 @@ async function notifyDeadlineExtension({ employee, reportingAuthority, type, per
     });
 }
 
-module.exports = { notifySubmission, notifyEvaluation, notifyRejection, notifyDeadlineExtension };
+module.exports = { notifySubmission, notifyAddition, notifyEvaluation, notifyRejection, notifyDeadlineExtension };

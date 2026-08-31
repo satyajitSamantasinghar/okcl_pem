@@ -3,24 +3,24 @@ const sequelize = require("../config/database");
 // ─────────────────────────────────────────────────────────────
 //  Register every model
 // ─────────────────────────────────────────────────────────────
-const User                          = require("./User")(sequelize);
-const AuditLog                      = require("./AuditLog")(sequelize);
-const Notification                  = require("./Notification")(sequelize);
-const MonthlyPlan                   = require("./MonthlyPlan")(sequelize);
-const MonthlyPlanItem               = require("./MonthlyPlanItem")(sequelize);
-const MonthlyAchievement            = require("./MonthlyAchievement")(sequelize);
-const MonthlyAchievementItem        = require("./MonthlyAchievementItem")(sequelize);
-const MonthlyEvaluation             = require("./MonthlyEvaluation")(sequelize);
-const QuarterlyEvaluation           = require("./QuarterlyEvaluation")(sequelize);
-const YearlyPlan                    = require("./YearlyPlan")(sequelize);
-const YearlyPlanKra                 = require("./YearlyPlanKra")(sequelize);
-const YearlyPlanRevisionLog         = require("./YearlyPlanRevisionLog")(sequelize);
-const YearlyPlanEditHistory         = require("./YearlyPlanEditHistory")(sequelize);
-const YearlyAppraisalReport         = require("./YearlyAppraisalReport")(sequelize);
-const YearlyAppraisalKraAssessment  = require("./YearlyAppraisalKraAssessment")(sequelize);
-const AppraisalQuarterlyEvaluation  = require("./AppraisalQuarterlyEvaluation")(sequelize);
-const EmployeeRAHistory             = require("./EmployeeRAHistory")(sequelize);
-const DeadlineExtension             = require("./DeadlineExtension")(sequelize);
+const User = require("./User")(sequelize);
+const AuditLog = require("./AuditLog")(sequelize);
+const Notification = require("./Notification")(sequelize);
+const MonthlyPlan = require("./MonthlyPlan")(sequelize);
+const MonthlyPlanItem = require("./MonthlyPlanItem")(sequelize);
+const MonthlyAchievement = require("./MonthlyAchievement")(sequelize);
+const MonthlyAchievementItem = require("./MonthlyAchievementItem")(sequelize);
+const MonthlyEvaluation = require("./MonthlyEvaluation")(sequelize);
+const QuarterlyEvaluation = require("./QuarterlyEvaluation")(sequelize);
+const YearlyPlan = require("./YearlyPlan")(sequelize);
+const YearlyPlanKra = require("./YearlyPlanKra")(sequelize);
+const YearlyPlanRevisionLog = require("./YearlyPlanRevisionLog")(sequelize);
+const YearlyPlanEditHistory = require("./YearlyPlanEditHistory")(sequelize);
+const YearlyAppraisalReport = require("./YearlyAppraisalReport")(sequelize);
+const YearlyAppraisalKraAssessment = require("./YearlyAppraisalKraAssessment")(sequelize);
+const AppraisalQuarterlyEvaluation = require("./AppraisalQuarterlyEvaluation")(sequelize);
+const EmployeeRAHistory = require("./EmployeeRAHistory")(sequelize);
+const DeadlineExtension = require("./DeadlineExtension")(sequelize);
 
 // ─────────────────────────────────────────────────────────────
 //  ASSOCIATIONS
@@ -30,119 +30,138 @@ const DeadlineExtension             = require("./DeadlineExtension")(sequelize);
 
 /* ── User ↔ User (self-referencing) ── */
 User.belongsTo(User, {
-  as:         "reportingAuthority",
+  as: "reportingAuthority",
   foreignKey: "reportingAuthorityId",
 });
 User.hasMany(User, {
-  as:         "subordinates",
+  as: "subordinates",
   foreignKey: "reportingAuthorityId",
 });
 
 /* ── AuditLog ↔ User ── */
 AuditLog.belongsTo(User, { as: "user", foreignKey: "userId" });
-User.hasMany(AuditLog,   { as: "auditLogs", foreignKey: "userId" });
+User.hasMany(AuditLog, { as: "auditLogs", foreignKey: "userId" });
 
 /* ── Notification ↔ User ── */
 Notification.belongsTo(User, { as: "user", foreignKey: "userId" });
-User.hasMany(Notification,   { as: "notifications", foreignKey: "userId" });
+User.hasMany(Notification, { as: "notifications", foreignKey: "userId" });
 
 /* ── MonthlyPlan ↔ User ── */
 MonthlyPlan.belongsTo(User, { as: "employee", foreignKey: "employeeId" });
-User.hasMany(MonthlyPlan,   { as: "monthlyPlans", foreignKey: "employeeId" });
+User.hasMany(MonthlyPlan, { as: "monthlyPlans", foreignKey: "employeeId" });
 
 /* ── MonthlyPlanItem ↔ MonthlyPlan ── */
 MonthlyPlan.hasMany(MonthlyPlanItem, {
-  as:         "planItems",
+  as: "planItems",
   foreignKey: "monthlyPlanId",
-  onDelete:   "CASCADE",
+  onDelete: "CASCADE",
 });
 MonthlyPlanItem.belongsTo(MonthlyPlan, { foreignKey: "monthlyPlanId" });
 
 /* ── MonthlyAchievement ↔ User & MonthlyPlan ── */
 MonthlyAchievement.belongsTo(User, {
-  as:         "employee",
+  as: "employee",
   foreignKey: "employeeId",
 });
 MonthlyAchievement.belongsTo(MonthlyPlan, {
-  as:         "monthlyPlan",
+  as: "monthlyPlan",
   foreignKey: "monthlyPlanId",
 });
 MonthlyPlan.hasOne(MonthlyAchievement, {
-  as:         "achievement",
+  as: "achievement",
   foreignKey: "monthlyPlanId",
 });
 
 /* ── MonthlyAchievementItem ↔ MonthlyAchievement ── */
 MonthlyAchievement.hasMany(MonthlyAchievementItem, {
-  as:         "planAchievements",
+  as: "planAchievements",
   foreignKey: "monthlyAchievementId",
-  onDelete:   "CASCADE",
+  onDelete: "CASCADE",
 });
 MonthlyAchievementItem.belongsTo(MonthlyAchievement, {
   foreignKey: "monthlyAchievementId",
 });
 
+/* ── MonthlyAchievementItem ↔ MonthlyPlanItem ──
+   Authoritative link for "which plan item does this progress entry report
+   on" — replaces positional (planIndex-based) matching, which broke once a
+   plan item's array position could change after the "Add More Plans"
+   append feature shipped (see employeeController.js / server.js
+   repairItemOrdering for the incident this fixes). onDelete: CASCADE means
+   deleting a MonthlyPlanItem (e.g. a REJECTED→resubmit reset) automatically
+   removes its now-orphaned achievement entry, instead of requiring manual
+   cleanup. */
+MonthlyAchievementItem.belongsTo(MonthlyPlanItem, {
+  as: "planItem",
+  foreignKey: "planItemId",
+  onDelete: "CASCADE",
+});
+MonthlyPlanItem.hasOne(MonthlyAchievementItem, {
+  as: "achievementItem",
+  foreignKey: "planItemId",
+});
+
 /* ── MonthlyEvaluation ↔ User, MonthlyPlan, MonthlyAchievement ── */
-MonthlyEvaluation.belongsTo(User, { as: "employee",           foreignKey: "employeeId" });
-MonthlyEvaluation.belongsTo(User, { as: "ra",                 foreignKey: "raId" });
+MonthlyEvaluation.belongsTo(User, { as: "employee", foreignKey: "employeeId" });
+MonthlyEvaluation.belongsTo(User, { as: "ra", foreignKey: "raId" });
 // evaluatorId — used when MD directly evaluates an RA (raId is null in that case)
-MonthlyEvaluation.belongsTo(User, { as: "evaluator",          foreignKey: "evaluatorId" });
+MonthlyEvaluation.belongsTo(User, { as: "evaluator", foreignKey: "evaluatorId" });
 MonthlyEvaluation.belongsTo(MonthlyPlan, {
-  as:         "monthlyPlan",
+  as: "monthlyPlan",
   foreignKey: "monthlyPlanId",
 });
 MonthlyEvaluation.belongsTo(MonthlyAchievement, {
-  as:         "monthlyAchievement",
+  as: "monthlyAchievement",
   foreignKey: "monthlyAchievementId",
 });
 
 /* ── QuarterlyEvaluation ↔ User ── */
 QuarterlyEvaluation.belongsTo(User, { as: "employee", foreignKey: "employeeId" });
-QuarterlyEvaluation.belongsTo(User, { as: "ra",       foreignKey: "raId" });
+QuarterlyEvaluation.belongsTo(User, { as: "ra", foreignKey: "raId" });
 User.hasMany(QuarterlyEvaluation, { as: "quarterlyEvaluationsAsEmployee", foreignKey: "employeeId" });
-User.hasMany(QuarterlyEvaluation, { as: "quarterlyEvaluationsAsRa",       foreignKey: "raId" });
+User.hasMany(QuarterlyEvaluation, { as: "quarterlyEvaluationsAsRa", foreignKey: "raId" });
 
 /* ── YearlyPlan ↔ User ── */
 YearlyPlan.belongsTo(User, { as: "employee", foreignKey: "employeeId" });
-User.hasMany(YearlyPlan,   { as: "yearlyPlans", foreignKey: "employeeId" });
+User.hasMany(YearlyPlan, { as: "yearlyPlans", foreignKey: "employeeId" });
 
 /* ── YearlyPlanKra ↔ YearlyPlan ── */
 YearlyPlan.hasMany(YearlyPlanKra, {
-  as:         "kras",
+  as: "kras",
   foreignKey: "yearlyPlanId",
-  onDelete:   "CASCADE",
+  onDelete: "CASCADE",
 });
 YearlyPlanKra.belongsTo(YearlyPlan, { foreignKey: "yearlyPlanId" });
 
 /* ── YearlyPlanRevisionLog ↔ YearlyPlan ── */
 YearlyPlan.hasMany(YearlyPlanRevisionLog, {
-  as:         "revisionLog",
+  as: "revisionLog",
   foreignKey: "yearlyPlanId",
-  onDelete:   "CASCADE",
+  onDelete: "CASCADE",
 });
 YearlyPlanRevisionLog.belongsTo(YearlyPlan, { foreignKey: "yearlyPlanId" });
 
 /* ── YearlyPlanEditHistory ↔ YearlyPlan ── */
 YearlyPlan.hasMany(YearlyPlanEditHistory, {
-  as:         "editHistory",
+  as: "editHistory",
   foreignKey: "yearlyPlanId",
-  onDelete:   "CASCADE",
+  onDelete: "CASCADE",
 });
 YearlyPlanEditHistory.belongsTo(YearlyPlan, { foreignKey: "yearlyPlanId" });
 
 /* ── YearlyAppraisalReport ↔ User & YearlyPlan ── */
 YearlyAppraisalReport.belongsTo(User, { as: "employee", foreignKey: "employeeId" });
-User.hasMany(YearlyAppraisalReport,   { as: "appraisalReports", foreignKey: "employeeId" });
+User.hasMany(YearlyAppraisalReport, { as: "appraisalReports", foreignKey: "employeeId" });
 YearlyAppraisalReport.belongsTo(YearlyPlan, {
-  as:         "linkedYearlyPlan",
+  as: "linkedYearlyPlan",
   foreignKey: "linkedYearlyPlanId",
 });
 
 /* ── YearlyAppraisalKraAssessment ↔ YearlyAppraisalReport ── */
 YearlyAppraisalReport.hasMany(YearlyAppraisalKraAssessment, {
-  as:         "kraAssessments",
+  as: "kraAssessments",
   foreignKey: "yearlyAppraisalReportId",
-  onDelete:   "CASCADE",
+  onDelete: "CASCADE",
 });
 YearlyAppraisalKraAssessment.belongsTo(YearlyAppraisalReport, {
   foreignKey: "yearlyAppraisalReportId",
@@ -150,30 +169,30 @@ YearlyAppraisalKraAssessment.belongsTo(YearlyAppraisalReport, {
 
 /* ── YearlyAppraisalReport ↔ QuarterlyEvaluation (many-to-many via junction) ── */
 YearlyAppraisalReport.belongsToMany(QuarterlyEvaluation, {
-  through:    AppraisalQuarterlyEvaluation,
-  as:         "quarterlyEvaluations",
+  through: AppraisalQuarterlyEvaluation,
+  as: "quarterlyEvaluations",
   foreignKey: "yearlyAppraisalReportId",
-  otherKey:   "quarterlyEvaluationId",
+  otherKey: "quarterlyEvaluationId",
 });
 QuarterlyEvaluation.belongsToMany(YearlyAppraisalReport, {
-  through:    AppraisalQuarterlyEvaluation,
-  as:         "appraisalReports",
+  through: AppraisalQuarterlyEvaluation,
+  as: "appraisalReports",
   foreignKey: "quarterlyEvaluationId",
-  otherKey:   "yearlyAppraisalReportId",
+  otherKey: "yearlyAppraisalReportId",
 });
 
 /* ── EmployeeRAHistory ↔ User (employee, ra, assignedByUser) ── */
-EmployeeRAHistory.belongsTo(User, { as: "employee",       foreignKey: "employeeId" });
-EmployeeRAHistory.belongsTo(User, { as: "ra",             foreignKey: "raId" });
+EmployeeRAHistory.belongsTo(User, { as: "employee", foreignKey: "employeeId" });
+EmployeeRAHistory.belongsTo(User, { as: "ra", foreignKey: "raId" });
 EmployeeRAHistory.belongsTo(User, { as: "assignedByUser", foreignKey: "assignedBy" });
 User.hasMany(EmployeeRAHistory, { as: "raHistoryAsEmployee", foreignKey: "employeeId" });
-User.hasMany(EmployeeRAHistory, { as: "raHistoryAsRA",       foreignKey: "raId" });
+User.hasMany(EmployeeRAHistory, { as: "raHistoryAsRA", foreignKey: "raId" });
 
 /* ── DeadlineExtension ↔ User (employee, extendedBy) ── */
-DeadlineExtension.belongsTo(User, { as: "employee",   foreignKey: "employeeId" });
+DeadlineExtension.belongsTo(User, { as: "employee", foreignKey: "employeeId" });
 DeadlineExtension.belongsTo(User, { as: "extendedBy", foreignKey: "extendedById" });
 User.hasMany(DeadlineExtension, { as: "deadlineExtensionsAsEmployee", foreignKey: "employeeId" });
-User.hasMany(DeadlineExtension, { as: "deadlineExtensionsGranted",    foreignKey: "extendedById" });
+User.hasMany(DeadlineExtension, { as: "deadlineExtensionsGranted", foreignKey: "extendedById" });
 
 // ─────────────────────────────────────────────────────────────
 //  Export everything so controllers can do:

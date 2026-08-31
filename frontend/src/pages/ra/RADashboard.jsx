@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -136,14 +136,12 @@ const lbScoreConfig = (score) => {
 const RADashboard = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
-    // CENTRALIZED DEADLINE CONFIG — plan & achievement days from .env via API.
-    // getPlanDeadlineForRole / getAchievementDeadlineForRole are used per team member
-    // with each person's own role, so an RA reportee (e.g. Sushant das) gets the
-    // RA deadline (27th), not the EMPLOYEE deadline (26th).
-    const {
-        getPlanDeadlineForRole,
-        getAchievementDeadlineForRole,
-    } = useDeadlines();
+    // useDeadlines is still imported for other helpers (e.g. getExtensionCeiling
+    // used internally by ExtendDeadlineModal). The missed-deadline logic now uses
+    // the server's /ra/missed-deadlines response directly, so the base-deadline
+    // helpers getPlanDeadlineForRole / getAchievementDeadlineForRole are no longer
+    // needed here.
+    useDeadlines();
 
     const [stats, setStats] = useState({
         totalEmployees: 0,
@@ -218,21 +216,24 @@ const RADashboard = () => {
         fetchTrend();
     }, []);
 
-    /* ── Cross-month missed deadlines fetch (once on mount, not tied to selectedMonth) ── */
-    useEffect(() => {
-        const fetchMissed = async () => {
-            setMissedDeadlinesLoading(true);
-            try {
-                const res = await api.get('/ra/missed-deadlines');
-                setMissedDeadlinesData(res.data);
-            } catch {
-                setMissedDeadlinesData(null);
-            } finally {
-                setMissedDeadlinesLoading(false);
-            }
-        };
-        fetchMissed();
+    /* ── Cross-month missed deadlines fetch ─────────────────────────────────────
+       Named useCallback so the ExtendDeadlineModal onConfirm handler can re-invoke
+       it after a successful extension — keeping the leaderboard badges in sync
+       without a full page reload. The endpoint is the same single source of truth
+       used by ExtendDeadlineManagementPage. */
+    const fetchMissedDeadlines = useCallback(async () => {
+        setMissedDeadlinesLoading(true);
+        try {
+            const res = await api.get('/ra/missed-deadlines');
+            setMissedDeadlinesData(res.data);
+        } catch {
+            setMissedDeadlinesData(null);
+        } finally {
+            setMissedDeadlinesLoading(false);
+        }
     }, []);
+
+    useEffect(() => { fetchMissedDeadlines(); }, [fetchMissedDeadlines]);
 
     /* ── Timeline / activity fetch ── */
     useEffect(() => {
@@ -382,57 +383,40 @@ const RADashboard = () => {
             .sort((a, b) => b.score - a.score);
     }, [employeesList, stats.lists]);
 
-    /* ── Missed deadline employees — derived from existing data ── */
-    /* An employee is "missed" if their OWN-role deadline has passed and they
-       haven't submitted. Each person's deadline is resolved from their own
-       emp.role (EMPLOYEE or RA), so a team member who is themselves an RA
-       (e.g. Sushant das, role=RA) gets the RA deadline (27th), not the
-       EMPLOYEE deadline (26th), and won't appear as "missed" if their window
-       is still open. */
+    /* ── Missed deadline employees — SERVER-DRIVEN (extension-aware) ────────────
+       Derived from missedDeadlinesData which is fetched from GET /ra/missed-deadlines.
+       This is the same source of truth as ExtendDeadlineManagementPage, meaning:
+       - An employee whose deadline was extended WON'T appear here if today is
+         before their new effective deadline (the backend checks extensions in DB).
+       - isStillExtendable gates the hover-reveal Extend button.
+       - isExtended is available for the leaderboard step-badge display if needed.
+
+       The old useMemo used getPlanDeadlineForRole / getAchievementDeadlineForRole
+       which are explicitly BASE (config-only) deadlines and never reflected DB extensions,
+       causing the "missed" badges to persist after an RA extended a deadline. */
     const missedEmployees = useMemo(() => {
-        const today = new Date();
         if (!selectedMonth) return [];
-
-        const submittedSet = new Set((stats.lists?.submitted || []).map(id => id?.toString()));
-        const achievementsSet = new Set((stats.lists?.achievements || []).map(id => id?.toString()));
-        // Employees whose plan was REJECTED by the RA are excluded from missed-deadline logic.
-        // A rejected plan means the employee DID submit within the deadline; the RA rejected
-        // it afterwards. The dateMiddleware already allows the employee to resubmit after a
-        // rejection at any time, so they do NOT need an extension and must NOT appear in the
-        // missed-deadline section with an "Extend" button.
-        const rejectedSet = new Set((stats.lists?.rejected || []).map(id => id?.toString()));
-
-        return employeesList
-            .map(emp => {
-                const empId = emp.id?.toString();
-
-                // Skip employees with a rejected plan — they're not "missed", they can resubmit freely
-                if (rejectedSet.has(empId)) return null;
-
-                const submitted = submittedSet.has(empId);
-                const hasAchievement = achievementsSet.has(empId);
-
-                // Resolve deadlines per this specific person's role.
-                // emp.role comes from the API and is now included in the response.
-                // Falls back to 'EMPLOYEE' for any unrecognised role (HRD, MD, etc.).
-                const memberRole = emp.role || 'EMPLOYEE';
-                const memberPlanDeadline = getPlanDeadlineForRole(selectedMonth, memberRole);
-                const memberAchDeadline  = getAchievementDeadlineForRole(selectedMonth, memberRole);
-
-                if (!memberPlanDeadline || !memberAchDeadline) return null;
-
-                // (a) missed plan — deadline per their own role
-                if (!submitted && today > memberPlanDeadline) {
-                    return { ...emp, missingType: 'plan', originalDeadline: memberPlanDeadline };
-                }
-                // (b) missed progress — achievement deadline per their own role
-                if (submitted && !hasAchievement && today > memberAchDeadline) {
-                    return { ...emp, missingType: 'progress', originalDeadline: memberAchDeadline };
-                }
-                return null;
-            })
-            .filter(Boolean);
-    }, [employeesList, stats.lists, selectedMonth, getPlanDeadlineForRole, getAchievementDeadlineForRole]);
+        const allItems = missedDeadlinesData?.items || [];
+        // Filter to the month shown in the month picker
+        return allItems
+            .filter(item => item.month === selectedMonth)
+            .map(item => ({
+                id: item.employeeId,
+                name: item.employeeName,
+                employeeCode: item.employeeCode,
+                department: item.department,
+                // 'plan' | 'progress'  (progress matches existing badge labels)
+                missingType: item.type === 'PLAN' ? 'plan' : 'progress',
+                originalDeadline: item.baseDeadline
+                    ? new Date(item.baseDeadline + 'T23:59:59')
+                    : null,
+                effectiveDeadline: item.effectiveDeadline
+                    ? new Date(item.effectiveDeadline + 'T23:59:59')
+                    : null,
+                isExtended: item.isExtended,
+                isStillExtendable: item.isStillExtendable,
+            }));
+    }, [missedDeadlinesData, selectedMonth]);
 
 
     /* ── Helper: open extend modal ── */
@@ -1085,7 +1069,9 @@ const RADashboard = () => {
                                                     {(() => {
                                                         const isMissed = missedEmployees.find(m => m.id?.toString() === emp.id?.toString());
                                                         const isHovered = hoveredRowId === emp.id?.toString();
-                                                        if (isMissed && isHovered) {
+                                                        // Only show the Extend button when the RA's extension window is still
+                                                        // open (isStillExtendable = server confirmed today <= ceiling).
+                                                        if (isMissed && isMissed.isStillExtendable && isHovered) {
                                                             return (
                                                                 <button
                                                                     onClick={(e) => {
@@ -1153,10 +1139,12 @@ const RADashboard = () => {
                     missingType={selectedEmployeeForExtension.missingType || 'plan'}
                     originalDeadline={selectedEmployeeForExtension.originalDeadline || null}
                     onClose={closeExtendModal}
-                    onConfirm={(newDeadline, reason, notify, empName) => {
-                        // Optimistic update: remove the employee from missedEmployees by
-                        // triggering a data refresh (re-fetch dashboard data)
+                    onConfirm={() => {
+                        // Re-fetch missed deadlines from server after extension so the
+                        // leaderboard badges (⚠ Plan / ⚠ Prog) update immediately and
+                        // stay correct on page refresh — no stale optimistic state.
                         closeExtendModal();
+                        fetchMissedDeadlines();
                     }}
                 />
             )}

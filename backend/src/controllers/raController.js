@@ -73,7 +73,34 @@ async function notifyEmployeeOfRejection(employeeId, raId, month, remarks) {
   }
 }
 
+/* ─── Helper: is a SUBMITTED achievement actually COMPLETE for its plan? ────
+   "Add More Plans" lets an employee append plan items to an already-
+   submitted plan at any point before evaluation; "Add More Progress"
+   mirrors that on the achievement side. Between the two actions, a plan
+   can legitimately have more MonthlyPlanItem rows than its already-
+   SUBMITTED MonthlyAchievement has MonthlyAchievementItem rows — the
+   achievement's `status` column stays "SUBMITTED" from that earlier,
+   smaller submission until the employee separately submits progress for
+   the new item(s). A naive existence check (does a SUBMITTED achievement
+   exist at all?) therefore wrongly treats progress as fully reported the
+   moment ANY achievement is submitted, even one that predates a later-
+   added, still-unreported plan item.
 
+   The employee's "Add More Progress" flow always appends exactly one new
+   MonthlyAchievementItem per new MonthlyPlanItem (see the "ADD MORE
+   PROGRESS" block in employeeController.submitMonthlyAchievement), so a
+   plain item-count comparison is sufficient to detect the gap — no need
+   to resolve individual planItemId links here.
+
+   planItemCount === 0 means this plan predates the MonthlyPlanItem table
+   (pure legacy planDetails text with no structured items) — there's
+   nothing to compare per-item, so we fall back to the original
+   existence-only behavior rather than blocking evaluation for data this
+   feature doesn't apply to. */
+function isAchievementCompleteForPlan(planItemCount, achievementItemCount) {
+  if (!planItemCount) return true;
+  return achievementItemCount >= planItemCount;
+}
 
 /* ─── 1. RA DASHBOARD ────────────────────────────────────────────────────────── */
 exports.getRADashboard = async (req, res) => {
@@ -187,11 +214,11 @@ exports.getRADashboard = async (req, res) => {
     // they had actionable work when they didn't.
     const pendingEvaluation = planIdsWithAchievement.length > 0
       ? await MonthlyEvaluation.count({
-          where: {
-            monthlyPlanId: { [Op.in]: planIdsWithAchievement },
-            status: "PENDING",
-          },
-        })
+        where: {
+          monthlyPlanId: { [Op.in]: planIdsWithAchievement },
+          status: "PENDING",
+        },
+      })
       : 0;
 
     // FIX (permanent): notYetSubmitted now correctly counts employees who either:
@@ -253,7 +280,7 @@ exports.getMonthlyTrend = async (req, res) => {
       months.map(async (monthStr) => {
         const [selYear, selMonthNum] = monthStr.split("-").map(Number);
         const startOfMonth = new Date(selYear, selMonthNum - 1, 1, 0, 0, 0, 0);
-        const endOfMonth   = new Date(selYear, selMonthNum, 0, 23, 59, 59, 999);
+        const endOfMonth = new Date(selYear, selMonthNum, 0, 23, 59, 59, 999);
 
         const historyRows = await EmployeeRAHistory.findAll({
           where: {
@@ -292,8 +319,8 @@ exports.getMonthlyTrend = async (req, res) => {
         // Achievements: only SUBMITTED (not DRAFT)
         const achievements = planIds.length > 0
           ? await MonthlyAchievement.count({
-              where: { monthlyPlanId: { [Op.in]: planIds }, status: "SUBMITTED" },
-            })
+            where: { monthlyPlanId: { [Op.in]: planIds }, status: "SUBMITTED" },
+          })
           : 0;
 
         // Evaluations: only EVALUATED status
@@ -440,7 +467,11 @@ exports.getEmployeeDetail = async (req, res) => {
       monthlyPlans, monthlyAchievements, monthlyEvaluations,
       quarterlyEvaluations, yearlyPlans, yearlyReports, deadlineExtensions,
     ] = await Promise.all([
-      MonthlyPlan.findAll({ where: { employeeId: id }, include: [{ model: MonthlyPlanItem, as: "planItems", order: [["itemOrder", "ASC"]] }], order: [["month", "DESC"]] }),
+      // NOTE: `order` inside a nested Sequelize `include` is silently ignored
+      // (v6 gotcha — see the same note in employeeController.js's
+      // getMonthlyPlans). Both queries below are sorted in JS right after
+      // this Promise.all resolves instead of relying on an include-level order.
+      MonthlyPlan.findAll({ where: { employeeId: id }, include: [{ model: MonthlyPlanItem, as: "planItems" }], order: [["month", "DESC"]] }),
       MonthlyAchievement.findAll({ where: { employeeId: id }, include: [{ model: MonthlyPlan, as: "monthlyPlan", attributes: ["id", "month", "planDetails"] }, { model: MonthlyAchievementItem, as: "planAchievements" }], order: [["submittedAt", "DESC"]] }),
       MonthlyEvaluation.findAll({ where: { employeeId: id }, include: [{ model: User, as: "ra", attributes: ["id", "name"] }], order: [["month", "DESC"]] }),
       QuarterlyEvaluation.findAll({ where: { employeeId: id }, include: [{ model: User, as: "ra", attributes: ["id", "name"] }], order: [["createdAt", "DESC"]] }),
@@ -455,6 +486,20 @@ exports.getEmployeeDetail = async (req, res) => {
         order: [["createdAt", "DESC"]],
       }),
     ]);
+
+    // Sort planItems (by itemOrder) and planAchievements (by planIndex) in JS —
+    // see the NOTE on the Promise.all above for why this can't be done via the
+    // include's own `order` option.
+    monthlyPlans.forEach((plan) => {
+      if (Array.isArray(plan.planItems)) {
+        plan.planItems.sort((a, b) => (a.itemOrder ?? 0) - (b.itemOrder ?? 0));
+      }
+    });
+    monthlyAchievements.forEach((ach) => {
+      if (Array.isArray(ach.planAchievements)) {
+        ach.planAchievements.sort((a, b) => (a.planIndex ?? 0) - (b.planIndex ?? 0));
+      }
+    });
 
     res.json({ employee, monthlyPlans, monthlyAchievements, monthlyEvaluations, quarterlyEvaluations, yearlyPlans, yearlyReports, deadlineExtensions });
   } catch (error) {
@@ -517,6 +562,24 @@ exports.submitMonthlyEvaluation = async (req, res) => {
       if (!submittedAchievement) {
         return res.status(400).json({
           message: "Cannot evaluate: the employee has not yet submitted their monthly progress/achievement. Evaluation can only proceed after the progress submission is received.",
+        });
+      }
+
+      // ── BUSINESS RULE (extension): a SUBMITTED achievement must cover
+      // EVERY current plan item, including any added later via "Add More
+      // Plans" — not just the ones that existed when the achievement was
+      // first submitted. See isAchievementCompleteForPlan's comment for
+      // why the existence check above isn't sufficient by itself. This
+      // closes the same gap at the API layer that the RA Monthly
+      // Evaluation page's Evaluate button is gated on below, so a direct
+      // API call can't bypass the frontend check either.
+      const [planItemCount, achievementItemCount] = await Promise.all([
+        MonthlyPlanItem.count({ where: { monthlyPlanId: evaluation.monthlyPlanId } }),
+        MonthlyAchievementItem.count({ where: { monthlyAchievementId: submittedAchievement.id } }),
+      ]);
+      if (!isAchievementCompleteForPlan(planItemCount, achievementItemCount)) {
+        return res.status(400).json({
+          message: "Cannot evaluate: the employee has added new plan item(s) since submitting progress, and hasn't yet reported progress for the new item(s). Evaluation can only proceed once progress for every plan item has been submitted.",
         });
       }
     }
@@ -595,7 +658,7 @@ exports.getMonthlyEvaluations = async (req, res) => {
           // ── Resolve employees under this RA for the selected month ──────────────────
           const [evalSelYear, evalSelMonth] = req.query.month.split("-").map(Number);
           const evalStartOfMonth = new Date(evalSelYear, evalSelMonth - 1, 1, 0, 0, 0, 0);
-          const evalEndOfMonth   = new Date(evalSelYear, evalSelMonth, 0, 23, 59, 59, 999);
+          const evalEndOfMonth = new Date(evalSelYear, evalSelMonth, 0, 23, 59, 59, 999);
 
           const evalHistRows = await EmployeeRAHistory.findAll({
             where: {
@@ -721,8 +784,11 @@ exports.getMonthlyEvaluations = async (req, res) => {
       include: [
         { model: User, as: "employee", attributes: ["id", "name", "employeeCode", "department"] },
         {
+          // NOTE: `order` inside a nested `include` is silently ignored by
+          // Sequelize v6 (see the note in employeeController.js's
+          // getMonthlyPlans) — planItems is sorted in JS below instead.
           model: MonthlyPlan, as: "monthlyPlan", attributes: ["id", "month", "planDetails", "status", "raRemarks", "submittedAt"],
-          include: [{ model: MonthlyPlanItem, as: "planItems", order: [["itemOrder", "ASC"]] }]
+          include: [{ model: MonthlyPlanItem, as: "planItems" }]
         },
         // ra may be null when evaluatorId is used (MD→RA flow) — Sequelize handles nullable FK fine
         { model: User, as: "ra", attributes: ["id", "name", "employeeCode"], required: false },
@@ -731,6 +797,12 @@ exports.getMonthlyEvaluations = async (req, res) => {
       order: [["createdAt", "DESC"]],
       offset,
       limit,
+    });
+
+    evaluations.forEach((ev) => {
+      if (Array.isArray(ev.monthlyPlan?.planItems)) {
+        ev.monthlyPlan.planItems.sort((a, b) => (a.itemOrder ?? 0) - (b.itemOrder ?? 0));
+      }
     });
 
     const totalCount = await MonthlyEvaluation.count({ where });
@@ -746,9 +818,47 @@ exports.getMonthlyEvaluations = async (req, res) => {
       // RA knows they cannot evaluate yet.
       const achievements = await MonthlyAchievement.findAll({
         where: { monthlyPlanId: { [Op.in]: planIds }, status: "SUBMITTED" },
-        attributes: ["monthlyPlanId"],
+        attributes: ["id", "monthlyPlanId"],
       });
-      achievements.forEach(a => achSet.add(String(a.monthlyPlanId)));
+
+      // FIX (extension): a SUBMITTED achievement isn't necessarily COMPLETE —
+      // see isAchievementCompleteForPlan's comment for the full rationale.
+      // "Add More Plans" can append plan items after the achievement was
+      // already submitted, and the achievement's status stays "SUBMITTED"
+      // from that earlier, smaller submission until progress is separately
+      // submitted for the new item(s). Without this, hasAchievement (and
+      // therefore the Evaluate button, the "Submitted" badge, and the
+      // "pending" summary count) all went true as soon as ANY achievement
+      // existed — even one that predates a still-unreported new plan item.
+      const achIds = achievements.map(a => a.id);
+      const achievementItemCounts = achIds.length > 0
+        ? await MonthlyAchievementItem.findAll({
+          where: { monthlyAchievementId: { [Op.in]: achIds } },
+          attributes: ["monthlyAchievementId"],
+        })
+        : [];
+      const itemCountByAchievementId = new Map();
+      achievementItemCounts.forEach(row => {
+        const key = String(row.monthlyAchievementId);
+        itemCountByAchievementId.set(key, (itemCountByAchievementId.get(key) || 0) + 1);
+      });
+      const planItemCountByPlanId = new Map();
+      evaluations.forEach(ev => {
+        if (ev.monthlyPlanId) {
+          planItemCountByPlanId.set(
+            String(ev.monthlyPlanId),
+            Array.isArray(ev.monthlyPlan?.planItems) ? ev.monthlyPlan.planItems.length : 0
+          );
+        }
+      });
+
+      achievements.forEach(a => {
+        const planItemCount = planItemCountByPlanId.get(String(a.monthlyPlanId)) || 0;
+        const achievementItemCount = itemCountByAchievementId.get(String(a.id)) || 0;
+        if (isAchievementCompleteForPlan(planItemCount, achievementItemCount)) {
+          achSet.add(String(a.monthlyPlanId));
+        }
+      });
     }
 
     const response = evaluations.map(ev => ({
@@ -774,7 +884,13 @@ exports.getMonthlyEvaluationById = async (req, res) => {
     const evaluation = await MonthlyEvaluation.findByPk(req.params.id, {
       include: [
         { model: User, as: "employee", attributes: ["id", "name", "employeeCode", "department"] },
-        { model: MonthlyPlan, as: "monthlyPlan", include: [{ model: MonthlyPlanItem, as: "planItems", order: [["itemOrder", "ASC"]] }] },
+        // NOTE: `order` inside a nested `include` is silently ignored by
+        // Sequelize v6 (see the note in employeeController.js's
+        // getMonthlyPlans) — planItems and planAchievements are sorted in JS
+        // below instead. This was the root cause of a late-added plan item
+        // (and, via the position-based achievement fallback, its progress
+        // card) rendering under the wrong "Plan N" label in the RA view.
+        { model: MonthlyPlan, as: "monthlyPlan", include: [{ model: MonthlyPlanItem, as: "planItems" }] },
         { model: User, as: "ra", attributes: ["id", "name", "employeeCode"] },
       ],
     });
@@ -786,16 +902,33 @@ exports.getMonthlyEvaluationById = async (req, res) => {
     if (req.user.role === "EMPLOYEE" && evaluation.employee?.id !== req.user.userId) return res.status(403).json({ message: "Not authorized" });
 
     const planDoc = evaluation.monthlyPlan || null;
+    if (planDoc && Array.isArray(planDoc.planItems)) {
+      planDoc.planItems.sort((a, b) => (a.itemOrder ?? 0) - (b.itemOrder ?? 0));
+    }
     // FIX: only return a SUBMITTED achievement. If the employee saved a draft,
     // this query must return null so the detail modal correctly shows
     // "Progress Details not yet submitted" instead of displaying draft content
     // as if it were an official submission.
     const achievement = planDoc
       ? await MonthlyAchievement.findOne({
-          where: { monthlyPlanId: planDoc.id, status: "SUBMITTED" },
-          include: [{ model: MonthlyAchievementItem, as: "planAchievements", order: [["planIndex", "ASC"]] }],
-        })
+        where: { monthlyPlanId: planDoc.id, status: "SUBMITTED" },
+        include: [{ model: MonthlyAchievementItem, as: "planAchievements" }],
+      })
       : null;
+    if (achievement && Array.isArray(achievement.planAchievements)) {
+      achievement.planAchievements.sort((a, b) => (a.planIndex ?? 0) - (b.planIndex ?? 0));
+    }
+
+    // FIX (extension): a SUBMITTED achievement isn't necessarily COMPLETE —
+    // see isAchievementCompleteForPlan's comment near the top of this file.
+    // `achievementComplete` is the authoritative flag the RA Monthly
+    // Evaluation page's Evaluate button gates on (DetailModal's `hasAch`).
+    // `achievementSubmitted` is left as a plain existence check for any
+    // caller that only cares whether a submission happened at all — its
+    // meaning is unchanged.
+    const planItemCount = Array.isArray(planDoc?.planItems) ? planDoc.planItems.length : 0;
+    const achievementItemCount = Array.isArray(achievement?.planAchievements) ? achievement.planAchievements.length : 0;
+    const achievementComplete = !!achievement && isAchievementCompleteForPlan(planItemCount, achievementItemCount);
 
     const canViewScore = ["RA", "HRD", "MD"].includes(req.user.role);
 
@@ -807,6 +940,7 @@ exports.getMonthlyEvaluationById = async (req, res) => {
       status: {
         planSubmitted: !!planDoc,
         achievementSubmitted: !!achievement,
+        achievementComplete,
         evaluated: evaluation.status === "EVALUATED",
       },
     });
@@ -1285,8 +1419,11 @@ exports.getQuarterlyFullDetail = async (req, res) => {
       where: { employeeId: quarterly.employeeId, month: { [Op.in]: quarterMonths }, status: "EVALUATED" },
       include: [
         {
+          // NOTE: `order` inside a nested `include` is silently ignored by
+          // Sequelize v6 (see the note in employeeController.js's
+          // getMonthlyPlans) — planItems is sorted in JS below instead.
           model: MonthlyPlan, as: "monthlyPlan",
-          include: [{ model: MonthlyPlanItem, as: "planItems", order: [["itemOrder", "ASC"]] }],
+          include: [{ model: MonthlyPlanItem, as: "planItems" }],
         },
       ],
       order: [["month", "ASC"]],
@@ -1303,15 +1440,21 @@ exports.getQuarterlyFullDetail = async (req, res) => {
     const monthlyData = await Promise.all(
       monthlyEvals.map(async (ev) => {
         const planDoc = ev.monthlyPlan || null;
+        if (planDoc && Array.isArray(planDoc.planItems)) {
+          planDoc.planItems.sort((a, b) => (a.itemOrder ?? 0) - (b.itemOrder ?? 0));
+        }
 
         // FIX: only show SUBMITTED achievement. If the employee only has a DRAFT,
         // treat it as "not submitted" so the quarterly detail view is accurate.
         const achievement = planDoc
           ? await MonthlyAchievement.findOne({
             where: { monthlyPlanId: planDoc.id, status: "SUBMITTED" },
-            include: [{ model: MonthlyAchievementItem, as: "planAchievements", order: [["planIndex", "ASC"]] }],
+            include: [{ model: MonthlyAchievementItem, as: "planAchievements" }],
           })
           : null;
+        if (achievement && Array.isArray(achievement.planAchievements)) {
+          achievement.planAchievements.sort((a, b) => (a.planIndex ?? 0) - (b.planIndex ?? 0));
+        }
 
         return {
           month: ev.month, score: ev.score, remarks: ev.remarks || null, evaluatedAt: ev.evaluatedAt,

@@ -1945,6 +1945,35 @@
     color: #5F5E5A;
 }
 
+/* "New — Not Started" — a late-added item with no progress yet. Deliberately
+   indigo, not red: this is expected, not neglect. */
+.meval-ctx-plan-badge--new {
+    background: #EEF2FF;
+    color: #3730A3;
+}
+
+/* Origin tag — marks a plan item appended via "Add More Plans" after the
+   original monthly plan was already submitted. Kept visually distinct
+   (blue, bordered) from the status badges above since it answers a
+   different question (when/how was this added) than they do (how much
+   progress has been made). */
+.meval-ctx-plan-badge--added-later {
+    background: #EFF6FF;
+    color: #1D4ED8;
+    border: 1px solid #BFDBFE;
+    gap: 3px;
+}
+
+.meval-ctx-plan-added-meta {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.6875rem;
+    color: #1D4ED8;
+    font-weight: 600;
+    margin-top: 5px;
+}
+
 .meval-ctx-plan-text {
     font-size: 0.8125rem;
     color: var(--text-primary);
@@ -2008,6 +2037,16 @@
     font-size: 0.8125rem;
     color: var(--text-muted);
     font-style: italic;
+}
+
+/* Empty-progress state for a newly appended plan item — same slot as
+   .meval-ctx-ach-empty but non-italic and indigo-toned to match
+   .meval-ctx-plan-badge--new, so it reads as "not due yet" rather than
+   "missing". */
+.meval-ctx-ach-empty--new {
+    color: #3730A3;
+    font-style: normal;
+    font-weight: 500;
 }
 
 /* No achievement notice */

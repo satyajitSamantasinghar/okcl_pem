@@ -135,13 +135,47 @@ function getProgressTokens(progress) {
     };
 }
 
+// Defensive sort shared by getPlanItems/getPlanItemRows below. The backend
+// is expected to return MonthlyPlanItem rows in itemOrder already, but a
+// nested Sequelize `include` order clause is easy to get wrong (it's
+// silently ignored unless paired with `separate: true` or a server-side JS
+// sort — see getEffectivePlanAch's identical comment for planAchievements),
+// and a client that fetched this plan before such a backend fix deploys
+// would still be holding an out-of-order response. Re-sorting here — the
+// same "never trust position, re-derive it" principle already applied to
+// achievements — means a late-added ("Add More Plans") item always renders
+// at the tail instead of wherever the JOIN happened to put it, regardless
+// of what the backend does.
+function sortedPlanItemObjects(plan) {
+    if (!plan || !Array.isArray(plan.planItems)) return [];
+    const items = plan.planItems;
+    const allObjects = items.length > 0 && items.every(p => p && typeof p === 'object');
+    if (!allObjects) return items; // legacy string array — no itemOrder to sort by
+    return [...items].sort((a, b) => (a.itemOrder ?? 0) - (b.itemOrder ?? 0));
+}
+
 function getPlanItems(plan) {
     if (!plan) return [];
     if (Array.isArray(plan.planItems) && plan.planItems.length > 0)
-        return plan.planItems.map(p => typeof p === 'string' ? p : p.itemText).filter(Boolean);
+        return sortedPlanItemObjects(plan).map(p => typeof p === 'string' ? p : p.itemText).filter(Boolean);
     if (plan.planDetails)
         return plan.planDetails.split('\n').map(s => s.trim()).filter(Boolean);
     return [];
+}
+
+// Companion to getPlanItems, kept separate so every existing caller of
+// getPlanItems (plain text, used for editing/resubmitting/rendering) is
+// completely unaffected. Returns the real MonthlyPlanItem id alongside each
+// item's text, sorted the same way (itemOrder ASC) — used only where an id
+// is actually needed: building/submitting achievement progress entries
+// against a specific plan item rather than "whichever one is at position i".
+// Legacy plans with no MonthlyPlanItem rows (planDetails-only) yield no ids.
+function getPlanItemRows(plan) {
+    if (!plan || !Array.isArray(plan.planItems)) return [];
+    return sortedPlanItemObjects(plan)
+        .filter(p => p && typeof p === 'object')
+        .map(p => ({ id: p.id, text: p.itemText }))
+        .filter(row => row.text);
 }
 
 function parseLegacyPlanAch(legacyText, planCount) {
@@ -733,6 +767,7 @@ const MonthlyPlanPage = () => {
     const openAchModal = (plan) => {
         const existing = achievementByPlanId[plan.id];
         const itemList = getPlanItems(plan);
+        const itemRows = getPlanItemRows(plan);
         setAchModal(plan);
 
         let nextAchItems;
@@ -741,32 +776,52 @@ const MonthlyPlanPage = () => {
         if (existing) {
             const effective = getEffectivePlanAch(existing, itemList.length);
 
-            // Build a lookup map keyed by planIndex so we never rely on array
-            // position. This makes the mapping correct even if items arrive
-            // in non-sequential order (e.g. DB insertion order remnants).
+            // Build lookup maps so we never rely on array position: prefer
+            // planItemId (the real FK link — correct even if a plan item's
+            // position ever changes), falling back to planIndex only for
+            // legacy achievement rows written before planItemId existed.
+            const achByPlanItemId = {};
             const achByPlanIndex = {};
             if (Array.isArray(effective)) {
                 effective.forEach((a, idx) => {
-                    // Use planIndex field when available; fall back to position
-                    // only for legacy parsed entries that have no planIndex field.
+                    if (a.planItemId) achByPlanItemId[a.planItemId] = a;
                     const key = (a.planIndex !== undefined && a.planIndex !== null)
                         ? a.planIndex
                         : idx;
                     achByPlanIndex[key] = a;
                 });
             }
+            // Only trust positional matching when EVERY row in this achievement
+            // predates the planItemId FK (true legacy data). If even one row is
+            // linked, this is modern data — a per-item miss (e.g. a brand-new
+            // plan item with no progress submitted yet) means "no progress yet
+            // for this item", not "borrow whatever sits at the same index."
+            // Falling back per-item regardless of the rest of the data was
+            // exactly how a newly appended plan item ended up displaying an
+            // unrelated older item's achievement text.
+            const isLegacyAchData = Array.isArray(effective) && effective.length > 0
+                && effective.every(a => !a.planItemId);
 
-            nextAchItems = itemList.map((_, i) => ({
-                achievementDetails: achByPlanIndex[i]?.achievementDetails ?? '',
-                progress:           achByPlanIndex[i]?.progress           ?? 0,
-            }));
+            nextAchItems = itemList.map((_, i) => {
+                const rowId = itemRows[i]?.id;
+                const match = (rowId && achByPlanItemId[rowId]) || (isLegacyAchData ? achByPlanIndex[i] : undefined);
+                return {
+                    planItemId: rowId ?? null,
+                    achievementDetails: match?.achievementDetails ?? '',
+                    progress:           match?.progress           ?? 0,
+                };
+            });
 
             if (existing.additionalAchievement) {
                 const parsed = parseAdditionalAch(existing.additionalAchievement);
                 nextAdditionalItems = parsed.length ? parsed : [{ text: '', progress: 0 }];
             } else { nextAdditionalItems = [{ text: '', progress: 0 }]; }
         } else {
-            nextAchItems = itemList.map(() => ({ achievementDetails: '', progress: 0 }));
+            nextAchItems = itemList.map((_, i) => ({
+                planItemId: itemRows[i]?.id ?? null,
+                achievementDetails: '',
+                progress: 0,
+            }));
             nextAdditionalItems = [{ text: '', progress: 0 }];
         }
 
@@ -995,7 +1050,12 @@ const MonthlyPlanPage = () => {
         try {
             await api.post('/employee/monthly-achievement', {
                 monthlyPlanId: achModal.id,
-                planAchievements: achItems.map((a, i) => ({ planIndex: i, achievementDetails: a.achievementDetails || '', progress: a.progress || 0 })),
+                planAchievements: achItems.map((a, i) => ({
+                    planItemId: a.planItemId || null,
+                    planIndex: i, // legacy fallback only — the backend prefers planItemId when present
+                    achievementDetails: a.achievementDetails || '',
+                    progress: a.progress || 0,
+                })),
                 additionalAchievement: additionalStr, achievementDetails: legacyDetails,
                 status: asDraft ? 'DRAFT' : 'SUBMITTED',
             });
@@ -1386,11 +1446,30 @@ const MonthlyPlanPage = () => {
         const detailWindowStatus = getAchievementWindowStatusForPlan(selectedPlan);
         const prog = getProgress(selectedPlan);
         const planItemsList = getPlanItems(selectedPlan);
+        const planItemRowsForDetail = getPlanItemRows(selectedPlan);
         const chipStyle = getMonthChipStyle(selectedPlan.month);
 
         const effectivePlanAch = getEffectivePlanAch(ach, planItemsList.length);
         const hasStructuredAch = !!effectivePlanAch;
         const achIsSubmitted = ach && ach.status !== 'DRAFT';
+
+        // Same planItemId-first, position-as-fallback matching used in
+        // openAchModal — see there for why position alone isn't trusted.
+        const achByPlanItemIdForDetail = {};
+        if (Array.isArray(effectivePlanAch)) {
+            effectivePlanAch.forEach(a => { if (a.planItemId) achByPlanItemIdForDetail[a.planItemId] = a; });
+        }
+        // Same isLegacyAchData gate as openAchModal: only fall back to
+        // position when NONE of this achievement's rows are FK-linked. A
+        // missing match against modern (partially-or-fully-linked) data means
+        // the item genuinely has no progress yet, not "reuse the neighbor."
+        const isLegacyAchDataForDetail = Array.isArray(effectivePlanAch) && effectivePlanAch.length > 0
+            && effectivePlanAch.every(a => !a.planItemId);
+        const getDetailPlanAch = (i) => {
+            const rowId = planItemRowsForDetail[i]?.id;
+            if (rowId && achByPlanItemIdForDetail[rowId]) return achByPlanItemIdForDetail[rowId];
+            return isLegacyAchDataForDetail ? (effectivePlanAch?.[i] || null) : null;
+        };
 
         let additionalItems = parseAdditionalAch(ach?.additionalAchievement || '');
         if (additionalItems.length === 0 && ach?.achievementDetails) {
@@ -1560,7 +1639,7 @@ const MonthlyPlanPage = () => {
                             <div className="dmod-plan-cards">
                                 {planItemsList.map((planText, i) => {
                                     const pa = hasStructuredAch && achIsSubmitted
-                                        ? (effectivePlanAch[i] || { achievementDetails: '', progress: 0 })
+                                        ? (getDetailPlanAch(i) || { achievementDetails: '', progress: 0 })
                                         : { achievementDetails: '', progress: 0 };
                                     const p = Math.min(100, pa.progress || 0);
                                     const statusLabel = p === 100 ? 'Completed' : p > 0 ? 'In Progress' : 'Not Started';
@@ -1756,7 +1835,7 @@ const MonthlyPlanPage = () => {
         <div className="fade-in">
             <div className="page-header">
                 <h1>Monthly Plan & Progress</h1>
-                <p>Submit work plans, track progress, and view RA evaluations — all in one place</p>
+                <p>Submit work plans, progress, and view RA evaluation remarks — all in one place</p>
             </div>
 
             {/* Stats */}

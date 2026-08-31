@@ -180,13 +180,24 @@ const EmployeeDashboard = () => {
                 const planCtx = planDeadlineCtxRes?.data || null;
                 const achCtx = achDeadlineCtxRes?.data || null;
 
+                // DRAFT/SUBMITTED SYNC — single source of truth for "has this record
+                // actually been submitted, or is it just a saved draft?" Both
+                // `/employee/monthly-plans` and `/employee/monthly-achievements` return
+                // every status including DRAFT, so anywhere on this page that decides
+                // whether something still needs action — Action Center items AND
+                // Upcoming Deadlines alike — must go through these instead of a bare
+                // existence/truthy check on the plan or achievement row. A DRAFT row
+                // existing is not the same as the employee being done with it.
+                const isDraftStatus = (status) => (status || '').toUpperCase() === 'DRAFT';
+                const getAchievementPlanId = (a) => a.monthlyPlanId?.id ?? a.monthlyPlanId;
+                const hasSubmittedAchievement = (planId) =>
+                    achievements.some(a => getAchievementPlanId(a) === planId && !isDraftStatus(a.status));
+
                 // STATS FIX — exclude DRAFT achievements from the Monthly Progress
                 // count so the dashboard correctly reflects only submitted records.
                 // A DRAFT means the employee has not yet submitted; counting it as
                 // "1" was misleading the user into thinking they had submitted.
-                const submittedAchievements = achievements.filter(
-                    a => (a.status || '').toUpperCase() !== 'DRAFT'
-                );
+                const submittedAchievements = achievements.filter(a => !isDraftStatus(a.status));
 
                 setStats({
                     monthlyPlans: plans.length,
@@ -256,16 +267,28 @@ const EmployeeDashboard = () => {
                 const remarks = [];
 
                 // Check Monthly Plan for current month
+                // BUG FIX (DRAFT/submitted sync): this used to be `if (!currentPlan)`, which
+                // is truthy-blind to status — a plan row exists the moment a draft is saved,
+                // long before it's actually submitted. That silently treated "drafted but not
+                // submitted" as "handled," so an employee sitting on an unsubmitted draft got
+                // no Action Center reminder at all (and, further below, no Upcoming Deadlines
+                // entry either — including any extension the RA applied). `currentPlanSubmitted`
+                // is the real "is this employee done with this month's plan?" signal.
                 const currentPlan = plans.find(p => p.month === currentMonthString);
-                if (!currentPlan) {
+                const currentPlanSubmitted = !!currentPlan && !isDraftStatus(currentPlan.status);
+                const currentPlanIsDraft = !!currentPlan && isDraftStatus(currentPlan.status);
+
+                if (!currentPlanSubmitted) {
                     const md = new Date(currentMonthString + '-01').toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
                     actions.push({
                         id: 'submit_plan',
                         type: 'warning',
-                        title: 'Submit Monthly Plan',
-                        desc: `Your plan for ${md} is missing.`,
+                        title: currentPlanIsDraft ? 'Finish & Submit Monthly Plan' : 'Submit Monthly Plan',
+                        desc: currentPlanIsDraft
+                            ? `You have a saved draft for ${md} that hasn't been submitted yet.`
+                            : `Your plan for ${md} is missing.`,
                         link: '/employee/monthly-plan',
-                        btnText: 'Submit Now',
+                        btnText: currentPlanIsDraft ? 'Continue Draft' : 'Submit Now',
                         dueChip: getDueChip(planDeadline, now),
                         isExtended: planIsExtended,
                     });
@@ -293,9 +316,8 @@ const EmployeeDashboard = () => {
                             isExtended: isCurrentMonth && planIsExtended,
                         });
                     } else if (['PENDING', 'APPROVED', 'RA_EVALUATED'].includes(plan.status)) {
-                        // Check if achievement submitted
-                        const achievement = achievements.find(a => a.monthlyPlanId?.id === plan.id || a.monthlyPlanId === plan.id);
-                        if (!achievement || achievement.status === 'DRAFT') {
+                        // Check if achievement submitted (DRAFT rows don't count — hasSubmittedAchievement)
+                        if (!hasSubmittedAchievement(plan.id)) {
                             const achDl = isCurrentMonth ? achDeadline : getAchievementDeadline(plan.month);
                             actions.push({
                                 id: `submit_ach_${plan.id}`,
@@ -330,9 +352,16 @@ const EmployeeDashboard = () => {
                 // --- 3. Compute Upcoming Deadlines (all active types, extension-aware) ---
                 const dls = [];
 
-                if (!currentPlan && planDiff >= -10) { // Limit showing overdue deadlines to a reasonable amount
+                // BUG FIX (DRAFT/submitted sync): was `!currentPlan` — truthy-blind to status,
+                // so this entry (and any RA extension on it) silently disappeared the moment a
+                // draft was saved, not just when the plan was actually submitted. Now driven by
+                // the same `currentPlanSubmitted` used for the Action Center item above, so the
+                // two sections agree on what "handled" means.
+                if (!currentPlanSubmitted && planDiff >= -10) { // Limit showing overdue deadlines to a reasonable amount
                     dls.push({
-                        title: `Monthly Plan (${currMonthDisplay})`,
+                        title: currentPlanIsDraft
+                            ? `Monthly Plan (${currMonthDisplay}) — Draft in progress`
+                            : `Monthly Plan (${currMonthDisplay})`,
                         date: planDeadline,
                         days: planDiff,
                         critical: planDiff <= 2,
@@ -347,18 +376,24 @@ const EmployeeDashboard = () => {
                 // deadline was NEVER shown when the current month had no submitted plan (even if other
                 // months had pending achievements). Fix: check if ANY approved/pending plan is missing
                 // an achievement, and show the deadline whenever the window is open.
+                //
+                // BUG FIX (DRAFT/submitted sync): both checks below used to test only "does an
+                // achievement ROW exist for this plan" — true the instant a progress draft is
+                // saved, even though nothing has been submitted. That's the achievement-side twin
+                // of the plan bug above: a drafted-but-unsubmitted progress update silently read as
+                // "handled," so its deadline (and any RA extension) never appeared here, even though
+                // the Action Center correctly still flagged it as pending. Both checks now go
+                // through `hasSubmittedAchievement`, which excludes DRAFT rows.
                 const anyPlanNeedsAchievement = plans.some(plan => {
                     if (!['PENDING', 'APPROVED', 'RA_EVALUATED'].includes(plan.status)) return false;
-                    const hasAch = achievements.some(
-                        a => a.monthlyPlanId?.id === plan.id || a.monthlyPlanId === plan.id
-                    );
-                    return !hasAch;
+                    return !hasSubmittedAchievement(plan.id);
                 });
-                // Also show if current month's plan exists and its achievement is missing
-                const hasCurrentAchievement = currentPlan
-                    ? achievements.some(a => a.monthlyPlanId?.id === currentPlan.id || a.monthlyPlanId === currentPlan.id)
-                    : false;
-                const needsAchievementDeadline = anyPlanNeedsAchievement || (currentPlan && !hasCurrentAchievement);
+                // Also show if current month's plan is SUBMITTED and its achievement is missing
+                // or still just a draft. Gated on currentPlanSubmitted: if the plan itself hasn't
+                // been submitted yet, there's nothing to submit progress against, so no
+                // achievement deadline is due regardless of whether a plan row exists.
+                const needsAchievementDeadline = anyPlanNeedsAchievement ||
+                    (currentPlanSubmitted && !hasSubmittedAchievement(currentPlan.id));
 
                 if (needsAchievementDeadline && windowNotYetOpen && achStartDiff >= 0) {
                     dls.push({
