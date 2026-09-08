@@ -23,6 +23,7 @@ const {
   addCalendarMonths,
   getLastDayOfMonth,
   buildDeadlineDate,
+  computeAchievementWindow,
 } = require("../utils/dateHelpers");
 
 // DEADLINE RESOLVER — single source of truth for "what deadline actually
@@ -36,30 +37,6 @@ const { getEffectiveDeadline } = require("../utils/deadlineResolver");
 ════════════════════════════════════════════════════════════════════ */
 function getCurrentFinancialYear() {
   return getCurrentFiscalYear();
-}
-
-/* ════════════════════════════════════════════════════════════════════
-   HELPER — computes the concrete [windowStart, windowEnd] Date range
-   for a monthly achievement, anchored to the RECORD'S OWN month
-   ("YYYY-MM") rather than to "the current calendar month" — this is
-   what makes the window month-flexible: it can open in the record's
-   month and close in a LATER month (per achievementDeadlineMonthOffset),
-   and correctly stays closed for old records once their own window has
-   elapsed, with no separate "is this month too old" check needed.
-════════════════════════════════════════════════════════════════════ */
-function computeAchievementWindow(planMonth, config) {
-  const [yearStr, monthStr] = planMonth.split("-");
-  const year = parseInt(yearStr, 10);
-  const month = parseInt(monthStr, 10);
-
-  const windowStart = buildDeadlineDate(
-    year, month, config.achievementStartDay, config.achievementStartMonthOffset, false
-  );
-  const windowEnd = buildDeadlineDate(
-    year, month, config.achievementDay, config.achievementDeadlineMonthOffset, true
-  );
-
-  return { windowStart, windowEnd };
 }
 
 /* ════════════════════════════════════════════════════════════════════

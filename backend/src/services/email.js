@@ -78,7 +78,7 @@ async function sendMail({ to, cc, subject, html, text, logLabel = 'Notification'
         return { success: false, error: 'Missing recipient' };
     }
 
-    // Dev safety net — don't spam real inboxes while developing/testing locally
+    // // Dev safety net — don't spam real inboxes while developing/testing locally
     // if (process.env.NODE_ENV !== 'production' && process.env.FORCE_EMAIL_SEND !== 'true') {
     //     console.log(`[email:dev] Would send "${subject}" to ${to}${cc ? ` (cc: ${cc})` : ''} — set FORCE_EMAIL_SEND=true to actually send`);
     //     return { success: true, skipped: true };

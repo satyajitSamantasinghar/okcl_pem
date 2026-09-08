@@ -6,9 +6,8 @@
  * both the date-enforcement middleware (dateMiddleware.js) and the React
  * deadline context on the frontend (useDeadlines()).
  *
- * ─────────────────────────────────────────────────────────────────────────
  * ROLE-BASED DEADLINES
- * ─────────────────────────────────────────────────────────────────────────
+ * 
  * An RA's own monthly plan/achievement submission (RA acting in
  * "Employee Mode", i.e. asEmployee=true / selfView=true) is a real
  * obligation with its own SLA — it does not have to mirror a regular

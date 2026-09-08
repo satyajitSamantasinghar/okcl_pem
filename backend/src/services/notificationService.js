@@ -1,7 +1,7 @@
 'use strict';
 
 const { sendMail } = require('./email');
-const { submissionTemplate, additionalItemsTemplate, evaluationTemplate, rejectionTemplate, deadlineExtensionTemplate } = require("./emailTemplates");
+const { submissionTemplate, additionalItemsTemplate, evaluationTemplate, rejectionTemplate, reminderTemplate, incompleteAchievementReminderTemplate, deadlineExtensionTemplate } = require("./emailTemplates");
 const { formatPeriod, formatDeadline } = require('../utils/dateHelpers');
 
 /**
@@ -130,4 +130,68 @@ async function notifyDeadlineExtension({ employee, reportingAuthority, type, per
     });
 }
 
-module.exports = { notifySubmission, notifyAddition, notifyEvaluation, notifyRejection, notifyDeadlineExtension };
+/**
+ * Fired by reminderService.js's scheduled job when an employee/RA has not
+ * yet submitted their Monthly Plan or Achievement and the effective
+ * deadline (including any RA-granted extension) is within a configured
+ * number of days. Notifies the employee/RA themselves — this is a
+ * self-reminder, not an RA-facing notice, so unlike notifySubmission etc.
+ * there is no reportingAuthority parameter here.
+ */
+async function notifyDeadlineReminder({ employee, type, period, deadlineLabel, daysRemaining }) {
+    if (!employee?.email) {
+        console.warn(`[notification] No email on file — skipped ${type} reminder for employee ${employee?.id}`);
+        return { success: false, error: "Employee email missing" };
+    }
+
+    const urgency =
+        daysRemaining <= 0 ? "today" : daysRemaining === 1 ? "tomorrow" : `in ${daysRemaining} days`;
+
+    return sendMail({
+        to: employee.email,
+        subject: `Reminder: ${type} for ${period} — due ${urgency}`,
+        html: reminderTemplate({
+            employeeName: employee.name,
+            type,
+            period,
+            deadlineLabel,
+            daysRemaining,
+        }),
+        logLabel: `${type} Reminder`,
+    });
+}
+
+/**
+ * Fired by reminderService.js's scheduled job for the "submitted but no
+ * longer complete" achievement case — a SUBMITTED MonthlyAchievement
+ * exists, but plan item(s) appended later via "Add More Plans" still have
+ * no matching progress (see utils/achievementCompleteness.js). Unlike
+ * notifyDeadlineReminder above, this is never fired for a plan with no
+ * submission at all — reminderService.js routes that case through
+ * notifyDeadlineReminder instead, since the messaging genuinely differs
+ * (nothing submitted yet vs. some new items still missing progress).
+ */
+async function notifyIncompleteAchievementReminder({ employee, period, deadlineLabel, daysRemaining, missingCount }) {
+    if (!employee?.email) {
+        console.warn(`[notification] No email on file — skipped incomplete-progress reminder for employee ${employee?.id}`);
+        return { success: false, error: "Employee email missing" };
+    }
+
+    const urgency =
+        daysRemaining <= 0 ? "today" : daysRemaining === 1 ? "tomorrow" : `in ${daysRemaining} days`;
+
+    return sendMail({
+        to: employee.email,
+        subject: `Reminder: Progress Missing for ${missingCount} New Item${missingCount !== 1 ? "s" : ""} — Monthly Achievement (${period}) — due ${urgency}`,
+        html: incompleteAchievementReminderTemplate({
+            employeeName: employee.name,
+            period,
+            deadlineLabel,
+            daysRemaining,
+            missingCount,
+        }),
+        logLabel: "Monthly Achievement Incomplete-Progress Reminder",
+    });
+}
+
+module.exports = { notifySubmission, notifyAddition, notifyEvaluation, notifyRejection, notifyDeadlineExtension, notifyDeadlineReminder, notifyIncompleteAchievementReminder };

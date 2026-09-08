@@ -102,6 +102,63 @@ function rejectionTemplate({ employeeName, raName, period, type, remarks }) {
   });
 }
 
+// Fired by reminderService.js's scheduled job when an employee/RA has NOT
+// yet submitted their Monthly Plan or Achievement and the effective deadline
+// (including any RA-granted extension) is within a configured number of
+// days. `type` is the human label passed through from reminderService.js —
+// "Monthly Plan" or "Monthly Achievement" — matching the label style already
+// used by submissionTemplate/evaluationTemplate above.
+function reminderTemplate({ employeeName, type, period, deadlineLabel, daysRemaining }) {
+  const urgency =
+    daysRemaining <= 0 ? "today" : daysRemaining === 1 ? "tomorrow" : `in ${daysRemaining} days`;
+
+  return baseTemplate({
+    title: `Reminder: ${type} for ${period} is due ${urgency}`,
+    bodyHtml: `
+      <p>Hi ${escapeHtml(employeeName)},</p>
+      <p>Our records show you have not yet submitted your <strong>${escapeHtml(type)}</strong> for <strong>${escapeHtml(period)}</strong>.</p>
+      <p>The deadline is <strong>${escapeHtml(deadlineLabel)}</strong> (${escapeHtml(urgency)}).</p>
+      <p>Please log in to KRMS and submit at your earliest convenience to avoid missing the deadline.</p>
+    `,
+    ctaText: "Submit Now",
+    ctaUrl: `${process.env.FRONTEND_URL}/employee/monthly-plan`,
+  });
+}
+
+// Fired by reminderService.js's scheduled job for the OTHER achievement-
+// reminder case: the employee already has a SUBMITTED Monthly Achievement,
+// but it no longer covers every current Monthly Plan item because plan
+// item(s) were appended later via "Add More Plans" and matching progress
+// was never separately submitted for them via "Add More Progress" (the
+// achievement's `status` stays "SUBMITTED" from the earlier, smaller
+// submission — see utils/achievementCompleteness.js's isAchievementCompleteForPlan
+// for the full rationale). Deliberately a separate template from
+// reminderTemplate: telling someone who already submitted most of their
+// progress "you have not yet submitted" would be inaccurate and confusing —
+// this instead names exactly what's missing (new item(s) without progress)
+// and what happens if the deadline passes without it: the RA cannot
+// evaluate the record, per raController.js's isAchievementCompleteForPlan
+// evaluate-authorization guard.
+function incompleteAchievementReminderTemplate({ employeeName, period, deadlineLabel, daysRemaining, missingCount }) {
+  const urgency =
+    daysRemaining <= 0 ? "today" : daysRemaining === 1 ? "tomorrow" : `in ${daysRemaining} days`;
+  const itemWord = missingCount === 1 ? "item" : "items";
+  const missingVerb = missingCount === 1 ? "doesn't" : "don't";
+  const beVerb = missingCount === 1 ? "isn't" : "aren't";
+
+  return baseTemplate({
+    title: `Reminder: Progress Missing for ${missingCount} New Plan ${itemWord} — ${period}`,
+    bodyHtml: `
+      <p>Hi ${escapeHtml(employeeName)},</p>
+      <p>You've already submitted progress for your <strong>Monthly Achievement</strong> for <strong>${escapeHtml(period)}</strong>, but <strong>${missingCount} new plan ${itemWord}</strong> added afterward (via "Add More Plans") still ${missingVerb} have progress reported.</p>
+      <p>The deadline to add progress is <strong>${escapeHtml(deadlineLabel)}</strong> (${escapeHtml(urgency)}). If progress for ${missingCount === 1 ? "this item" : "these items"} ${beVerb} submitted by then, your Reporting Authority will <strong>not be able to evaluate</strong> this month's record.</p>
+      <p>Please log in to KRMS and add progress for the new ${itemWord} at your earliest convenience.</p>
+    `,
+    ctaText: "Add Progress Now",
+    ctaUrl: `${process.env.FRONTEND_URL}/employee/monthly-plan`,
+  });
+}
+
 function deadlineExtensionTemplate({ employeeName, raName, type, period, newDeadline, reason }) {
   return baseTemplate({
     title: `${type} Deadline Extended`,
@@ -116,4 +173,4 @@ function deadlineExtensionTemplate({ employeeName, raName, type, period, newDead
 }
 
 
-module.exports = { baseTemplate, submissionTemplate, additionalItemsTemplate, evaluationTemplate, rejectionTemplate, deadlineExtensionTemplate };
+module.exports = { baseTemplate, submissionTemplate, additionalItemsTemplate, evaluationTemplate, rejectionTemplate, reminderTemplate, incompleteAchievementReminderTemplate, deadlineExtensionTemplate };

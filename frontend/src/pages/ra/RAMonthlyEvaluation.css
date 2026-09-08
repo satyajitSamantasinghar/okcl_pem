@@ -271,6 +271,36 @@
     box-shadow: 0 0 0 2px rgba(255, 122, 24, 0.15);
 }
 
+/* Progress / Status filter dropdowns — same visual language as the
+   Period month/year selects so all toolbar filters read as one family. */
+.meval-status-select {
+    border: 1px solid var(--border-default);
+    background: var(--bg-card);
+    font-size: 0.85rem;
+    font-family: inherit;
+    color: var(--text-primary);
+    padding: 5px 26px 5px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    outline: none;
+    appearance: none;
+    max-width: 200px;
+    text-overflow: ellipsis;
+    background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20width%3D%2210%22%20height%3D%226%22%20viewBox%3D%220%200%2010%206%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cpath%20d%3D%22M1%201L5%205L9%201%22%20stroke%3D%22%23888888%22%20stroke-width%3D%221.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%3C%2Fsvg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    transition: all 0.15s ease;
+}
+
+.meval-status-select:hover {
+    border-color: #d0d0d0;
+}
+
+.meval-status-select:focus {
+    border-color: var(--primary, #ff7a18);
+    box-shadow: 0 0 0 2px rgba(255, 122, 24, 0.15);
+}
+
 .meval-search-wrap {
     flex: 1;
     position: relative;
@@ -336,6 +366,67 @@
     height: 100%;
     display: flex;
     align-items: center;
+}
+
+/* ─── ACTIVE FILTER CHIPS ────────────────── */
+.meval-active-filters {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 4px 2px;
+}
+
+.meval-active-filters-label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-right: 2px;
+}
+
+.meval-filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 100px;
+    border: 1px solid rgba(255, 122, 24, 0.3);
+    background: rgba(255, 122, 24, 0.08);
+    color: var(--primary, #ff7a18);
+    font-size: 0.78rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.meval-filter-chip:hover {
+    background: var(--error-bg);
+    border-color: rgba(220, 38, 38, 0.3);
+    color: var(--error);
+}
+
+.meval-clear-filters {
+    background: none;
+    border: none;
+    font-family: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 4px 6px;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.meval-clear-filters:hover {
+    color: var(--text-primary);
+}
+
+.meval-empty-clear-btn {
+    margin-top: 14px;
 }
 
 /* ─── TABLE CARD ─────────────────────────── */
@@ -1265,6 +1356,38 @@
 }
 
 /* ─── RESPONSIVE ────────────────────────── */
+
+/* Toolbar now holds Period + Progress + Status + Search + result count.
+   Between this breakpoint and the full column-stack at 768px, let it wrap
+   onto a second line rather than clip (the row's default height:44px has
+   overflow: hidden). Scoped with min-width so it never fights the 768px
+   rules below, which already handle narrower screens correctly. */
+@media (max-width: 1180px) and (min-width: 769px) {
+    .meval-toolbar {
+        flex-wrap: wrap;
+        height: auto;
+        padding: 4px 0;
+    }
+
+    .meval-filter-group {
+        height: 36px;
+    }
+
+    .meval-toolbar-divider {
+        display: none;
+    }
+
+    .meval-search-wrap {
+        flex: 1 1 240px;
+        height: 36px;
+    }
+
+    .meval-result-count {
+        border-left: none;
+        height: 36px;
+    }
+}
+
 @media (max-width: 1100px) {
     .meval-kpi-strip {
         grid-template-columns: repeat(2, 1fr);

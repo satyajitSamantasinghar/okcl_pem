@@ -6,6 +6,7 @@
  *   - configController.js        (extension ceiling computation)
  *   - deadlineResolver.js        (effective-deadline resolution)
  *   - raController.js            (missed-deadlines aggregation)
+ *   - reminderService.js         (pre-deadline reminder emails)
  *
  * These were previously duplicated inside dateMiddleware.js.
  * Centralised here so any fix or extension is applied once.
@@ -82,6 +83,34 @@ function buildDeadlineDate(year, month, day, monthOffset, endOfDay) {
 }
 
 /* ════════════════════════════════════════════════════════════════════
+   HELPER — computes the concrete [windowStart, windowEnd] Date range for
+   a monthly achievement, anchored to the RECORD'S OWN month ("YYYY-MM")
+   rather than "the current calendar month" — this is what makes the
+   window month-flexible: it can open in the record's month and close in
+   a LATER month (per achievementDeadlineMonthOffset).
+
+   Moved here from dateMiddleware.js (previously a private, unexported
+   copy) so reminderService.js can compute the exact same window
+   dateMiddleware.js enforces, instead of a second, possibly-diverging
+   implementation. dateMiddleware.js now imports this instead of
+   defining its own — behavior is unchanged, this is a pure DRY move.
+════════════════════════════════════════════════════════════════════ */
+function computeAchievementWindow(planMonth, config) {
+  const [yearStr, monthStr] = planMonth.split("-");
+  const year = parseInt(yearStr, 10);
+  const month = parseInt(monthStr, 10);
+
+  const windowStart = buildDeadlineDate(
+    year, month, config.achievementStartDay, config.achievementStartMonthOffset, false
+  );
+  const windowEnd = buildDeadlineDate(
+    year, month, config.achievementDay, config.achievementDeadlineMonthOffset, true
+  );
+
+  return { windowStart, windowEnd };
+}
+
+/* ════════════════════════════════════════════════════════════════════
    HELPER — Converts an ISO period string "YYYY-MM" to a human-readable
    label such as "August 2026". Safe-falls-back to the raw string if the
    input is malformed or missing.
@@ -129,6 +158,7 @@ module.exports = {
   addCalendarMonths,
   getLastDayOfMonth,
   buildDeadlineDate,
+  computeAchievementWindow,
   formatPeriod,
   formatDeadline,
 };

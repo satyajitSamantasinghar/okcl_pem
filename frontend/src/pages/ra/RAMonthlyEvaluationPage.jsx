@@ -187,6 +187,84 @@ const formatDate = (d) => {
 };
 
 /* ─────────────────────────────────────────
+   ROW STATUS CLASSIFICATION — single source of truth for both
+   the "Progress" column badge and the Progress filter dropdown.
+
+   A row's progress state is one of three mutually-exclusive values:
+     REJECTED  — the RA sent the plan back; the employee must resubmit.
+                  (Takes priority over everything else — a rejected plan's
+                  achievement state is irrelevant until it's resubmitted.)
+     SUBMITTED — hasAchievement is true: progress has been submitted and,
+                  per isAchievementCompleteForPlan on the backend, covers
+                  every current plan item (including any appended later
+                  via "Add More Plans").
+     PENDING   — plan is active but progress hasn't been (fully) submitted.
+
+   Deliberately reused for the filter instead of re-deriving the same
+   three conditions a second time — this codebase has hit more than one
+   bug from two call sites quietly drifting out of sync on identical
+   logic, so the badge render below now calls this same function.
+───────────────────────────────────────── */
+const PROGRESS_STATUS = { REJECTED: 'REJECTED', SUBMITTED: 'SUBMITTED', PENDING: 'PENDING' };
+
+function getProgressStatus(ev) {
+    if (ev.monthlyPlanId?.status === 'REJECTED') return PROGRESS_STATUS.REJECTED;
+    return ev.hasAchievement ? PROGRESS_STATUS.SUBMITTED : PROGRESS_STATUS.PENDING;
+}
+
+// Options for the "Progress" filter dropdown — value must match a
+// PROGRESS_STATUS key (or 'ALL'). Order matches the visual precedence above.
+const PROGRESS_FILTER_OPTIONS = [
+    { value: 'ALL', label: 'All Progress' },
+    { value: PROGRESS_STATUS.SUBMITTED, label: 'Progress Submitted' },
+    { value: PROGRESS_STATUS.PENDING, label: 'Progress Pending' },
+    { value: PROGRESS_STATUS.REJECTED, label: 'Plan Rejected' },
+];
+
+// Options for the "Status" filter dropdown.
+//
+// FIX: the previous version only had two states (ALL / PENDING / EVALUATED)
+// and defined "Pending Evaluation" as simply `status !== 'EVALUATED'` — i.e.
+// every row not yet scored, including ones the RA can't actually evaluate
+// yet. That silently disagreed with the "Pending Evaluation" KPI card,
+// which correctly requires progress to have been submitted first. There
+// are now two distinct, deliberately non-exclusive options:
+//   PENDING             — broad: evaluation status is literally PENDING
+//                          (not yet evaluated, for any reason).
+//   PENDING_EVALUATION  — narrow: rows the RA can act on RIGHT NOW. Uses
+//                          isActionablePendingEvaluation, the exact same
+//                          predicate as the KPI card, so the two numbers
+//                          can never disagree again.
+const EVAL_STATUS_FILTER_OPTIONS = [
+    { value: 'ALL', label: 'All Statuses' },
+    { value: 'PENDING', label: 'Pending' },
+    { value: 'PENDING_EVALUATION', label: 'Pending Evaluation' },
+    { value: 'EVALUATED', label: 'Evaluated' },
+];
+
+/* ─────────────────────────────────────────
+   ACTIONABLE "PENDING EVALUATION" — single source of truth for the
+   "Pending Evaluation" KPI card AND the Status filter's matching option.
+
+   A plan submission creates a MonthlyEvaluation row with status PENDING
+   immediately — but the RA cannot evaluate it until the employee has
+   ALSO submitted progress/achievement covering every plan item (including
+   any appended later via "Add More Plans"; see hasAchievement's origin in
+   getMonthlyEvaluations / isAchievementCompleteForPlan on the backend).
+   All three conditions must hold:
+     1. Not yet evaluated            (status !== 'EVALUATED')
+     2. Plan was not rejected        (monthlyPlanId?.status !== 'REJECTED')
+     3. Progress has been submitted  (hasAchievement === true)
+───────────────────────────────────────── */
+function isActionablePendingEvaluation(ev) {
+    return (
+        ev.status !== 'EVALUATED' &&
+        ev.monthlyPlanId?.status !== 'REJECTED' &&
+        ev.hasAchievement === true
+    );
+}
+
+/* ─────────────────────────────────────────
    CIRCULAR PROGRESS RING
 ───────────────────────────────────────── */
 function CircularProgress({ progress, size = 44 }) {
@@ -242,6 +320,19 @@ const StatusBadge = ({ status }) => {
             {isEvaluated ? 'Evaluated' : 'Pending'}
         </span>
     );
+};
+
+/* ─────────────────────────────────────────
+   PROGRESS BADGE (table) — same three states/classes/icons the inline
+   IIFE previously rendered, now driven by getProgressStatus so this
+   badge and the Progress filter read from one shared classification.
+───────────────────────────────────────── */
+const ProgressBadge = ({ status }) => {
+    if (status === PROGRESS_STATUS.REJECTED)
+        return <span className="meval-ach-badge meval-ach-badge--rejected"><FiXCircle size={10} /> Plan Rejected</span>;
+    if (status === PROGRESS_STATUS.SUBMITTED)
+        return <span className="meval-ach-badge meval-ach-badge--submitted"><FiCheckCircle size={10} /> Submitted</span>;
+    return <span className="meval-ach-badge meval-ach-badge--pending"><FiClock size={10} /> Pending</span>;
 };
 
 /* ─────────────────────────────────────────
@@ -1024,6 +1115,10 @@ const RAMonthlyEvaluationPage = () => {
         return { year: now.getFullYear(), month: now.getMonth() + 1 };
     }, []);
     const [search, setSearch] = useState('');
+    // Progress column filter — 'ALL' | 'SUBMITTED' | 'PENDING' | 'REJECTED' (see PROGRESS_STATUS).
+    const [progressFilter, setProgressFilter] = useState('ALL');
+    // Status column filter — 'ALL' | 'PENDING' | 'EVALUATED'.
+    const [evalStatusFilter, setEvalStatusFilter] = useState('ALL');
     const [sortField, setSortField] = useState('name');
     const [sortDir, setSortDir] = useState('asc');
     const [page, setPage] = useState(1);
@@ -1204,30 +1299,54 @@ const RAMonthlyEvaluationPage = () => {
     const total = evaluations.filter(e => e.monthlyPlanId?.status !== 'REJECTED').length;
     const evaluated = evaluations.filter(e => e.status === 'EVALUATED').length;
 
-    // FIX (permanent): "pending" must only count evaluations the RA can actually
-    // act on right now. The three conditions that must ALL be true:
-    //   1. Not yet evaluated (status !== 'EVALUATED')
-    //   2. Plan is not rejected (monthlyPlanId?.status !== 'REJECTED')
-    //   3. Employee has submitted their progress (hasAchievement === true)
-    //
-    // Previously this was `total - evaluated` which incorrectly included:
-    //   • Employees who haven't uploaded progress yet (RA cannot evaluate yet)
-    //   • Employees whose plan was rejected (RA has already acted; no eval possible)
-    const pending = evaluations.filter(e =>
-      e.status !== 'EVALUATED' &&
-      e.monthlyPlanId?.status !== 'REJECTED' &&
-      e.hasAchievement === true
-    ).length;
+    // "pending" must only count evaluations the RA can actually act on right
+    // now — see isActionablePendingEvaluation's doc comment above for the
+    // three conditions. Previously this was `total - evaluated`, which
+    // incorrectly included employees who haven't uploaded progress yet and
+    // employees whose plan was rejected.
+    const pending = evaluations.filter(isActionablePendingEvaluation).length;
 
     const completion = total > 0 ? Math.round((evaluated / total) * 100) : 0;
 
-    const filtered = useMemo(() => {
+    // Name/code/department search — split out from the rest of `filtered` so the
+    // two dropdown filters below can compute "how many rows would this option
+    // show" counts against the current search, independent of each other.
+    const searchFiltered = useMemo(() => {
         const q = search.trim().toLowerCase();
-        let list = evaluations.filter(ev => {
-            if (!q) return true;
-            return [ev.employee?.name, ev.employee?.employeeCode, ev.employee?.department]
-                .filter(Boolean).some(v => v.toLowerCase().includes(q));
+        if (!q) return evaluations;
+        return evaluations.filter(ev =>
+            [ev.employee?.name, ev.employee?.employeeCode, ev.employee?.department]
+                .filter(Boolean).some(v => v.toLowerCase().includes(q))
+        );
+    }, [evaluations, search]);
+
+    // Facet counts shown in each filter option's label, e.g. "Progress Pending (4)".
+    const progressCounts = useMemo(() => {
+        const counts = { ALL: searchFiltered.length, SUBMITTED: 0, PENDING: 0, REJECTED: 0 };
+        searchFiltered.forEach(ev => { counts[getProgressStatus(ev)]++; });
+        return counts;
+    }, [searchFiltered]);
+
+    // Facet counts for the Status dropdown. PENDING (broad) and
+    // PENDING_EVALUATION (narrow/actionable) are deliberately not mutually
+    // exclusive — PENDING_EVALUATION is always a subset of PENDING — each
+    // count is computed independently against its own definition.
+    const evalStatusCounts = useMemo(() => {
+        const counts = { ALL: searchFiltered.length, PENDING: 0, PENDING_EVALUATION: 0, EVALUATED: 0 };
+        searchFiltered.forEach(ev => {
+            if (ev.status === 'EVALUATED') counts.EVALUATED++;
+            else counts.PENDING++;
+            if (isActionablePendingEvaluation(ev)) counts.PENDING_EVALUATION++;
         });
+        return counts;
+    }, [searchFiltered]);
+
+    const filtered = useMemo(() => {
+        let list = searchFiltered;
+        if (progressFilter !== 'ALL') list = list.filter(ev => getProgressStatus(ev) === progressFilter);
+        if (evalStatusFilter === 'EVALUATED') list = list.filter(ev => ev.status === 'EVALUATED');
+        else if (evalStatusFilter === 'PENDING') list = list.filter(ev => ev.status !== 'EVALUATED');
+        else if (evalStatusFilter === 'PENDING_EVALUATION') list = list.filter(isActionablePendingEvaluation);
         list = [...list].sort((a, b) => {
             let aVal, bVal;
             if (sortField === 'name') { aVal = a.employee?.name || ''; bVal = b.employee?.name || ''; }
@@ -1238,7 +1357,12 @@ const RAMonthlyEvaluationPage = () => {
             return sortDir === 'asc' ? cmp : -cmp;
         });
         return list;
-    }, [evaluations, search, sortField, sortDir]);
+    }, [searchFiltered, progressFilter, evalStatusFilter, sortField, sortDir]);
+
+    // True when either dropdown filter is narrowing the list (search has its
+    // own inline clear-X already, so it's tracked separately from this).
+    const hasFilterChips = progressFilter !== 'ALL' || evalStatusFilter !== 'ALL';
+    const clearFilterChips = () => { setProgressFilter('ALL'); setEvalStatusFilter('ALL'); setPage(1); };
 
     const totalPages = Math.max(1, Math.ceil(filtered.length / ROWS_PER_PAGE));
     const safePage = Math.min(page, totalPages);
@@ -1318,7 +1442,7 @@ const RAMonthlyEvaluationPage = () => {
             {/* ── KPI STRIP ── */}
             <div className="meval-kpi-strip">
                 <SummaryCard icon={<FaFile size={16} />} value={total} label="Total" subtitle="Monthly plans submitted" color="blue" />
-                <SummaryCard icon={<FiClock size={16} />} value={pending} label="Pending" subtitle="Awaiting evaluation" color="amber" />
+                <SummaryCard icon={<FiClock size={16} />} value={pending} label="Pending Evaluation" subtitle="Awaiting evaluation" color="amber" />
                 <SummaryCard icon={<FiCheckCircle size={16} />} value={evaluated} label="Evaluated" subtitle="This month" color="green" />
                 <SummaryCard icon={<FiTrendingUp size={16} />} value={`${completion}%`} label="Completion" subtitle={`${evaluated}/${total} done`} color="orange" />
             </div>
@@ -1390,10 +1514,74 @@ const RAMonthlyEvaluationPage = () => {
                         </button>
                     )}
                 </div>
+                <div className="meval-toolbar-divider" />
+                <div className="meval-filter-group">
+                    <label className="meval-filter-label" htmlFor="meval-progress-filter">Progress</label>
+                    <select
+                        id="meval-progress-filter"
+                        value={progressFilter}
+                        onChange={e => { setProgressFilter(e.target.value); setPage(1); }}
+                        className="meval-status-select"
+                    >
+                        {PROGRESS_FILTER_OPTIONS.map(opt => (
+                            <option key={opt.value} value={opt.value}>
+                                {opt.label} ({progressCounts[opt.value]})
+                            </option>
+                        ))}
+                    </select>
+                </div>
+                <div className="meval-toolbar-divider" />
+                <div className="meval-filter-group">
+                    <label className="meval-filter-label" htmlFor="meval-status-filter">Status</label>
+                    <select
+                        id="meval-status-filter"
+                        value={evalStatusFilter}
+                        onChange={e => { setEvalStatusFilter(e.target.value); setPage(1); }}
+                        className="meval-status-select"
+                    >
+                        {EVAL_STATUS_FILTER_OPTIONS.map(opt => (
+                            <option key={opt.value} value={opt.value}>
+                                {opt.label} ({evalStatusCounts[opt.value]})
+                            </option>
+                        ))}
+                    </select>
+                </div>
                 <span className="meval-result-count">
-                    {filtered.length} result{filtered.length !== 1 ? 's' : ''}
+                    {(hasFilterChips || search)
+                        ? `${filtered.length} of ${evaluations.length} result${evaluations.length !== 1 ? 's' : ''}`
+                        : `${filtered.length} result${filtered.length !== 1 ? 's' : ''}`}
                 </span>
             </div>
+
+            {/* ── ACTIVE FILTER CHIPS ── */}
+            {hasFilterChips && (
+                <div className="meval-active-filters">
+                    <span className="meval-active-filters-label">Filters:</span>
+                    {progressFilter !== 'ALL' && (
+                        <button
+                            className="meval-filter-chip"
+                            onClick={() => { setProgressFilter('ALL'); setPage(1); }}
+                            title="Remove this filter"
+                        >
+                            {PROGRESS_FILTER_OPTIONS.find(o => o.value === progressFilter)?.label}
+                            <FiX size={11} />
+                        </button>
+                    )}
+                    {evalStatusFilter !== 'ALL' && (
+                        <button
+                            className="meval-filter-chip"
+                            onClick={() => { setEvalStatusFilter('ALL'); setPage(1); }}
+                            title="Remove this filter"
+                        >
+                            {EVAL_STATUS_FILTER_OPTIONS.find(o => o.value === evalStatusFilter)?.label}
+                            <FiX size={11} />
+                        </button>
+                    )}
+                    <button className="meval-clear-filters" onClick={clearFilterChips}>
+                        Clear all
+                    </button>
+                </div>
+            )}
 
             {/* ── EVALUATION TABLE CARD ── */}
             <div className="meval-table-card">
@@ -1403,7 +1591,7 @@ const RAMonthlyEvaluationPage = () => {
                         <p className="meval-table-card-sub">Click any row to view details · Use Evaluate to score · Use Reject to send back for revision</p>
                     </div>
                     <span className={`meval-badge ${pending > 0 ? 'meval-badge--pending' : 'meval-badge--evaluated'}`}>
-                        {pending > 0 ? `${pending} Pending` : '✓ All Done'}
+                        {pending > 0 ? `${pending} Evaluation Pending` : 'No Evaluation Pending'}
                     </span>
                 </div>
 
@@ -1416,7 +1604,19 @@ const RAMonthlyEvaluationPage = () => {
                     <div className="meval-empty">
                         <div className="meval-empty-icon">📭</div>
                         <h3>No evaluations found</h3>
-                        <p>{search ? 'Try a different name, code, or department.' : 'No monthly plan submissions for this period.'}</p>
+                        <p>
+                            {search || hasFilterChips
+                                ? 'Try a different name, code, or department, or adjust your filters.'
+                                : 'No monthly plan submissions for this period.'}
+                        </p>
+                        {(search || hasFilterChips) && (
+                            <button
+                                className="btn btn-sm btn-secondary meval-empty-clear-btn"
+                                onClick={() => { setSearch(''); clearFilterChips(); }}
+                            >
+                                Clear all filters
+                            </button>
+                        )}
                     </div>
                 ) : (
                     <>
@@ -1476,16 +1676,7 @@ const RAMonthlyEvaluationPage = () => {
 
                                             {/* Achievement status / Plan rejection badge */}
                                             <div className="meval-cell">
-                                                {(() => {
-                                                    const planStatus = ev.monthlyPlanId?.status;
-                                                    if (planStatus === 'REJECTED') {
-                                                        return <span className="meval-ach-badge meval-ach-badge--rejected"><FiXCircle size={10} /> Plan Rejected</span>;
-                                                    }
-                                                    if (ev.hasAchievement) {
-                                                        return <span className="meval-ach-badge meval-ach-badge--submitted"><FiCheckCircle size={10} /> Submitted</span>;
-                                                    }
-                                                    return <span className="meval-ach-badge meval-ach-badge--pending"><FiClock size={10} /> Pending</span>;
-                                                })()}
+                                                <ProgressBadge status={getProgressStatus(ev)} />
                                             </div>
 
                                             {/* Score */}

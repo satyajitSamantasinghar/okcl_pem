@@ -24,6 +24,8 @@ const {
 } = require("./src/models");
 const { DataTypes, Op } = require("sequelize");
 const { verifyEmailConnection } = require('./src/services/email');
+const cron = require('node-cron');
+const { runDeadlineReminders } = require('./src/services/reminderService');
 
 
 const PORT = process.env.PORT || 5000;
@@ -861,6 +863,35 @@ const startServer = async () => {
 
         // Start server only after DB is ready
         await verifyEmailConnection();
+
+        // ── Deadline reminder job ───────────────────────────────────────────
+        // Emails employees/RAs who haven't yet submitted their Monthly Plan or
+        // Achievement as their deadline nears. See src/services/reminderService.js
+        // for the full logic — it reuses the same deadline computation
+        // (configController + dateHelpers + deadlineResolver) that
+        // dateMiddleware.js uses to ENFORCE deadlines, so a reminder can never
+        // disagree with actual enforcement.
+        //
+        // REMINDER_JOB_ENABLED=false disables the schedule entirely (e.g. for
+        // local dev, so you don't email real inboxes on every restart) without
+        // a code change — same pattern as email.js's FORCE_EMAIL_SEND idea.
+        // REMINDER_CRON_SCHEDULE — standard 5-field cron expression,
+        //   default "0 9 * * *" (09:00 daily).
+        // REMINDER_TZ — IANA timezone name the schedule above is evaluated in,
+        //   default "Asia/Kolkata".
+        // REMINDER_THRESHOLD_DAYS — read inside reminderService.js itself
+        //   (default "3,1": remind 3 days before AND 1 day before deadline).
+        if (process.env.REMINDER_JOB_ENABLED !== "false") {
+            const reminderSchedule = process.env.REMINDER_CRON_SCHEDULE || "52 10 * * *";
+            const reminderTz = process.env.REMINDER_TZ || "Asia/Kolkata";
+            cron.schedule(reminderSchedule, () => {
+                runDeadlineReminders();
+            }, { timezone: reminderTz });
+            console.log(`✅ Deadline reminder job scheduled ("${reminderSchedule}", ${reminderTz})`);
+        } else {
+            console.log("⏸️  Deadline reminder job disabled (REMINDER_JOB_ENABLED=false)");
+        }
+
         app.listen(PORT, () => {
             console.log(`🚀 Server running on port ${PORT}`);
         });

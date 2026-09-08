@@ -45,6 +45,10 @@ const { parseDeadlineConfig, normalizeRole, getExtensionCeiling } = require("./c
 const { getEffectiveDeadline, getExtensionHistory } = require("../utils/deadlineResolver");
 const { GO_LIVE, buildDeadlineDate } = require("../utils/dateHelpers");
 const { notifyEvaluation, notifyRejection, notifyDeadlineExtension } = require("../services/notificationService");
+// Single source of truth for "is a SUBMITTED achievement actually complete
+// for its plan" — shared with services/reminderService.js. See that file's
+// header for why this moved out of being controller-local.
+const { isAchievementCompleteForPlan } = require("../utils/achievementCompleteness");
 
 /* helper — mirrors the old in-file function */
 function getQuarterMonths(quarter) {
@@ -71,35 +75,6 @@ async function notifyEmployeeOfRejection(employeeId, raId, month, remarks) {
   } catch (err) {
     console.error("[notification] Rejection notice failed:", err.message);
   }
-}
-
-/* ─── Helper: is a SUBMITTED achievement actually COMPLETE for its plan? ────
-   "Add More Plans" lets an employee append plan items to an already-
-   submitted plan at any point before evaluation; "Add More Progress"
-   mirrors that on the achievement side. Between the two actions, a plan
-   can legitimately have more MonthlyPlanItem rows than its already-
-   SUBMITTED MonthlyAchievement has MonthlyAchievementItem rows — the
-   achievement's `status` column stays "SUBMITTED" from that earlier,
-   smaller submission until the employee separately submits progress for
-   the new item(s). A naive existence check (does a SUBMITTED achievement
-   exist at all?) therefore wrongly treats progress as fully reported the
-   moment ANY achievement is submitted, even one that predates a later-
-   added, still-unreported plan item.
-
-   The employee's "Add More Progress" flow always appends exactly one new
-   MonthlyAchievementItem per new MonthlyPlanItem (see the "ADD MORE
-   PROGRESS" block in employeeController.submitMonthlyAchievement), so a
-   plain item-count comparison is sufficient to detect the gap — no need
-   to resolve individual planItemId links here.
-
-   planItemCount === 0 means this plan predates the MonthlyPlanItem table
-   (pure legacy planDetails text with no structured items) — there's
-   nothing to compare per-item, so we fall back to the original
-   existence-only behavior rather than blocking evaluation for data this
-   feature doesn't apply to. */
-function isAchievementCompleteForPlan(planItemCount, achievementItemCount) {
-  if (!planItemCount) return true;
-  return achievementItemCount >= planItemCount;
 }
 
 /* ─── 1. RA DASHBOARD ────────────────────────────────────────────────────────── */
