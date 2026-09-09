@@ -22,6 +22,7 @@ const ALLOWED_VIEWS = {
     RA:       ['RA', 'EMPLOYEE'],
     HRD:      ['HRD'],
     MD:       ['MD', 'RA'],
+    ADMIN:    ['ADMIN'],   // ADMIN has its own view — no switching
 };
 
 export const AuthProvider = ({ children }) => {
@@ -170,6 +171,7 @@ export const AuthProvider = ({ children }) => {
             RA: '/ra',
             HRD: '/hrd',
             MD: '/md',
+            ADMIN: '/admin',   // ← was missing; caused ADMIN login to fall through to /login
         };
         return paths[role] || '/login';
     };

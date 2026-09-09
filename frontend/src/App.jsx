@@ -45,6 +45,9 @@ import MDMonthlyOverviewPage from './pages/md/MDMonthlyOverviewPage';
 import MDEmployeeListPage from './pages/md/MDEmployeeListPage';
 import MDEmployeeDetailPage from './pages/md/MDEmployeeDetailPage';
 
+// Admin
+import AdminDashboard from './pages/admin/AdminDashboard';
+
 // ── Smart redirect based on logged-in role and activeView ────────────────────
 //  Uses activeView (not just user.role) so that a refreshed page respects the
 //  last selected view context (stored in localStorage and restored by AuthContext).
@@ -67,6 +70,7 @@ const HomeRedirect = () => {
     RA: '/ra',
     HRD: '/hrd',
     MD: '/md',
+    ADMIN: '/admin',
   };
 
   // Map active view to the correct landing path.
@@ -207,6 +211,19 @@ function App() {
             <Route path="monthly-overview" element={<MDMonthlyOverviewPage />} />
             <Route path="employees" element={<MDEmployeeListPage />} />
             <Route path="employee/:id" element={<MDEmployeeDetailPage />} />
+            <Route path="profile" element={<ProfilePage />} />
+          </Route>
+
+          {/* Admin Routes */}
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute allowedRoles={['ADMIN']}>
+                <DashboardLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<AdminDashboard />} />
             <Route path="profile" element={<ProfilePage />} />
           </Route>
 

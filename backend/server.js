@@ -26,6 +26,7 @@ const { DataTypes, Op } = require("sequelize");
 const { verifyEmailConnection } = require('./src/services/email');
 const cron = require('node-cron');
 const { runDeadlineReminders } = require('./src/services/reminderService');
+const bcrypt = require('bcrypt');
 
 
 const PORT = process.env.PORT || 5000;
@@ -199,6 +200,111 @@ const runMigrations = async () => {
     // if (mdToRaCount?.rowCount > 0) {
     //     console.log("✅ Migration 6: emp_code '1686011' role updated MD → RA");
     // }
+
+    // ── Migration 9: Add 'ADMIN' to the users.role enum ────────────────────
+    //  Adds a new PostgreSQL enum label for the upcoming Admin dashboard/login
+    //  feature. role is a native Postgres ENUM type (auto-named by Sequelize
+    //  as enum_<table>_<column> → "enum_users_role"), so a new value can't be
+    //  added with addColumn/changeColumn like a normal column — it needs a
+    //  raw ALTER TYPE ... ADD VALUE.
+    //
+    //  Idempotency: rather than relying on "ADD VALUE IF NOT EXISTS" (only
+    //  supported from Postgres 12 onward), this checks pg_enum directly first
+    //  — same check-before-act philosophy as describeTable() above, and safe
+    //  on any Postgres version this app might run on.
+    //
+    //  Note: ALTER TYPE ... ADD VALUE cannot be used in the same transaction
+    //  that then uses the new value — but this call isn't wrapped in an
+    //  explicit transaction, so that's not a concern here.
+    const [existingRoleEnumValues] = await sequelize.query(`
+        SELECT e.enumlabel
+        FROM pg_type t
+        JOIN pg_enum e ON t.oid = e.enumtypid
+        WHERE t.typname = 'enum_users_role'
+    `);
+    const hasAdminEnumValue = existingRoleEnumValues.some((row) => row.enumlabel === "ADMIN");
+    if (!hasAdminEnumValue) {
+        await sequelize.query(`ALTER TYPE "enum_users_role" ADD VALUE 'ADMIN'`);
+        console.log("✅ Migration 9: added 'ADMIN' value to enum_users_role type");
+    }
+};
+
+// ─── Bootstrap: seed the initial ADMIN account ───────────────────────────────
+//  Creates exactly ONE admin user, sourced from env vars, the first time the
+//  server boots after this feature is deployed. This is a bootstrap step, not
+//  a login mechanism — the admin credential does NOT live in .env at runtime;
+//  it exists only long enough to create a normal, DB-backed local-login User
+//  row (role: "ADMIN", authProvider: "local"), hashed with bcrypt exactly
+//  like authController.register() hashes every other local password. From
+//  then on the admin logs in through the existing POST /api/auth/login flow
+//  like any local user — no special-cased auth path, no separate admin login
+//  page, and the token/refresh/logout machinery in authController.js needs
+//  zero changes.
+//
+//  Required env vars (set these in .env before the first deploy of this
+//  feature, then they can stay — they're only read when no ADMIN exists yet):
+//    ADMIN_EMPLOYEE_CODE   — unique employeeCode for the admin row (e.g. "ADMIN001")
+//    ADMIN_NAME            — display name (e.g. "System Administrator")
+//    ADMIN_EMAIL           — login email
+//    ADMIN_INITIAL_PASSWORD — plaintext initial password, hashed once here and
+//                              never stored or logged in plaintext
+//
+//  Idempotency — the important part: this checks "does ANY ADMIN role user
+//  already exist?", not "does this specific email already exist?". Once an
+//  admin row exists, this function is a permanent no-op on every subsequent
+//  restart, REGARDLESS of what ADMIN_INITIAL_PASSWORD currently holds. That's
+//  intentional: if it re-applied the .env password on every boot, changing
+//  your password from inside the app would get silently undone the next time
+//  the server restarts. Rotate the admin's password through a normal
+//  "change password" flow (or a direct DB update), not by editing .env after
+//  the first boot.
+//
+//  Wrapped in try/catch — matches every other one-time bootstrap/cleanup
+//  function in this file: a failure here must never prevent PES itself from
+//  starting for everyone else.
+// ─────────────────────────────────────────────────────────────────────────────
+const seedAdminAccount = async () => {
+    try {
+        const existingAdmin = await User.findOne({ where: { role: "ADMIN" } });
+        if (existingAdmin) {
+            console.log("✅ Admin Bootstrap: an ADMIN account already exists — nothing to seed.");
+            return;
+        }
+
+        const {
+            ADMIN_EMPLOYEE_CODE,
+            ADMIN_NAME,
+            ADMIN_EMAIL,
+            ADMIN_INITIAL_PASSWORD,
+        } = process.env;
+
+        if (!ADMIN_EMPLOYEE_CODE || !ADMIN_EMAIL || !ADMIN_INITIAL_PASSWORD) {
+            console.warn(
+                "⚠️  Admin Bootstrap: no ADMIN account exists yet, but one or more of " +
+                "ADMIN_EMPLOYEE_CODE / ADMIN_EMAIL / ADMIN_INITIAL_PASSWORD is missing from " +
+                ".env — skipping admin creation. Set these and restart to create the admin account."
+            );
+            return;
+        }
+
+        const passwordHash = await bcrypt.hash(ADMIN_INITIAL_PASSWORD, 10);
+
+        await User.create({
+            employeeCode: ADMIN_EMPLOYEE_CODE,
+            name: ADMIN_NAME || "System Administrator",
+            email: ADMIN_EMAIL,
+            passwordHash,
+            authProvider: "local",
+            role: "ADMIN",
+            isActive: true,
+        });
+
+        console.log(`✅ Admin Bootstrap: created initial ADMIN account (${ADMIN_EMAIL}). ` +
+            "You can remove ADMIN_INITIAL_PASSWORD from .env now if you'd like — it will not be read again.");
+    } catch (seedErr) {
+        // Log but do NOT rethrow — this must never block PES from starting.
+        console.error("❌ Admin Bootstrap failed (server will still start):", seedErr.message);
+    }
 };
 
 // ─── One-time Data Repair: normalize itemOrder / planIndex ──────────────────
@@ -442,7 +548,7 @@ const backfillRAHistory = async () => {
 //  Employee codes: 1686029, 1686017, 1686008, 1035
 //  Target month  : 2026-07
 //
-//  ⚠️  REMOVE THIS BLOCK after the next successful deployment to keep startup lean.
+//    REMOVE THIS BLOCK after the next successful deployment to keep startup lean.
 // ─────────────────────────────────────────────────────────────────────────────
 // const deleteJuly2026Plans = async () => {
 //     const TARGET_EMP_CODES = ["1686013", "1686012"];
@@ -800,6 +906,11 @@ const startServer = async () => {
 
         // Run schema migrations before syncing
         await runMigrations();
+
+        // Bootstrap the initial ADMIN account (see seedAdminAccount() above).
+        // Must run after runMigrations() — Migration 9 adds the 'ADMIN' enum
+        // value this depends on. A permanent no-op once an ADMIN row exists.
+        await seedAdminAccount();
 
         // Repair any itemOrder/planIndex rows corrupted by the "Add More"
         // append bug described above. Must run after runMigrations() (needs

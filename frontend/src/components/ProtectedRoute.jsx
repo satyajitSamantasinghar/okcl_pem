@@ -17,6 +17,7 @@ const viewAccessMap = {
     RA:       ['RA', 'EMPLOYEE'],   // RA is also an employee (can submit own plans)
     HRD:      ['HRD'],
     MD:       ['MD', 'RA'],         // MD can act as RA evaluator for direct reportees
+    ADMIN:    ['ADMIN'],            // ADMIN only accesses admin routes — no view-switching
 };
 
 const ProtectedRoute = ({ children, allowedRoles }) => {
