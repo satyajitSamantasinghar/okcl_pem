@@ -235,8 +235,11 @@ async function fetchEmployeeIdsByRAForMonth(month) {
 
 /* ─── Group a list of compliance rows by Reporting Authority ────────────────
    Mirrors groupByDept's shape ([label, rows[]] pairs) so both grouping modes
-   render through the exact same PDF-drawing loop below. Each RA's own
-   compliance row (they carry the same plan/progress obligations as an
+   render through the exact same PDF-drawing loop below. Called ONCE, on the
+   full month's row set (Completed and Non-Completed together) — the PDF
+   render loop is what later splits each group's rows into its Completed/
+   Non-Completed sub-tables, so every RA appears exactly once here. Each RA's
+   own compliance row (they carry the same plan/progress obligations as an
    employee — see ADMIN_TRACKED_ROLES) is prepended to their own group so it
    isn't just implied by the group header — it's an actual row a reader can
    check, styled distinctly by employeeRow(). Regular employees with no RA
@@ -245,7 +248,7 @@ async function fetchEmployeeIdsByRAForMonth(month) {
 */
 function groupByRA(list, employeeIdsByRA, raById) {
   const employeeRows = list.filter(r => r.role === 'EMPLOYEE');
-  const raSelfRows = list.filter(r => r.role === 'RA'); // RAs whose own status falls in THIS subset
+  const raSelfRows = list.filter(r => r.role === 'RA'); // RA's own compliance row, if in this list
 
   const raIdsWithReports = [...employeeIdsByRA.keys()].filter(raId => raById.has(raId));
   const raIdsWithSelfRow = raSelfRows.map(r => r.id);
@@ -468,22 +471,35 @@ exports.exportComplianceReportPdf = async (req, res) => {
       return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
     }
 
-    let compliantGroups, nonCompliantGroups, groupLabel;
+    // Group the FULL row set (compliant + non-compliant together) by RA/
+    // department, once. Each group's rows are split into Completed /
+    // Non-Completed only at render time, below — this is what lets every
+    // RA/Department appear exactly once in the report, with both of its
+    // sub-tables nested underneath it, instead of the old layout where an
+    // RA/department could be listed once under "Completed" and again,
+    // separately, under "Non-Completed".
+    let groups, groupLabel;
     if (groupBy === 'ra') {
       const employeeIdsByRA = await fetchEmployeeIdsByRAForMonth(month);
       const raById = new Map(rows.filter(r => r.role === 'RA').map(r => [r.id, r]));
-      compliantGroups = groupByRA(compliant, employeeIdsByRA, raById);
-      nonCompliantGroups = groupByRA(nonCompliant, employeeIdsByRA, raById);
+      groups = groupByRA(rows, employeeIdsByRA, raById);
       groupLabel = 'Reporting Authority';
     } else {
-      compliantGroups = groupByDept(compliant);
-      nonCompliantGroups = groupByDept(nonCompliant);
+      groups = groupByDept(rows);
       groupLabel = 'Department';
     }
 
     // ── Build PDF ─────────────────────────────────────────────────────────
     const PDFDocument = require('pdfkit');
-    const doc = new PDFDocument({ margin: 50, size: 'A4' });
+    // bufferPages: true keeps every generated page in memory instead of
+    // flushing it to the response as soon as the next page starts. Without
+    // this, doc.bufferedPageRange() below only ever "sees" the single page
+    // that hasn't been flushed yet (i.e. the last one) once the document
+    // spans more than one page — which is exactly why the exported PDF's
+    // footer only ever said "Page 1 of 1" and every page before the last
+    // one had no footer at all. This report is small (tens to low hundreds
+    // of rows), so holding all pages in memory until doc.end() is cheap.
+    const doc = new PDFDocument({ margin: 50, size: 'A4', bufferPages: true });
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader(
@@ -507,6 +523,32 @@ exports.exportComplianceReportPdf = async (req, res) => {
     const pageW = doc.page.width - doc.options.margin * 2;
     const left = doc.options.margin;
 
+    // ── Layout constants used by every page-break check below ──────────────
+    // Previously each check re-typed its own magic number (40, 80, 120, 170)
+    // measured from the raw page edge instead of from the actual bottom
+    // margin, and the per-row check didn't account for the row's own height
+    // at all. That let the last row on a page start as little as ~1pt above
+    // the bottom margin and render up to ~28pt past it — straight through
+    // where the footer (added afterwards, below) gets stamped, which is the
+    // "overlapping/garbled" page-break glitch. Every check now derives from
+    // the same numbers used to actually draw those elements, so they can't
+    // drift out of sync again.
+    const MARGIN = doc.options.margin;                 // 50
+    const ROW_H = 18;                                   // employeeRow() rect height
+    const TABLE_HEADER_H = 18;                           // tableHeader() rect height + spacing
+    const GROUP_HEADER_H = 30;                           // groupHeader() card band + its spacing
+    const SUB_HEADER_H = 16;                             // subsectionHeader() line + its spacing
+    // A group can't open at the very bottom of a page with nothing under it:
+    // reserve room for the group's own header PLUS at least one populated
+    // sub-section (its own header, the table header, and >=1 row) before
+    // starting a new RA/department block.
+    const MIN_GROUP_BLOCK = GROUP_HEADER_H + SUB_HEADER_H + TABLE_HEADER_H + ROW_H;
+    // Once a group header is already drawn, a fresh sub-section within it
+    // only needs room for its own header + table header + >=1 row.
+    const MIN_SUBSECTION_BLOCK = SUB_HEADER_H + TABLE_HEADER_H + ROW_H;
+    const LEGEND_BREAK_BUFFER = 120;                     // == old flat "page.height - 170"
+    function pageBottom() { return doc.page.height - MARGIN; } // usable bottom edge
+
     function hRule(y, color = '#E5E7EB') {
       doc.moveTo(left, y).lineTo(left + pageW, y).strokeColor(color).lineWidth(0.5).stroke();
     }
@@ -521,9 +563,35 @@ exports.exportComplianceReportPdf = async (req, res) => {
       doc.x = left; // pdfkit leaves doc.x wherever the text() call above put it — pin it back
     }
 
-    function groupHeader(groupName, count, color) {
-      doc.fontSize(10).font('Helvetica-Bold').fillColor(color)
-        .text(`${groupName}  (${count})`, left, doc.y, { width: pageW });
+    // Group header = one RA/department "card": a shaded band with the
+    // group's name on the left and a compact Total/Completed/Pending
+    // tally on the right, so a reader can see that RA or department's
+    // whole standing at a glance before reading its two sub-tables below.
+    function groupHeader(groupName, total, completedCount, pendingCount) {
+      const y = doc.y;
+      const boxH = 22;
+      doc.rect(left, y, pageW, boxH).fill(GREY_LITE);
+      doc.fontSize(10.5).font('Helvetica-Bold').fillColor(GREY_DARK)
+        .text(groupName, left + 8, y + 6, { width: pageW * 0.5, lineBreak: false });
+
+      doc.fontSize(8).font('Helvetica-Bold');
+      doc.fillColor(GREY_MID)
+        .text(`${total} Total`, left + pageW * 0.55, y + 7, { width: pageW * 0.15, align: 'right', lineBreak: false });
+      doc.fillColor(GREEN)
+        .text(`${completedCount} Completed`, left + pageW * 0.68, y + 7, { width: pageW * 0.16, align: 'right', lineBreak: false });
+      doc.fillColor(RED)
+        .text(`${pendingCount} Pending`, left + pageW * 0.83, y + 7, { width: pageW * 0.17, align: 'right', lineBreak: false });
+
+      doc.x = left;
+      doc.y = y + boxH + 8;
+    }
+
+    // Sub-section header = the "Completed" / "Non-Completed" label nested
+    // under a group's card, indented slightly so it visually reads as a
+    // child of the group above it rather than a peer section of its own.
+    function subsectionHeader(label, count, color) {
+      doc.fontSize(9).font('Helvetica-Bold').fillColor(color)
+        .text(`${label}  (${count})`, left + 6, doc.y, { width: pageW - 6 });
       doc.moveDown(0.2);
       doc.x = left;
     }
@@ -605,46 +673,62 @@ exports.exportComplianceReportPdf = async (req, res) => {
     doc.y += 68;
     doc.moveDown(0.5);
 
-    // ── Section 1: Compliant employees ────────────────────────────────────
-    sectionTitle('Completed Employees  —  Submitted Plan & Complete Progress', GREEN);
-    if (compliantGroups.length === 0) {
+    // ── Employee status, grouped by RA/Department ──────────────────────────
+    // Each RA/department appears exactly once, as its own card, with its
+    // Completed employees listed first and its Non-Completed employees
+    // listed directly beneath — then the next RA/department starts. This
+    // replaces the old layout, which listed every RA/department once under
+    // a page-wide "Completed" section and a second time under a separate
+    // "Non-Completed" section, forcing a reader to jump between two places
+    // to see one RA/department's full picture.
+    sectionTitle(`Employee Status by ${groupLabel}`, PRIMARY);
+    if (groups.length === 0) {
       doc.fontSize(9).fillColor(GREY_MID)
-        .text('No employees in this category for the selected month.', left, doc.y, { width: pageW })
+        .text('No employees found for the selected month.', left, doc.y, { width: pageW })
         .moveDown(0.5);
       doc.x = left;
     } else {
-      for (const [groupName, groupRows] of compliantGroups) {
-        // Check if we need a new page
-        if (doc.y > doc.page.height - 80) doc.addPage();
-        groupHeader(groupName, groupRows.length, GREEN);
-        tableHeader();
-        groupRows.forEach((r, i) => {
-          if (doc.y > doc.page.height - 40) { doc.addPage(); tableHeader(); }
-          employeeRow(r, i);
-        });
-        doc.moveDown(0.6);
-      }
-    }
+      groups.forEach(([groupName, groupRows], groupIdx) => {
+        const groupCompliant = groupRows.filter(r => r.achievementStatus === 'COMPLETE');
+        const groupNonCompliant = groupRows.filter(r => r.achievementStatus !== 'COMPLETE');
 
-    // ── Section 2: Non-Compliant employees ────────────────────────────────
-    if (doc.y > doc.page.height - 120) doc.addPage();
-    sectionTitle('Non-Completed Employees  —  Missing Plan or Progress', RED);
-    if (nonCompliantGroups.length === 0) {
-      doc.fontSize(9).fillColor(GREY_MID)
-        .text('No employees in this category for the selected month.', left, doc.y, { width: pageW })
-        .moveDown(0.5);
-      doc.x = left;
-    } else {
-      for (const [groupName, groupRows] of nonCompliantGroups) {
-        if (doc.y > doc.page.height - 80) doc.addPage();
-        groupHeader(groupName, groupRows.length, RED);
-        tableHeader();
-        groupRows.forEach((r, i) => {
-          if (doc.y > doc.page.height - 40) { doc.addPage(); tableHeader(); }
-          employeeRow(r, i);
-        });
-        doc.moveDown(0.6);
-      }
+        // Reserve room for the card header plus at least its first
+        // sub-section before starting a new RA/department block.
+        if (doc.y + MIN_GROUP_BLOCK > pageBottom()) doc.addPage();
+        groupHeader(groupName, groupRows.length, groupCompliant.length, groupNonCompliant.length);
+
+        if (groupCompliant.length > 0) {
+          if (doc.y + MIN_SUBSECTION_BLOCK > pageBottom()) doc.addPage();
+          subsectionHeader('Completed', groupCompliant.length, GREEN);
+          tableHeader();
+          groupCompliant.forEach((r, i) => {
+            if (doc.y + ROW_H > pageBottom()) { doc.addPage(); tableHeader(); }
+            employeeRow(r, i);
+          });
+          doc.moveDown(0.4);
+        }
+
+        if (groupNonCompliant.length > 0) {
+          if (doc.y + MIN_SUBSECTION_BLOCK > pageBottom()) doc.addPage();
+          subsectionHeader('Non-Completed', groupNonCompliant.length, RED);
+          tableHeader();
+          groupNonCompliant.forEach((r, i) => {
+            if (doc.y + ROW_H > pageBottom()) { doc.addPage(); tableHeader(); }
+            employeeRow(r, i);
+          });
+          doc.moveDown(0.4);
+        }
+
+        // Thin divider between one RA/department card and the next —
+        // skipped after the last group so the report doesn't end on a
+        // trailing rule.
+        if (groupIdx < groups.length - 1) {
+          if (doc.y + 20 > pageBottom()) doc.addPage();
+          doc.moveDown(0.2);
+          hRule(doc.y);
+          doc.moveDown(0.5);
+        }
+      });
     }
 
     // ── Legend: only when this report actually contains an Incomplete row ──
@@ -655,7 +739,7 @@ exports.exportComplianceReportPdf = async (req, res) => {
     // thin footer strip, so it can actually be read.
     const hasIncomplete = rows.some(r => r.achievementStatus === 'INCOMPLETE');
     if (hasIncomplete) {
-      if (doc.y > doc.page.height - 170) doc.addPage();
+      if (doc.y + LEGEND_BREAK_BUFFER > pageBottom()) doc.addPage();
       sectionTitle('Understanding Progress Status', PRIMARY);
       doc.fontSize(9).fillColor(GREY_MID)
         .text('The Progress column above is defined as follows:', left, doc.y, { width: pageW });
@@ -688,9 +772,21 @@ exports.exportComplianceReportPdf = async (req, res) => {
       const pageH = doc.page.height;
       const pageNum = i - range.start + 1;
       hRule(pageH - 40);
+
+      // The footer text sits at (pageHeight - 30), which is inside the
+      // bottom margin band by design (below the last content row). pdfkit
+      // treats the margin as the page's content boundary, so writing text
+      // past it makes pdfkit think the text doesn't fit and silently calls
+      // addPage() on its own — appending a stray extra page per iteration
+      // and leaving this loop's page numbers/totals wrong. Zeroing the
+      // bottom margin just for this call lets us write inside that band
+      // without triggering it, then we restore it immediately after.
+      const savedBottomMargin = doc.page.margins.bottom;
+      doc.page.margins.bottom = 0;
       doc.fontSize(7).fillColor(GREY_MID)
         .text(`Generated ${new Date().toLocaleString('en-IN')}  |  Page ${pageNum} of ${range.count}`,
           left, pageH - 30, { width: pageW, align: 'center' });
+      doc.page.margins.bottom = savedBottomMargin;
     }
 
     doc.end();
