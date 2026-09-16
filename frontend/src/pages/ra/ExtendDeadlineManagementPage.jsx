@@ -562,7 +562,7 @@ const ExpiredSection = ({ expiredCount, expiredOpen, expiredLoading, expiredItem
                                     <td style={{ color: '#6B7280' }}>{fmtMonth(item.month)}</td>
                                     <td>
                                         <span className={item.type === 'PLAN' ? 'edmp-type-plan' : 'edmp-type-achievement'}>
-                                            {item.type === 'PLAN' ? '📋 Plan' : '🏆 Progress'}
+                                            {item.type === 'PLAN' ? 'Plan' : 'Progress'}
                                         </span>
                                     </td>
                                     <td><span className="edmp-deadline">{fmtDate(item.baseDeadline)}</span></td>

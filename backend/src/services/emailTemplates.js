@@ -18,7 +18,7 @@ function baseTemplate({ title, bodyHtml, ctaText, ctaUrl }) {
         <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;">
           <tr>
             <td style="background:#0b2545;padding:20px 32px;">
-              <span style="color:#ffffff;font-size:18px;font-weight:bold;">KRMS — Performance Evaluation System</span>
+              <span style="color:#ffffff;font-size:18px;font-weight:bold;">KRA — Performance Evaluation System</span>
             </td>
           </tr>
           <tr>
@@ -27,13 +27,13 @@ function baseTemplate({ title, bodyHtml, ctaText, ctaUrl }) {
               <div style="color:#333333;font-size:14px;line-height:1.6;">${bodyHtml}</div>
               ${ctaUrl ? `
               <div style="margin-top:24px;">
-                <a href="${ctaUrl}" style="background:#f97316;color:#ffffff;padding:12px 24px;border-radius:6px;text-decoration:none;font-size:14px;font-weight:bold;display:inline-block;">${escapeHtml(ctaText || 'View in KRMS')}</a>
+                <a href="${ctaUrl}" style="background:#f97316;color:#ffffff;padding:12px 24px;border-radius:6px;text-decoration:none;font-size:14px;font-weight:bold;display:inline-block;">${escapeHtml(ctaText || 'View in KRA')}</a>
               </div>` : ''}
             </td>
           </tr>
           <tr>
             <td style="background:#f4f5f7;padding:16px 32px;font-size:12px;color:#888888;">
-              This is an automated notification from KRMS. Please do not reply to this email.
+              This is an automated notification from KRA. Please do not reply to this email.
             </td>
           </tr>
         </table>
@@ -49,7 +49,7 @@ function submissionTemplate({ employeeName, raName, period, type }) {
     bodyHtml: `
       <p>Hi ${escapeHtml(raName)},</p>
       <p><strong>${escapeHtml(employeeName)}</strong> has submitted their <strong>${escapeHtml(type)}</strong> for <strong>${escapeHtml(period)}</strong>.</p>
-      <p>Please log in to KRMS to review and take action.</p>
+      <p>Please log in to KRA to review and take action.</p>
     `,
     ctaText: 'Review Now',
     ctaUrl: `${process.env.FRONTEND_URL}/ra/monthly-evaluation`,
@@ -68,7 +68,7 @@ function additionalItemsTemplate({ employeeName, raName, period, type, itemCount
     bodyHtml: `
       <p>Hi ${escapeHtml(raName)},</p>
       <p><strong>${escapeHtml(employeeName)}</strong> has added <strong>${itemCount} new ${itemWord}</strong> to their already-submitted <strong>${escapeHtml(type)}</strong> for <strong>${escapeHtml(period)}</strong>.</p>
-      <p>The original submission is unchanged — please log in to KRMS to review the newly added ${itemWord}.</p>
+      <p>The original submission is unchanged — please log in to KRA to review the newly added ${itemWord}.</p>
     `,
     ctaText: "Review Now",
     ctaUrl: `${process.env.FRONTEND_URL}/ra/monthly-evaluation`,
@@ -118,7 +118,7 @@ function reminderTemplate({ employeeName, type, period, deadlineLabel, daysRemai
       <p>Hi ${escapeHtml(employeeName)},</p>
       <p>Our records show you have not yet submitted your <strong>${escapeHtml(type)}</strong> for <strong>${escapeHtml(period)}</strong>.</p>
       <p>The deadline is <strong>${escapeHtml(deadlineLabel)}</strong> (${escapeHtml(urgency)}).</p>
-      <p>Please log in to KRMS and submit at your earliest convenience to avoid missing the deadline.</p>
+      <p>Please log in to KRA and submit at your earliest convenience to avoid missing the deadline.</p>
     `,
     ctaText: "Submit Now",
     ctaUrl: `${process.env.FRONTEND_URL}/employee/monthly-plan`,
@@ -152,7 +152,7 @@ function incompleteAchievementReminderTemplate({ employeeName, period, deadlineL
       <p>Hi ${escapeHtml(employeeName)},</p>
       <p>You've already submitted progress for your <strong>Monthly Achievement</strong> for <strong>${escapeHtml(period)}</strong>, but <strong>${missingCount} new plan ${itemWord}</strong> added afterward (via "Add More Plans") still ${missingVerb} have progress reported.</p>
       <p>The deadline to add progress is <strong>${escapeHtml(deadlineLabel)}</strong> (${escapeHtml(urgency)}). If progress for ${missingCount === 1 ? "this item" : "these items"} ${beVerb} submitted by then, your Reporting Authority will <strong>not be able to evaluate</strong> this month's record.</p>
-      <p>Please log in to KRMS and add progress for the new ${itemWord} at your earliest convenience.</p>
+      <p>Please log in to KRA and add progress for the new ${itemWord} at your earliest convenience.</p>
     `,
     ctaText: "Add Progress Now",
     ctaUrl: `${process.env.FRONTEND_URL}/employee/monthly-plan`,
@@ -167,7 +167,7 @@ function deadlineExtensionTemplate({ employeeName, raName, type, period, newDead
       <p>Your Reporting Authority, <strong>${escapeHtml(raName)}</strong>, has extended your <strong>${escapeHtml(type)}</strong> submission deadline for <strong>${escapeHtml(period)}</strong> to <strong>${escapeHtml(newDeadline)}</strong>.</p>
       <p><em>Reason: ${escapeHtml(reason)}</em></p>
     `,
-    ctaText: "View in KRMS",
+    ctaText: "View in KRA",
     ctaUrl: `${process.env.FRONTEND_URL}/employee`,
   });
 }

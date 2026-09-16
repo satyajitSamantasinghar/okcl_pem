@@ -32,4 +32,6 @@ router.get(
   adminController.exportComplianceReportPdf,
 );
 
+router.patch('/employees/:id/status', verifyToken, authorizeRoles('ADMIN'), adminController.updateEmployeeStatus);
+
 module.exports = router;

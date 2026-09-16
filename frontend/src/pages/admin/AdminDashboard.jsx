@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import {
     FiCalendar, FiUsers, FiFileText, FiCheckCircle, FiAlertCircle,
     FiFilter, FiSearch, FiX, FiDownload, FiChevronLeft, FiChevronRight,
-    FiChevronUp, FiChevronDown, FiBarChart2, FiShield,
+    FiChevronUp, FiChevronDown, FiBarChart2, FiShield, FiUserX, FiUserCheck,
 } from 'react-icons/fi';
 import './AdminDashboard.css';
 
@@ -34,6 +34,15 @@ const STATUS_OPTIONS = [
     { value: 'NOT_SUBMITTED', label: 'No Plan' },
     { value: 'PLAN_ONLY',     label: 'Plan Only / Incomplete' },
     { value: 'COMPLETE',      label: 'Complete' },
+];
+
+// Active/inactive is a separate axis from compliance status — a deactivated
+// user (left the company) isn't "non-compliant", they're simply out of scope,
+// so this stays its own filter rather than folding into STATUS_OPTIONS above.
+const ACTIVE_STATUS_OPTIONS = [
+    { value: 'active',   label: 'Active Only' },
+    { value: 'inactive', label: 'Inactive Only' },
+    { value: 'all',      label: 'Active + Inactive' },
 ];
 
 const SORT_FIELDS = [
@@ -138,6 +147,7 @@ const AdminDashboard = () => {
     // ── Filters ───────────────────────────────────────────────────────────
     const [deptFilter, setDeptFilter]     = useState('');   // '' = all
     const [statusFilter, setStatusFilter] = useState('ALL');
+    const [activeStatus, setActiveStatus] = useState('active'); // 'active' | 'inactive' | 'all'
     const [search, setSearch]             = useState('');
     const [page, setPage]                 = useState(1);
     const [sortField, setSortField]       = useState('name');
@@ -146,6 +156,9 @@ const AdminDashboard = () => {
     // ── Export state ──────────────────────────────────────────────────────
     const [exporting, setExporting] = useState(false);
     const [exportFormat, setExportFormat] = useState('department'); // 'department' | 'ra'
+
+    // ── Active/inactive toggle state ─────────────────────────────────────
+    const [statusUpdatingId, setStatusUpdatingId] = useState(null); // employee id currently being toggled
 
     /* ── Fetch summary ── */
     const fetchSummary = useCallback(async () => {
@@ -173,6 +186,7 @@ const AdminDashboard = () => {
             };
             if (deptFilter)                 params.department = deptFilter;
             if (statusFilter !== 'ALL')     params.status     = statusFilter;
+            if (activeStatus !== 'active')  params.activeStatus = activeStatus;
             if (search.trim())              params.search     = search.trim();
 
             const res = await api.get('/admin/employees', { params });
@@ -183,13 +197,13 @@ const AdminDashboard = () => {
         } finally {
             setListLoading(false);
         }
-    }, [month, page, sortField, sortDir, deptFilter, statusFilter, search]);
+    }, [month, page, sortField, sortDir, deptFilter, statusFilter, activeStatus, search]);
 
     useEffect(() => { fetchSummary(); }, [fetchSummary]);
     useEffect(() => { fetchEmployees(); }, [fetchEmployees]);
 
     /* ── Reset page when filters/month change ── */
-    useEffect(() => { setPage(1); }, [month, deptFilter, statusFilter, search, sortField, sortDir]);
+    useEffect(() => { setPage(1); }, [month, deptFilter, statusFilter, activeStatus, search, sortField, sortDir]);
 
     /* ── Export PDF ── */
     const handleExportPdf = async () => {
@@ -228,8 +242,36 @@ const AdminDashboard = () => {
     };
 
     /* ── Active filter chips ── */
-    const hasFilterChips = deptFilter !== '' || statusFilter !== 'ALL';
-    const clearAllFilters = () => { setDeptFilter(''); setStatusFilter('ALL'); setSearch(''); setPage(1); };
+    const hasFilterChips = deptFilter !== '' || statusFilter !== 'ALL' || activeStatus !== 'active';
+    const clearAllFilters = () => { setDeptFilter(''); setStatusFilter('ALL'); setActiveStatus('active'); setSearch(''); setPage(1); };
+
+    /* ── Activate / deactivate an employee ──────────────────────────────────
+       Confirmed destructive-ish action (reversible, but shouldn't be a stray
+       click) — deactivating hides them from the default view and blocks new
+       RA assignment; it does not by itself revoke an already-issued login
+       session, so this is one part of a larger offboarding step, not the
+       whole thing. */
+    const handleToggleStatus = async (emp) => {
+        const nextActive = !emp.isActive;
+        const verb = nextActive ? 'reactivate' : 'deactivate';
+        const confirmMsg = nextActive
+            ? `Reactivate ${emp.name}? They will reappear in active compliance tracking.`
+            : `Deactivate ${emp.name}? They will be hidden from active compliance tracking and can no longer be assigned new reports.`;
+        if (!window.confirm(confirmMsg)) return;
+
+        setStatusUpdatingId(emp.id);
+        try {
+            const res = await api.patch(`/admin/employees/${emp.id}/status`, { isActive: nextActive });
+            toast.success(res.data?.message || `${emp.name} marked ${nextActive ? 'active' : 'inactive'}.`);
+            if (res.data?.warning) toast(res.data.warning, { icon: '⚠️', duration: 6000 });
+            fetchEmployees();
+            fetchSummary();
+        } catch (err) {
+            toast.error(err?.response?.data?.message || `Failed to ${verb} ${emp.name}.`);
+        } finally {
+            setStatusUpdatingId(null);
+        }
+    };
 
     // Month bounds
     const currentMonthStr = getCurrentMonth();
@@ -297,7 +339,9 @@ const AdminDashboard = () => {
                         icon={<FiUsers size={18} />}
                         value={summary.totalEmployees}
                         label="Total Employees"
-                        sub="Active Employee & RA users"
+                        sub={summary.inactiveEmployees > 0
+                            ? `Active Employee & RA users · ${summary.inactiveEmployees} inactive`
+                            : 'Active Employee & RA users'}
                         color="blue"
                     />
                     <StatCard
@@ -420,6 +464,23 @@ const AdminDashboard = () => {
                             ))}
                         </select>
                     </div>
+
+                    <div className="adm-toolbar-divider" />
+
+                    {/* Active/inactive filter */}
+                    <div className="adm-filter-group">
+                        <label className="adm-filter-label" htmlFor="adm-active-filter">Employment</label>
+                        <select
+                            id="adm-active-filter"
+                            className="adm-filter-select"
+                            value={activeStatus}
+                            onChange={e => { setActiveStatus(e.target.value); setPage(1); }}
+                        >
+                            {ACTIVE_STATUS_OPTIONS.map(o => (
+                                <option key={o.value} value={o.value}>{o.label}</option>
+                            ))}
+                        </select>
+                    </div>
                 </div>
 
                 {/* ── Active Filter Chips ── */}
@@ -434,6 +495,11 @@ const AdminDashboard = () => {
                         {statusFilter !== 'ALL' && (
                             <button className="adm-filter-chip" onClick={() => { setStatusFilter('ALL'); setPage(1); }} title="Remove status filter">
                                 {STATUS_OPTIONS.find(o => o.value === statusFilter)?.label} <FiX size={11} />
+                            </button>
+                        )}
+                        {activeStatus !== 'active' && (
+                            <button className="adm-filter-chip" onClick={() => { setActiveStatus('active'); setPage(1); }} title="Reset to active employees only">
+                                {ACTIVE_STATUS_OPTIONS.find(o => o.value === activeStatus)?.label} <FiX size={11} />
                             </button>
                         )}
                         <button className="adm-clear-filters" onClick={clearAllFilters}>Clear all</button>
@@ -479,6 +545,7 @@ const AdminDashboard = () => {
                                     <div onClick={() => toggleSort('complianceStatus')} className="adm-th-sortable">
                                         Compliance <SortIcon field="complianceStatus" sortField={sortField} sortDir={sortDir} />
                                     </div>
+                                    <div>Employment</div>
                                 </div>
 
                                 {/* Table Body */}
@@ -538,6 +605,26 @@ const AdminDashboard = () => {
                                                     ? <span className="adm-badge adm-badge--incomplete"><FiAlertCircle size={10}/> Plan Only</span>
                                                     : <span className="adm-badge adm-badge--not-started">No Plan</span>
                                                 }
+                                            </div>
+
+                                            {/* Employment status + toggle */}
+                                            <div className="adm-cell adm-status-cell">
+                                                <span className={`adm-badge ${emp.isActive ? 'adm-badge--active' : 'adm-badge--inactive'}`}>
+                                                    {emp.isActive ? 'Active' : 'Inactive'}
+                                                </span>
+                                                <button
+                                                    className={`adm-status-toggle-btn ${emp.isActive ? 'adm-status-toggle-btn--deactivate' : 'adm-status-toggle-btn--activate'}`}
+                                                    onClick={() => handleToggleStatus(emp)}
+                                                    disabled={statusUpdatingId === emp.id}
+                                                    title={emp.isActive ? `Deactivate ${emp.name}` : `Reactivate ${emp.name}`}
+                                                >
+                                                    {statusUpdatingId === emp.id
+                                                        ? <span className="adm-btn-spinner" />
+                                                        : emp.isActive
+                                                            ? <><FiUserX size={11} /> Deactivate</>
+                                                            : <><FiUserCheck size={11} /> Reactivate</>
+                                                    }
+                                                </button>
                                             </div>
                                         </div>
                                     ))}

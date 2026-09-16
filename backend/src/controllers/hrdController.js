@@ -81,12 +81,12 @@ exports.getHRDDashboard = async (req, res) => {
       const planIdsWithAch = plansWithAchievement.map(a => a.monthlyPlanId).filter(Boolean);
       pendingEvaluations = planIdsWithAch.length > 0
         ? await MonthlyEvaluation.count({
-            where: {
-              month,
-              status: "PENDING",
-              monthlyPlanId: { [Op.in]: planIdsWithAch },
-            },
-          })
+          where: {
+            month,
+            status: "PENDING",
+            monthlyPlanId: { [Op.in]: planIdsWithAch },
+          },
+        })
         : 0;
     }
 
@@ -377,7 +377,14 @@ exports.getMonthlyPlansList = async (req, res) => {
 /* ─── ALL EMPLOYEES LIST ─────────────────────────────────────────────────────── */
 exports.getAllEmployees = async (req, res) => {
   try {
+    // FIX: default to active users only — an employee/RA marked isActive:false
+    // (left the company, deactivated by admin) shouldn't surface in HRD's
+    // general browse/search list by default, matching searchUsers() and
+    // getAvailableEmployeesForRA() below, which already filter this way.
+    // Pass ?includeInactive=true to opt into seeing them too (e.g. HRD
+    // looking up a former employee's record by name/code).
     const where = { role: { [Op.in]: ["EMPLOYEE", "RA"] } };
+    if (req.query.includeInactive !== "true") where.isActive = true;
 
     if (req.query.q) {
       const q = req.query.q.trim().substring(0, 60);
@@ -394,7 +401,10 @@ exports.getAllEmployees = async (req, res) => {
 
     const employees = await User.findAll({
       where,
-      attributes: ["id", "name", "employeeCode", "department", "role"],
+      // isActive included so a caller using includeInactive=true can render
+      // a distinguishing badge instead of silently mixing former employees
+      // in with current ones.
+      attributes: ["id", "name", "employeeCode", "department", "role", "isActive"],
       order: [["name", "ASC"]],
       limit,
     });
@@ -566,14 +576,28 @@ exports.assignEmployeesToRA = async (req, res) => {
     const ra = await User.findByPk(id);
     if (!ra || ra.role !== "RA") return res.status(404).json({ message: "Reporting Authority not found" });
 
+    // FIX: block assigning employees to a deactivated RA — someone who has
+    // left the company shouldn't receive new direct reports.
+    if (!ra.isActive) {
+      return res.status(400).json({ message: "Cannot assign employees to an inactive Reporting Authority." });
+    }
+
     const now = new Date();
+    const skipped = []; // { id, reason } — reported back instead of silently dropped
 
     // Process each employee individually so we can maintain the RA assignment
     // history log. Sequential loop (not Promise.all) keeps writes atomic per
     // employee — if one fails the error is surfaced clearly.
     for (const empId of employeeIds) {
-      const employee = await User.findByPk(empId, { attributes: ["id", "role", "reportingAuthorityId"] });
+      const employee = await User.findByPk(empId, { attributes: ["id", "role", "reportingAuthorityId", "isActive"] });
       if (!employee || employee.role !== "EMPLOYEE") continue;
+
+      // FIX: skip a deactivated employee — they no longer submit plans, so a
+      // fresh RA assignment/history row would just be dead data. Unlike the
+      // role-mismatch skip above (which is a caller mistake, silently
+      // ignored), this is reported back in `skipped` so the caller isn't left
+      // guessing why an id in their request produced no visible change.
+      if (!employee.isActive) { skipped.push({ id: empId, reason: "inactive" }); continue; }
 
       // Skip if already assigned to this exact RA (idempotent — no duplicate rows)
       if (String(employee.reportingAuthorityId) === String(id)) continue;
@@ -601,7 +625,10 @@ exports.assignEmployeesToRA = async (req, res) => {
     }
 
     await AuditLog.create({ userId: req.user.userId, action: "ASSIGN_EMPLOYEES_TO_RA", entityType: "USER", entityId: String(id), ipAddress: req.ip });
-    res.json({ message: "Employees successfully assigned to Reporting Authority" });
+    res.json({
+      message: "Employees successfully assigned to Reporting Authority",
+      ...(skipped.length > 0 && { skipped }),
+    });
   } catch (error) {
     res.status(500).json({ message: "Failed to assign employees", error: error.message });
   }

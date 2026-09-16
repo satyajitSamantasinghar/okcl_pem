@@ -608,7 +608,7 @@
 /* Table Head */
 .adm-table-head {
     display: grid;
-    grid-template-columns: 2.2fr 1.4fr 1.1fr 1.2fr 1.4fr 1.2fr;
+    grid-template-columns: 2fr 1.3fr 1fr 1.1fr 1.3fr 1.1fr 1.3fr;
     background: #185FA5;
     color: #fff;
     font-size: 0.73rem;
@@ -617,7 +617,7 @@
     letter-spacing: 0.04em;
     padding: 11px 16px;
     gap: 8px;
-    min-width: 700px;
+    min-width: 820px;
 }
 
 .adm-th-sortable {
@@ -644,7 +644,7 @@
 
 /* Table Body */
 .adm-table-body {
-    min-width: 700px;
+    min-width: 820px;
 }
 
 /* Table Row */
@@ -662,7 +662,7 @@
 
 .adm-table-row {
     display: grid;
-    grid-template-columns: 2.2fr 1.4fr 1.1fr 1.2fr 1.4fr 1.2fr;
+    grid-template-columns: 2fr 1.3fr 1fr 1.1fr 1.3fr 1.1fr 1.3fr;
     align-items: center;
     padding: 11px 16px;
     gap: 8px;
@@ -824,6 +824,74 @@
     background: #FEF2F2;
     color: #A32D2D;
     border: 1px solid #FECACA;
+}
+
+/* Active/inactive employment badges — a separate axis from compliance
+   status above, so kept as its own modifier pair rather than reusing
+   --complete/--no-plan (same look would blur two different meanings). */
+.adm-badge--active {
+    background: #ECFDF5;
+    color: #3B6D11;
+    border: 1px solid #BBF7D0;
+}
+
+.adm-badge--inactive {
+    background: #F3F4F6;
+    color: #6B7280;
+    border: 1px solid #D1D5DB;
+}
+
+/* Employment status cell: badge stacked above its toggle action */
+.adm-status-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+}
+
+.adm-status-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: none;
+    border: 1px solid var(--border-default, #E5E7EB);
+    border-radius: 6px;
+    padding: 3px 8px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    color: var(--text-muted, #6B7280);
+    transition: background 0.14s, border-color 0.14s;
+    white-space: nowrap;
+}
+
+.adm-status-toggle-btn--deactivate {
+    color: #A32D2D;
+    border-color: #FECACA;
+}
+
+.adm-status-toggle-btn--deactivate:hover:not(:disabled) {
+    background: #FEF2F2;
+}
+
+.adm-status-toggle-btn--activate {
+    color: #3B6D11;
+    border-color: #BBF7D0;
+}
+
+.adm-status-toggle-btn--activate:hover:not(:disabled) {
+    background: #ECFDF5;
+}
+
+.adm-status-toggle-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.adm-status-toggle-btn .adm-btn-spinner {
+    border-color: rgba(107, 114, 128, 0.3);
+    border-top-color: currentColor;
 }
 
 /* ── Loading / Empty ────────────────────────────────── */
@@ -1009,8 +1077,10 @@
 
     .adm-table-head>div:nth-child(5),
     .adm-table-head>div:nth-child(6),
+    .adm-table-head>div:nth-child(7),
     .adm-table-row>div:nth-child(5),
-    .adm-table-row>div:nth-child(6) {
+    .adm-table-row>div:nth-child(6),
+    .adm-table-row>div:nth-child(7) {
         display: none;
     }
 }

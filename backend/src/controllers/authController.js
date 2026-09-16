@@ -120,6 +120,17 @@ exports.refreshAccessToken = async (req, res) => {
       return res.status(403).json({ message: "Invalid refresh token" });
     }
 
+    // FIX: a deactivated user's still-valid refresh token must not be able to
+    // mint a fresh access token — otherwise "deactivate" only takes effect
+    // once their *current* access token naturally expires (up to 1d for
+    // local, 8h for SSO), not immediately. Clear the stored refresh token too
+    // so this doesn't need re-checking on a later retry with the same token.
+    if (!user.isActive) {
+      user.refreshToken = null;
+      await user.save();
+      return res.status(403).json({ message: "Account is deactivated. Please contact HR." });
+    }
+
     const newAccessToken = jwt.sign(
       { userId: user.id, role: user.role },   // CHANGE: user._id → user.id
       process.env.JWT_SECRET,
@@ -220,7 +231,7 @@ exports.hrmsSSO = async (req, res) => {
       return res.status(400).json({ message: "SSO token is required" });
     }
 
-    // ── 0. Debug log — always visible in server console ─────────────────────
+    //  Debug log — always visible in server console ─────────────────────
     //  Helps trace which employee triggered the request without decrypting.
     //  Logged before decryption so even a bad token is traceable.
     console.log("[HRMS SSO] Incoming SSO request — token length:", token.length);
@@ -426,11 +437,28 @@ exports.hrmsSSO = async (req, res) => {
       }
 
       user.reportingAuthorityId = reportingAuthorityId ?? user.reportingAuthorityId;
-      user.isActive = isActive;
+
+      // FIX: sync isActive from HRMS in one direction only. HRMS can always
+      // deactivate a user here (it may know about a termination before our
+      // own admin panel does), but a token that still says active must NOT
+      // silently undo a deactivation an ADMIN performed manually via
+      // PATCH /admin/employees/:id/status — otherwise that button is a no-op
+      // for every HRMS SSO user the moment they next log in, since this sync
+      // runs on every single SSO login. Reactivating a locally-deactivated
+      // user requires an explicit admin action, not a stale/lagging token.
+      if (!isActive) {
+        user.isActive = false;
+      } else if (!user.isActive) {
+        console.log(
+          `[HRMS SSO] emp_code ${user.employeeCode}: HRMS reports active but user ` +
+          `is locally inactive — preserving inactive status (admin-controlled).`
+        );
+      }
 
       // Only update role if the user is NOT a manually-assigned HRD or MD
       if (!isPrivilegedRole) {
         user.role = derivedRole;
+        
       }
 
       await user.save();

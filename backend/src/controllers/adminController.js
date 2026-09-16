@@ -3,14 +3,20 @@
 // ─────────────────────────────────────────────────────────────────────────────
 //  ADMIN CONTROLLER
 //
-//  Three handlers scoped to a given month (query param `month`, "YYYY-MM"):
-//    1. getDashboardSummary   — org-wide + per-dept counts
+//  Four handlers:
+//    1. getDashboardSummary   — org-wide + per-dept counts (month-scoped)
 //    2. getEmployeeList       — paginated, filterable, sortable employee list
+//       (month-scoped; also filterable by active/inactive status)
 //    3. exportComplianceReportPdf — streams a PDF compliance report, grouped
 //       by department (default) or by Reporting Authority (?groupBy=ra)
+//       (month-scoped)
+//    4. updateEmployeeStatus  — PATCH: flips a user's isActive flag. This is
+//       the "mark an employee who has left the company as inactive" control.
+//       Not month-scoped — isActive is a point-in-time flag on the user, not
+//       a per-month fact.
 //
-//  All three share a single helper (fetchMonthlyComplianceData) that does the
-//  heavy DB lifting once per request — no N+1 per-employee loops.
+//  The first three share a single helper (fetchMonthlyComplianceData) that
+//  does the heavy DB lifting once per request — no N+1 per-employee loops.
 //
 //  Completeness definition is always delegated to isAchievementCompleteForPlan
 //  (the single shared implementation) — never re-derived inline.
@@ -32,6 +38,7 @@ const {
   MonthlyAchievement,
   MonthlyAchievementItem,
   EmployeeRAHistory,
+  AuditLog,
 } = require('../models');
 
 const { isAchievementCompleteForPlan } = require('../utils/achievementCompleteness');
@@ -53,9 +60,19 @@ const ADMIN_TRACKED_ROLES = ['EMPLOYEE', 'RA'];
    Returns an array of enriched employee objects for the given month.
    Runs a small fixed set of aggregate queries instead of one loop per employee.
 
+   `activeFilter` controls which users are included on the isActive column:
+     'active'   (default) — isActive: true.  Used by getDashboardSummary and
+                 exportComplianceReportPdf so org-wide compliance metrics and
+                 the PDF report only ever reflect current staff — an employee
+                 marked inactive (left the company) should not keep inflating
+                 or deflating those numbers.
+     'inactive' — isActive: false. Lets getEmployeeList surface only
+                 deactivated users (e.g. to review/reactivate one).
+     'all'      — no isActive condition at all.
+
    Each entry shape:
    {
-     id, name, employeeCode, department, email,
+     id, name, employeeCode, department, email, role, isActive,
      planStatus: null | 'SUBMITTED' | 'APPROVED' | ... (plan.status)
      planId: null | uuid,
      planSubmittedAt: null | Date,
@@ -68,14 +85,19 @@ const ADMIN_TRACKED_ROLES = ['EMPLOYEE', 'RA'];
    "INCOMPLETE" means a SUBMITTED achievement that doesn't cover them all.
    "NOT_STARTED" means no SUBMITTED achievement at all.
 ────────────────────────────────────────────────────────────────────────────── */
-async function fetchMonthlyComplianceData(month) {
-  // ── 1. All active EMPLOYEE + RA users (not HRD/MD/ADMIN) ───────────────────
+async function fetchMonthlyComplianceData(month, activeFilter = 'active') {
+  // ── 1. EMPLOYEE + RA users (not HRD/MD/ADMIN), scoped by activeFilter ──────
   //       RAs carry their own monthly plan/achievement obligations just like
   //       employees do, so they're counted here too. If you later want the
   //       admin org-wide view to also cover HRD/MD, extend ADMIN_TRACKED_ROLES.
+  const where = { role: { [Op.in]: ADMIN_TRACKED_ROLES } };
+  if (activeFilter === 'active') where.isActive = true;
+  else if (activeFilter === 'inactive') where.isActive = false;
+  // activeFilter === 'all' → no isActive condition, both included
+
   const employees = await User.findAll({
-    where: { role: { [Op.in]: ADMIN_TRACKED_ROLES }, isActive: true },
-    attributes: ['id', 'name', 'employeeCode', 'department', 'email', 'role'],
+    where,
+    attributes: ['id', 'name', 'employeeCode', 'department', 'email', 'role', 'isActive'],
     order: [['name', 'ASC']],
   });
 
@@ -181,6 +203,7 @@ async function fetchMonthlyComplianceData(month) {
       department: emp.department || 'Unassigned',
       email: emp.email,
       role: emp.role,
+      isActive: emp.isActive,
       planStatus: plan ? plan.status : null,
       planId: plan ? plan.id : null,
       planSubmittedAt: plan ? plan.submittedAt : null,
@@ -334,6 +357,14 @@ exports.getDashboardSummary = async (req, res) => {
       a.department.localeCompare(b.department)
     );
 
+    // Separate, lightweight count of deactivated tracked-role users — org-
+    // health context for the admin, kept OUT of the metrics above (which
+    // intentionally stay scoped to active staff only, so compliance numbers
+    // never shift just because someone left the company this month).
+    const inactiveEmployees = await User.count({
+      where: { role: { [Op.in]: ADMIN_TRACKED_ROLES }, isActive: false },
+    });
+
     return res.json({
       month,
       totalEmployees,
@@ -341,6 +372,7 @@ exports.getDashboardSummary = async (req, res) => {
       achievementSubmitted,
       noPlan,
       planOnlyOrIncomplete,
+      inactiveEmployees,
       byDepartment,
     });
   } catch (err) {
@@ -366,6 +398,14 @@ exports.getEmployeeList = async (req, res) => {
       return res.status(400).json({ message: `status must be one of: ${VALID_STATUS.join(', ')}` });
     }
 
+    // Active/inactive filter — defaults to 'active' so a deactivated employee
+    // (left the company) doesn't clutter the default view; pass ?activeStatus=
+    // inactive or =all to review/reactivate one.
+    const VALID_ACTIVE_STATUS = ['active', 'inactive', 'all'];
+    const activeStatus = VALID_ACTIVE_STATUS.includes(req.query.activeStatus)
+      ? req.query.activeStatus
+      : 'active';
+
     // ── Single shared data source ──────────────────────────────────────────
     // Same enrichment logic the dashboard summary and PDF export use, so the
     // three views can never disagree on who counts, what "compliant" means,
@@ -376,7 +416,7 @@ exports.getEmployeeList = async (req, res) => {
     // enough for that to matter, push department/search/status back down into
     // the initial User/MonthlyPlan queries — but keep them reading from the
     // same role list and completeness helper this file already centralizes.
-    let rows = await fetchMonthlyComplianceData(month);
+    let rows = await fetchMonthlyComplianceData(month, activeStatus);
 
     // ── Derive complianceStatus (this endpoint's own filter vocabulary —
     //    dashboard summary and PDF export partition compliant/non-compliant
@@ -439,7 +479,96 @@ exports.getEmployeeList = async (req, res) => {
   }
 };
 
-/* ─── 3. GET /api/admin/export-pdf ──────────────────────────────────────── */
+/* ─── 3. PATCH /api/admin/employees/:id/status ──────────────────────────────
+   Flips a user's isActive flag — the mechanism for marking an employee/RA who
+   has left the company as inactive (or reversing that: a rehire, or undoing
+   a mistaken deactivation).
+
+   Deliberately scoped OUT of ADMIN accounts: this endpoint can never be used
+   to deactivate the only admin account, another admin, or (by extension)
+   itself — that kind of account-lifecycle change belongs to a deliberate,
+   out-of-band action, not a single API call reachable from the employee
+   table.
+
+   Every change is written to AuditLog, the same convention every other
+   write action in this codebase follows (see hrdController.js's
+   assignEmployeesToRA, raController.js's rejectMonthlyPlan).
+────────────────────────────────────────────────────────────────────────────── */
+exports.updateEmployeeStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { isActive } = req.body;
+
+    if (typeof isActive !== 'boolean') {
+      return res.status(400).json({ message: 'isActive (boolean) is required in the request body' });
+    }
+
+    const user = await User.findByPk(id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    if (user.role === 'ADMIN') {
+      return res.status(400).json({ message: 'Admin accounts cannot be activated or deactivated from this endpoint.' });
+    }
+
+    if (String(user.id) === String(req.user.userId)) {
+      return res.status(400).json({ message: 'You cannot change your own active status.' });
+    }
+
+    if (user.isActive === isActive) {
+      return res.status(400).json({ message: `${user.name} is already ${isActive ? 'active' : 'inactive'}.` });
+    }
+
+    // Deactivating an RA: warn (don't block) if they still have active direct
+    // reports pointed at them. Reassignment is HRD's assignEmployeesToRA flow
+    // (hrdController.js) — this endpoint's job is only to flip the flag and
+    // leave a clean audit trail, not to reshuffle reporting lines itself.
+    let warning;
+    if (isActive === false && user.role === 'RA') {
+      const activeReportCount = await User.count({
+        where: { reportingAuthorityId: user.id, isActive: true },
+      });
+      if (activeReportCount > 0) {
+        warning = `${user.name} still has ${activeReportCount} active direct report(s). Consider reassigning them via the HRD "Assign Employees to RA" tool.`;
+      }
+    }
+
+    user.isActive = isActive;
+    // Deactivating: also clear the stored refresh token so an already-issued
+    // session can't silently mint a new access token via /auth/refresh once
+    // the current one expires — see authController.js's refreshAccessToken,
+    // which now rejects (and clears) an inactive user's refresh token too.
+    // This is belt-and-suspenders: either check alone already closes the
+    // gap, but clearing it here means the DB stops carrying a token for a
+    // deactivated user at all, rather than relying on it being rejected later.
+    if (!isActive) user.refreshToken = null;
+    await user.save();
+
+    await AuditLog.create({
+      userId: req.user.userId,
+      action: isActive ? 'ACTIVATE_USER' : 'DEACTIVATE_USER',
+      entityType: 'USER',
+      entityId: String(user.id),
+      ipAddress: req.ip,
+    });
+
+    return res.json({
+      message: `${user.name} marked ${isActive ? 'active' : 'inactive'} successfully.`,
+      employee: {
+        id: user.id,
+        name: user.name,
+        employeeCode: user.employeeCode,
+        role: user.role,
+        isActive: user.isActive,
+      },
+      ...(warning && { warning }),
+    });
+  } catch (err) {
+    console.error('[adminController] updateEmployeeStatus error:', err);
+    return res.status(500).json({ message: 'Failed to update employee status', error: err.message });
+  }
+};
+
+/* ─── 4. GET /api/admin/export-pdf ──────────────────────────────────────── */
 exports.exportComplianceReportPdf = async (req, res) => {
   try {
     const { month } = req.query;
