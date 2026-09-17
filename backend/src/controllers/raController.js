@@ -35,10 +35,12 @@ const {
   Notification,
   EmployeeRAHistory,
   DeadlineExtension,
+  UserStatusHistory,
 } = require("../models");
 
 const { Op } = require("sequelize");
 const { getQuarterMonthStrings } = require("../utils/fiscalUtils");
+const { filterActiveDuringMonth } = require("../utils/userStatusHistory");
 
 // Deadline extension helpers — single source of truth
 const { parseDeadlineConfig, normalizeRole, getExtensionCeiling } = require("./configController");
@@ -116,16 +118,16 @@ exports.getRADashboard = async (req, res) => {
       attributes: ["employeeId"],
     });
     const rawEmployeeIds = [...new Set(historyRows.map(h => h.employeeId))];
-    // FIX (permanent): filter to ACTIVE employees only so dashboard counts match
-    // /ra/my-employees (which already applies isActive:true). Without this, an
-    // inactive user who appears in EmployeeRAHistory would be counted in
-    // totalEmployees / stats.lists but not in the frontend's employeesList,
-    // making the KPI modal show a different set than the count card implies.
-    const activeUserRows = rawEmployeeIds.length > 0 ? await User.findAll({
-      where: { id: { [Op.in]: rawEmployeeIds }, isActive: true },
-      attributes: ["id"],
-    }) : [];
-    const employeeIds = activeUserRows.map(u => u.id);
+    // FIX (Sep 2026, supersedes the previous live-isActive filter): scope to
+    // employees who were active DURING THE SELECTED MONTH, via
+    // UserStatusHistory — not who happens to be active right now. The old
+    // `isActive: true` snapshot check meant deactivating an employee today
+    // silently erased them from every PAST month's dashboard too, even
+    // months they were genuinely active and submitted real data for. See
+    // utils/userStatusHistory.js for the overlap condition this applies.
+    const employeeIds = rawEmployeeIds.length > 0
+      ? await filterActiveDuringMonth(rawEmployeeIds, month)
+      : [];
     const totalEmployees = employeeIds.length;
 
     // FIX (permanent): exclude BOTH DRAFT and REJECTED plans from the "submitted" count.
@@ -349,9 +351,18 @@ exports.getMyEmployees = async (req, res) => {
     // Fetch full employee records — either the history-derived set or all current.
     // 'role' is included so the frontend can resolve each person's deadline against
     // their own role config (e.g. an RA reportee has planDay=27, not 26).
+    //
+    // When a specific ?month= is given, "active" means active DURING that
+    // month (UserStatusHistory), not active right now — same fix as
+    // getRADashboard, applied here preventively: this endpoint isn't
+    // currently called with a month param from the "My Employees" page, but
+    // the branch exists and would have had the identical bug the moment it
+    // was. With NO month param (the page's actual current behavior), "My
+    // Employees" correctly stays a live, active-only roster — that's
+    // intentional and unchanged.
     const employees = employeeIds !== null
       ? await User.findAll({
-        where: { id: { [Op.in]: employeeIds }, isActive: true },
+        where: { id: { [Op.in]: await filterActiveDuringMonth(employeeIds, req.query.month) } },
         attributes: ["id", "name", "employeeCode", "department", "email", "role", "createdAt"],
       })
       : await User.findAll({
@@ -1736,37 +1747,79 @@ exports.getMissedDeadlines = async (req, res) => {
     const raId = req.user.userId;
     const now = new Date();
 
-    // ── 1. Resolve current employees under this RA ────────────────────────────
-    const nowStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-    const nowEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    // ── 1. Resolve candidate employees ever under this RA (GO_LIVE → now) ─────
+    // FIX (Sep 2026): this used to resolve employees ONLY against the current
+    // month's RA-history + live isActive snapshot, then reuse that one fixed
+    // set across the ENTIRE GO_LIVE→now loop below — so deactivating an
+    // employee today silently erased them from every PAST month in this
+    // report, not just future ones. Now: resolve the full candidate set
+    // across the whole range up front (raw rows, not just IDs), and check
+    // per-month RA/active membership inside the loop itself (step 3), the
+    // same way getRADashboard/getDeadlineManagement do for a single month.
+    const goLiveStart = new Date(GO_LIVE.year, GO_LIVE.month - 1, 1, 0, 0, 0, 0);
 
-    const historyRows = await EmployeeRAHistory.findAll({
+    const raHistoryRows = await EmployeeRAHistory.findAll({
       where: {
         raId,
-        effectiveFrom: { [Op.lte]: nowEnd },
+        effectiveFrom: { [Op.lte]: now },
         [Op.or]: [
           { effectiveTo: null },
-          { effectiveTo: { [Op.gte]: nowStart } },
+          { effectiveTo: { [Op.gte]: goLiveStart } },
         ],
       },
-      attributes: ["employeeId"],
+      attributes: ["employeeId", "effectiveFrom", "effectiveTo"],
+      raw: true,
     });
-    const employeeIds = [...new Set(historyRows.map(h => h.employeeId))];
+    const candidateEmployeeIds = [...new Set(raHistoryRows.map(h => h.employeeId))];
 
-    if (employeeIds.length === 0) {
+    if (candidateEmployeeIds.length === 0) {
       return res.json({ totalCount: 0, byMonth: [], items: [] });
     }
 
-    // Fetch employee details
+    // Fetch employee details for the FULL candidate set — deliberately NOT
+    // filtered by the live isActive column. Per-month active membership is
+    // resolved below via UserStatusHistory instead, so a since-deactivated
+    // employee's past months still get evaluated correctly.
     const employees = await User.findAll({
-      where: { id: { [Op.in]: employeeIds }, isActive: true },
+      where: { id: { [Op.in]: candidateEmployeeIds } },
       attributes: ["id", "name", "employeeCode", "department", "role"],
     });
     const employeeMap = {};
     employees.forEach(e => { employeeMap[e.id] = e; });
 
+    // All isActive-transition rows for the candidate set, batch-loaded once
+    // — same purpose/shape as raHistoryRows above, checked per month below.
+    const statusHistoryRows = await UserStatusHistory.findAll({
+      where: { userId: { [Op.in]: candidateEmployeeIds } },
+      attributes: ["userId", "isActive", "effectiveFrom", "effectiveTo"],
+      raw: true,
+    });
+
+    // Group both row sets by employee once, so the employee × month loop in
+    // step 3 does an in-memory Map lookup instead of a re-filter/re-query
+    // per pair — same batching philosophy as planMap/achievedPlanIds below.
+    const raRowsByEmployee = new Map();
+    for (const r of raHistoryRows) {
+      if (!raRowsByEmployee.has(r.employeeId)) raRowsByEmployee.set(r.employeeId, []);
+      raRowsByEmployee.get(r.employeeId).push(r);
+    }
+    const activeStatusRowsByEmployee = new Map();
+    for (const r of statusHistoryRows) {
+      if (!r.isActive) continue; // only need the "was active" rows for this check
+      if (!activeStatusRowsByEmployee.has(r.userId)) activeStatusRowsByEmployee.set(r.userId, []);
+      activeStatusRowsByEmployee.get(r.userId).push(r);
+    }
+
+    // Shared date-overlap check — a history row "covers" a month if it
+    // started by the month's end and either has no end yet or ended no
+    // earlier than the month's start. Same overlap shape used throughout
+    // this file for EmployeeRAHistory queries (getRADashboard, etc.).
+    const rowCoversMonth = (row, monthStart, monthEnd) =>
+      new Date(row.effectiveFrom) <= monthEnd &&
+      (row.effectiveTo === null || new Date(row.effectiveTo) >= monthStart);
+
     // ── 2. Build month range: GO_LIVE → current month ─────────────────────────
-    const months = []; // [{ year, month, label, str }]
+    const months = []; // [{ year, month, label, str, monthStart, monthEnd }]
     let cursor = { year: GO_LIVE.year, month: GO_LIVE.month };
     while (
       cursor.year < now.getFullYear() ||
@@ -1775,7 +1828,9 @@ exports.getMissedDeadlines = async (req, res) => {
       const str = `${cursor.year}-${String(cursor.month).padStart(2, "0")}`;
       const label = new Date(cursor.year, cursor.month - 1, 1)
         .toLocaleDateString("en-US", { month: "long", year: "numeric" });
-      months.push({ year: cursor.year, month: cursor.month, label, str });
+      const monthStart = new Date(cursor.year, cursor.month - 1, 1, 0, 0, 0, 0);
+      const monthEnd = new Date(cursor.year, cursor.month, 0, 23, 59, 59, 999);
+      months.push({ year: cursor.year, month: cursor.month, label, str, monthStart, monthEnd });
 
       // Advance to next month
       let nm = cursor.month + 1;
@@ -1790,9 +1845,9 @@ exports.getMissedDeadlines = async (req, res) => {
     // Batch-load all plans and achievements for these employees across all months
     const allMonthStrs = months.map(m => m.str);
 
-    const allPlans = employeeIds.length > 0 ? await MonthlyPlan.findAll({
+    const allPlans = candidateEmployeeIds.length > 0 ? await MonthlyPlan.findAll({
       where: {
-        employeeId: { [Op.in]: employeeIds },
+        employeeId: { [Op.in]: candidateEmployeeIds },
         month: { [Op.in]: allMonthStrs },
         status: { [Op.ne]: "DRAFT" },
       },
@@ -1825,6 +1880,19 @@ exports.getMissedDeadlines = async (req, res) => {
           mObj.year > now.getFullYear() ||
           (mObj.year === now.getFullYear() && mObj.month > now.getMonth() + 1)
         ) continue;
+
+        // Skip this employee×month pair unless they were BOTH under this RA
+        // AND active (isActive) at some point during mObj — the actual fix.
+        // Without this, a deactivated employee either vanishes from every
+        // past month (the original bug) or, worse, would start appearing
+        // for months before they ever joined this RA / this company.
+        const wasUnderRA = (raRowsByEmployee.get(emp.id) || [])
+          .some(r => rowCoversMonth(r, mObj.monthStart, mObj.monthEnd));
+        if (!wasUnderRA) continue;
+
+        const wasActive = (activeStatusRowsByEmployee.get(emp.id) || [])
+          .some(r => rowCoversMonth(r, mObj.monthStart, mObj.monthEnd));
+        if (!wasActive) continue;
 
         const planKey = `${emp.id}:${mObj.str}`;
         const plan = planMap[planKey] || null;
@@ -1995,14 +2063,25 @@ exports.getDeadlineManagement = async (req, res) => {
       },
       attributes: ["employeeId"],
     });
-    const employeeIds = [...new Set(historyRows.map(h => h.employeeId))];
+    const historyEmployeeIds = [...new Set(historyRows.map(h => h.employeeId))];
+
+    if (historyEmployeeIds.length === 0) {
+      return res.json({ month: monthStr, year: targetYear, label, employees: [] });
+    }
+
+    // FIX (Sep 2026): scope to employees active DURING monthStr (via
+    // UserStatusHistory), not employees active right now — see
+    // getRADashboard's identical fix for the full reasoning. Otherwise
+    // deactivating an employee today would remove them from every past
+    // month's deadline-management view too.
+    const employeeIds = await filterActiveDuringMonth(historyEmployeeIds, monthStr);
 
     if (employeeIds.length === 0) {
       return res.json({ month: monthStr, year: targetYear, label, employees: [] });
     }
 
     const employees = await User.findAll({
-      where: { id: { [Op.in]: employeeIds }, isActive: true },
+      where: { id: { [Op.in]: employeeIds } },
       attributes: ["id", "name", "employeeCode", "department", "role"],
       order: [["name", "ASC"]],
     });

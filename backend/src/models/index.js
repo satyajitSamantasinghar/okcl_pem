@@ -22,6 +22,7 @@ const AppraisalQuarterlyEvaluation = require("./AppraisalQuarterlyEvaluation")(s
 const EmployeeRAHistory = require("./EmployeeRAHistory")(sequelize);
 const DeadlineExtension = require("./DeadlineExtension")(sequelize);
 const ReminderLog = require("./ReminderLog")(sequelize);
+const UserStatusHistory = require("./UserStatusHistory")(sequelize);
 
 // ─────────────────────────────────────────────────────────────
 //  ASSOCIATIONS
@@ -199,6 +200,11 @@ User.hasMany(DeadlineExtension, { as: "deadlineExtensionsGranted", foreignKey: "
 ReminderLog.belongsTo(User, { as: "employee", foreignKey: "employeeId" });
 User.hasMany(ReminderLog, { as: "reminderLogs", foreignKey: "employeeId" });
 
+/* ── UserStatusHistory ↔ User (subject, changedByUser) ── */
+UserStatusHistory.belongsTo(User, { as: "user", foreignKey: "userId" });
+UserStatusHistory.belongsTo(User, { as: "changedByUser", foreignKey: "changedBy" });
+User.hasMany(UserStatusHistory, { as: "statusHistory", foreignKey: "userId" });
+
 // ─────────────────────────────────────────────────────────────
 //  Export everything so controllers can do:
 //  const { User, MonthlyPlan, ... } = require('../models');
@@ -224,4 +230,5 @@ module.exports = {
   EmployeeRAHistory,
   DeadlineExtension,
   ReminderLog,
+  UserStatusHistory,
 };

@@ -39,9 +39,11 @@ const {
   MonthlyAchievementItem,
   EmployeeRAHistory,
   AuditLog,
+  UserStatusHistory,
 } = require('../models');
 
 const { isAchievementCompleteForPlan } = require('../utils/achievementCompleteness');
+const { filterActiveDuringMonth } = require('../utils/userStatusHistory');
 
 /* ─── Validation helper ────────────────────────────────────────────────────── */
 function validateMonth(month) {
@@ -60,15 +62,23 @@ const ADMIN_TRACKED_ROLES = ['EMPLOYEE', 'RA'];
    Returns an array of enriched employee objects for the given month.
    Runs a small fixed set of aggregate queries instead of one loop per employee.
 
-   `activeFilter` controls which users are included on the isActive column:
-     'active'   (default) — isActive: true.  Used by getDashboardSummary and
-                 exportComplianceReportPdf so org-wide compliance metrics and
-                 the PDF report only ever reflect current staff — an employee
-                 marked inactive (left the company) should not keep inflating
-                 or deflating those numbers.
-     'inactive' — isActive: false. Lets getEmployeeList surface only
-                 deactivated users (e.g. to review/reactivate one).
-     'all'      — no isActive condition at all.
+   `activeFilter` controls which users are included:
+     'active'   (default) — was active (isActive: true) at ANY point DURING
+                 the requested `month`, per UserStatusHistory (NOT the live
+                 User.isActive snapshot). Used by getDashboardSummary and
+                 exportComplianceReportPdf. This is deliberately month-aware:
+                 an employee deactivated in September must still appear in
+                 August's dashboard/PDF, because they were on staff for
+                 August — only months after their deactivation should stop
+                 counting them. (Fixed Sep 2026 — previously used the live
+                 isActive column, which made a deactivation retroactively
+                 erase the employee from every past month's reports too.)
+     'inactive' — isActive: false on the LIVE User row (current snapshot,
+                 deliberately NOT month-aware). This is getEmployeeList's
+                 administrative "who do I need to review/reactivate right
+                 now" view, not a historical fact about `month` — so it
+                 intentionally keeps the old semantics.
+     'all'      — no isActive condition at all (unchanged).
 
    Each entry shape:
    {
@@ -91,9 +101,11 @@ async function fetchMonthlyComplianceData(month, activeFilter = 'active') {
   //       employees do, so they're counted here too. If you later want the
   //       admin org-wide view to also cover HRD/MD, extend ADMIN_TRACKED_ROLES.
   const where = { role: { [Op.in]: ADMIN_TRACKED_ROLES } };
-  if (activeFilter === 'active') where.isActive = true;
-  else if (activeFilter === 'inactive') where.isActive = false;
-  // activeFilter === 'all' → no isActive condition, both included
+  // 'active' is intentionally NOT applied as a live isActive condition here
+  // — it's resolved below via UserStatusHistory instead, because it needs to
+  // be month-aware. 'inactive' stays a live-snapshot condition on purpose
+  // (see the comment above). 'all' applies no condition either way.
+  if (activeFilter === 'inactive') where.isActive = false;
 
   const employees = await User.findAll({
     where,
@@ -103,7 +115,20 @@ async function fetchMonthlyComplianceData(month, activeFilter = 'active') {
 
   if (employees.length === 0) return [];
 
-  const employeeIds = employees.map(e => e.id);
+  // 'active' (default): narrow down to employees who were active at some
+  // point DURING `month`, per UserStatusHistory — not who happens to be
+  // active right now. See filterActiveDuringMonth's own header for the
+  // overlap condition this applies.
+  let scopedEmployees = employees;
+  if (activeFilter === 'active') {
+    const activeIdSet = new Set(
+      await filterActiveDuringMonth(employees.map(e => e.id), month)
+    );
+    scopedEmployees = employees.filter(e => activeIdSet.has(e.id));
+    if (scopedEmployees.length === 0) return [];
+  }
+
+  const employeeIds = scopedEmployees.map(e => e.id);
 
   // ── 2. Non-DRAFT, non-REJECTED plans for this month ───────────────────────
   const plans = await MonthlyPlan.findAll({
@@ -178,7 +203,7 @@ async function fetchMonthlyComplianceData(month, activeFilter = 'active') {
   }
 
   // ── 6. Merge into enriched employee rows ─────────────────────────────────
-  return employees.map(emp => {
+  return scopedEmployees.map(emp => {
     const plan = planByEmployee.get(emp.id) || null;
 
     let achievementStatus = 'NOT_STARTED';
@@ -260,17 +285,33 @@ async function fetchEmployeeIdsByRAForMonth(month) {
    Mirrors groupByDept's shape ([label, rows[]] pairs) so both grouping modes
    render through the exact same PDF-drawing loop below. Called ONCE, on the
    full month's row set (Completed and Non-Completed together) — the PDF
-   render loop is what later splits each group's rows into its Completed/
-   Non-Completed sub-tables, so every RA appears exactly once here. Each RA's
-   own compliance row (they carry the same plan/progress obligations as an
-   employee — see ADMIN_TRACKED_ROLES) is prepended to their own group so it
-   isn't just implied by the group header — it's an actual row a reader can
-   check, styled distinctly by employeeRow(). Regular employees with no RA
-   match for the month land in an "Unassigned RA" bucket, same reasoning as
-   the department view's "Unassigned" department bucket. ──
+   render loop is what later renders each group's rows as a single ranked
+   table, so every RA appears exactly once here. Each RA's own compliance row
+   (they carry the same plan/progress obligations as an employee — see
+   ADMIN_TRACKED_ROLES) is prepended to their own group so it isn't just
+   implied by the group header — it's an actual row a reader can check,
+   styled distinctly by employeeRow(). Regular employees with no RA match for
+   the month land in an "Unassigned RA" bucket, same reasoning as the
+   department view's "Unassigned" department bucket.
+
+   A superior/subordinate RA hierarchy is resolved in two passes so a
+   subordinate RA (e.g. Piyush, who himself reports to Jayesh) is placed
+   correctly regardless of which name sorts first alphabetically:
+     Pass 1 — for every RA, resolve their direct reports against rows of ANY
+       tracked role (not just 'EMPLOYEE' — a subordinate RA's own compliance
+       row has role 'RA' too, and matching only 'EMPLOYEE' rows meant a
+       subordinate RA could never be matched into a superior's group; they
+       could only ever be their own top-level group). This is tracked
+       independently of iteration order via `claimedIds`.
+     Pass 2 — build each RA's card. A subordinate RA's own self-row is
+       included only if they weren't already claimed as someone else's
+       direct report in pass 1 — otherwise their personal status would be
+       shown twice (once nested under their superior, once again as their
+       own top-level row). Their own group still exists whenever they have
+       direct reports of their own; it just won't duplicate their personal
+       row. This generalizes to any depth of hierarchy, not just one level.
 */
 function groupByRA(list, employeeIdsByRA, raById) {
-  const employeeRows = list.filter(r => r.role === 'EMPLOYEE');
   const raSelfRows = list.filter(r => r.role === 'RA'); // RA's own compliance row, if in this list
 
   const raIdsWithReports = [...employeeIdsByRA.keys()].filter(raId => raById.has(raId));
@@ -278,23 +319,34 @@ function groupByRA(list, employeeIdsByRA, raById) {
   const allRaIds = [...new Set([...raIdsWithReports, ...raIdsWithSelfRow])]
     .sort((a, b) => raById.get(a).name.localeCompare(raById.get(b).name));
 
-  const groups = [];
-  const claimedEmployeeIds = new Set();
-
+  // Pass 1: resolve each RA's direct reports against the full row set (any
+  // role), and track which ids land inside a superior's group.
+  const reportsByRA = new Map();
+  const claimedIds = new Set();
   for (const raId of allRaIds) {
-    const ra = raById.get(raId);
     const empIds = employeeIdsByRA.get(raId) || new Set();
-    const matchedEmployees = employeeRows.filter(r => empIds.has(r.id));
-    const raSelfRow = raSelfRows.find(r => r.id === raId) || null;
-
-    if (matchedEmployees.length === 0 && !raSelfRow) continue; // nothing to show for this RA in this subset
-
-    const tableRows = raSelfRow ? [raSelfRow, ...matchedEmployees] : matchedEmployees;
-    groups.push([`${ra.name}  (${ra.employeeCode})`, tableRows]);
-    matchedEmployees.forEach(r => claimedEmployeeIds.add(r.id));
+    const matched = list.filter(r => r.id !== raId && empIds.has(r.id));
+    reportsByRA.set(raId, matched);
+    matched.forEach(r => claimedIds.add(r.id));
   }
 
-  const unassigned = employeeRows.filter(r => !claimedEmployeeIds.has(r.id));
+  // Pass 2: build each RA's card, skipping a subordinate RA's own self-row
+  // wherever it's already claimed by a superior's group.
+  const groups = [];
+  for (const raId of allRaIds) {
+    const ra = raById.get(raId);
+    const matchedReports = reportsByRA.get(raId);
+    const raSelfRow = raSelfRows.find(r => r.id === raId) || null;
+    const includeSelfRow = !!raSelfRow && !claimedIds.has(raId);
+
+    if (matchedReports.length === 0 && !includeSelfRow) continue; // nothing to show for this RA in this subset
+
+    const tableRows = includeSelfRow ? [raSelfRow, ...matchedReports] : matchedReports;
+    groups.push([`${ra.name}  (${ra.employeeCode})`, tableRows]);
+  }
+
+  const employeeRows = list.filter(r => r.role === 'EMPLOYEE');
+  const unassigned = employeeRows.filter(r => !claimedIds.has(r.id));
   if (unassigned.length > 0) {
     groups.push(['Unassigned RA', unassigned]);
   }
@@ -493,28 +545,44 @@ exports.getEmployeeList = async (req, res) => {
    Every change is written to AuditLog, the same convention every other
    write action in this codebase follows (see hrdController.js's
    assignEmployeesToRA, raController.js's rejectMonthlyPlan).
+
+   Also writes a UserStatusHistory row on every flip (closes the previously-
+   open row, opens a new one) — wrapped in the same transaction as the
+   User.isActive save and the AuditLog write, so the three can never end up
+   disagreeing with each other if one step fails partway through. This is
+   what lets month-scoped views (admin compliance dashboard/PDF, RA
+   dashboard, RA deadline management) correctly answer "was this person
+   active DURING month M" — see utils/userStatusHistory.js.
 ────────────────────────────────────────────────────────────────────────────── */
 exports.updateEmployeeStatus = async (req, res) => {
+  const t = await sequelize.transaction();
   try {
     const { id } = req.params;
     const { isActive } = req.body;
 
     if (typeof isActive !== 'boolean') {
+      await t.rollback();
       return res.status(400).json({ message: 'isActive (boolean) is required in the request body' });
     }
 
-    const user = await User.findByPk(id);
-    if (!user) return res.status(404).json({ message: 'User not found' });
+    const user = await User.findByPk(id, { transaction: t });
+    if (!user) {
+      await t.rollback();
+      return res.status(404).json({ message: 'User not found' });
+    }
 
     if (user.role === 'ADMIN') {
+      await t.rollback();
       return res.status(400).json({ message: 'Admin accounts cannot be activated or deactivated from this endpoint.' });
     }
 
     if (String(user.id) === String(req.user.userId)) {
+      await t.rollback();
       return res.status(400).json({ message: 'You cannot change your own active status.' });
     }
 
     if (user.isActive === isActive) {
+      await t.rollback();
       return res.status(400).json({ message: `${user.name} is already ${isActive ? 'active' : 'inactive'}.` });
     }
 
@@ -526,11 +594,14 @@ exports.updateEmployeeStatus = async (req, res) => {
     if (isActive === false && user.role === 'RA') {
       const activeReportCount = await User.count({
         where: { reportingAuthorityId: user.id, isActive: true },
+        transaction: t,
       });
       if (activeReportCount > 0) {
         warning = `${user.name} still has ${activeReportCount} active direct report(s). Consider reassigning them via the HRD "Assign Employees to RA" tool.`;
       }
     }
+
+    const changedAt = new Date();
 
     user.isActive = isActive;
     // Deactivating: also clear the stored refresh token so an already-issued
@@ -541,7 +612,26 @@ exports.updateEmployeeStatus = async (req, res) => {
     // gap, but clearing it here means the DB stops carrying a token for a
     // deactivated user at all, rather than relying on it being rejected later.
     if (!isActive) user.refreshToken = null;
-    await user.save();
+    await user.save({ transaction: t });
+
+    // Close the currently-open UserStatusHistory row (if any — the initial
+    // backfill row for this user, or a previous transition) and open a new
+    // one for the new status. Mirrors exactly how EmployeeRAHistory rows are
+    // closed/reopened on RA reassignment.
+    await UserStatusHistory.update(
+      { effectiveTo: changedAt },
+      { where: { userId: user.id, effectiveTo: null }, transaction: t }
+    );
+    await UserStatusHistory.create(
+      {
+        userId: user.id,
+        isActive,
+        effectiveFrom: changedAt,
+        effectiveTo: null,
+        changedBy: req.user.userId,
+      },
+      { transaction: t }
+    );
 
     await AuditLog.create({
       userId: req.user.userId,
@@ -549,7 +639,9 @@ exports.updateEmployeeStatus = async (req, res) => {
       entityType: 'USER',
       entityId: String(user.id),
       ipAddress: req.ip,
-    });
+    }, { transaction: t });
+
+    await t.commit();
 
     return res.json({
       message: `${user.name} marked ${isActive ? 'active' : 'inactive'} successfully.`,
@@ -563,6 +655,7 @@ exports.updateEmployeeStatus = async (req, res) => {
       ...(warning && { warning }),
     });
   } catch (err) {
+    await t.rollback();
     console.error('[adminController] updateEmployeeStatus error:', err);
     return res.status(500).json({ message: 'Failed to update employee status', error: err.message });
   }
@@ -601,12 +694,11 @@ exports.exportComplianceReportPdf = async (req, res) => {
     }
 
     // Group the FULL row set (compliant + non-compliant together) by RA/
-    // department, once. Each group's rows are split into Completed /
-    // Non-Completed only at render time, below — this is what lets every
-    // RA/Department appear exactly once in the report, with both of its
-    // sub-tables nested underneath it, instead of the old layout where an
-    // RA/department could be listed once under "Completed" and again,
-    // separately, under "Non-Completed".
+    // department, once, so every RA/Department appears exactly once in the
+    // report with a single ranked table underneath it — instead of listing
+    // an RA/department once under "Completed" and again, separately, under
+    // "Non-Completed" (or, in between, as two separate sub-tables nested
+    // under one group header).
     let groups, groupLabel;
     if (groupBy === 'ra') {
       const employeeIdsByRA = await fetchEmployeeIdsByRAForMonth(month);
@@ -666,15 +758,10 @@ exports.exportComplianceReportPdf = async (req, res) => {
     const ROW_H = 18;                                   // employeeRow() rect height
     const TABLE_HEADER_H = 18;                           // tableHeader() rect height + spacing
     const GROUP_HEADER_H = 30;                           // groupHeader() card band + its spacing
-    const SUB_HEADER_H = 16;                             // subsectionHeader() line + its spacing
     // A group can't open at the very bottom of a page with nothing under it:
-    // reserve room for the group's own header PLUS at least one populated
-    // sub-section (its own header, the table header, and >=1 row) before
-    // starting a new RA/department block.
-    const MIN_GROUP_BLOCK = GROUP_HEADER_H + SUB_HEADER_H + TABLE_HEADER_H + ROW_H;
-    // Once a group header is already drawn, a fresh sub-section within it
-    // only needs room for its own header + table header + >=1 row.
-    const MIN_SUBSECTION_BLOCK = SUB_HEADER_H + TABLE_HEADER_H + ROW_H;
+    // reserve room for the group's own header PLUS its table header and
+    // >=1 row before starting a new RA/department block.
+    const MIN_GROUP_BLOCK = GROUP_HEADER_H + TABLE_HEADER_H + ROW_H;
     const LEGEND_BREAK_BUFFER = 120;                     // == old flat "page.height - 170"
     function pageBottom() { return doc.page.height - MARGIN; } // usable bottom edge
 
@@ -683,19 +770,24 @@ exports.exportComplianceReportPdf = async (req, res) => {
     }
 
     function sectionTitle(text, color = PRIMARY) {
-      doc.moveDown(0.6);
+      // Fixed, deterministic offsets instead of moveDown() factors. moveDown()
+      // scales off whatever font size was last active — right after the 16pt
+      // stat numbers above, that made this gap noticeably bigger than the
+      // 13pt title it's actually spacing, which read as unintentional
+      // dead space between the stat box and the table below.
+      doc.y += 4;
       doc.fontSize(13).fillColor(color).font('Helvetica-Bold')
         .text(text, left, doc.y, { width: pageW });
-      doc.moveDown(0.3);
+      doc.y += 16; // ~13pt bold title's own line height
       hRule(doc.y, color);
-      doc.moveDown(0.4);
+      doc.y += 6;
       doc.x = left; // pdfkit leaves doc.x wherever the text() call above put it — pin it back
     }
 
     // Group header = one RA/department "card": a shaded band with the
     // group's name on the left and a compact Total/Completed/Pending
     // tally on the right, so a reader can see that RA or department's
-    // whole standing at a glance before reading its two sub-tables below.
+    // whole standing at a glance before reading its table below.
     function groupHeader(groupName, total, completedCount, pendingCount) {
       const y = doc.y;
       const boxH = 22;
@@ -713,16 +805,6 @@ exports.exportComplianceReportPdf = async (req, res) => {
 
       doc.x = left;
       doc.y = y + boxH + 8;
-    }
-
-    // Sub-section header = the "Completed" / "Non-Completed" label nested
-    // under a group's card, indented slightly so it visually reads as a
-    // child of the group above it rather than a peer section of its own.
-    function subsectionHeader(label, count, color) {
-      doc.fontSize(9).font('Helvetica-Bold').fillColor(color)
-        .text(`${label}  (${count})`, left + 6, doc.y, { width: pageW - 6 });
-      doc.moveDown(0.2);
-      doc.x = left;
     }
 
     function employeeRow(r, idx) {
@@ -799,18 +881,30 @@ exports.exportComplianceReportPdf = async (req, res) => {
       .fillColor(compliancePct >= 80 ? GREEN : compliancePct >= 50 ? AMBER : RED)
       .text(`${compliancePct}%`, left + 360, bY + 14);
 
-    doc.y += 68;
-    doc.moveDown(0.5);
+    // Box is 54pt tall; land a short, deliberate 8pt gap below it rather than
+    // the old +68 plus an extra moveDown(0.5) stacked on top of each other.
+    doc.y += 54 + 8;
 
     // ── Employee status, grouped by RA/Department ──────────────────────────
-    // Each RA/department appears exactly once, as its own card, with its
-    // Completed employees listed first and its Non-Completed employees
-    // listed directly beneath — then the next RA/department starts. This
-    // replaces the old layout, which listed every RA/department once under
-    // a page-wide "Completed" section and a second time under a separate
-    // "Non-Completed" section, forcing a reader to jump between two places
-    // to see one RA/department's full picture.
+    // Each RA/department appears exactly once, as its own card, with every
+    // one of its employees in a single table sorted Completed → Incomplete →
+    // Not Started (plan submitted) → Not Started (plan not submitted) — then
+    // the next RA/department starts. (Previously each group's Completed and
+    // Non-Completed employees were rendered as two separate sub-tables under
+    // one group header; a reader now sees one ranked list per RA/department
+    // instead of having to cross-reference two.)
     sectionTitle(`Employee Status by ${groupLabel}`, PRIMARY);
+    // Composite priority: Complete → Incomplete → Not Started (plan
+    // submitted) → Not Started (plan not submitted). achievementStatus alone
+    // can't distinguish the last two — someone who submitted their plan but
+    // hasn't started progress is further along than someone who submitted
+    // nothing at all, and the report should read that way rather than
+    // lumping both into one undifferentiated "Not Started" band.
+    function statusRank(r) {
+      if (r.achievementStatus === 'COMPLETE') return 0;
+      if (r.achievementStatus === 'INCOMPLETE') return 1;
+      return r.planSubmittedAt ? 2 : 3;
+    }
     if (groups.length === 0) {
       doc.fontSize(9).fillColor(GREY_MID)
         .text('No employees found for the selected month.', left, doc.y, { width: pageW })
@@ -818,35 +912,27 @@ exports.exportComplianceReportPdf = async (req, res) => {
       doc.x = left;
     } else {
       groups.forEach(([groupName, groupRows], groupIdx) => {
-        const groupCompliant = groupRows.filter(r => r.achievementStatus === 'COMPLETE');
-        const groupNonCompliant = groupRows.filter(r => r.achievementStatus !== 'COMPLETE');
+        const completedCount = groupRows.filter(r => r.achievementStatus === 'COMPLETE').length;
+        const pendingCount = groupRows.length - completedCount;
+        // Stable sort (Node/V8 guarantees this): rows already tied on rank
+        // keep their incoming order, which is why an RA's own row — first in
+        // the array groupByRA/groupByDept hand us — stays at the top of its
+        // own status band instead of shuffling around within it.
+        const sortedRows = [...groupRows].sort(
+          (a, b) => statusRank(a) - statusRank(b)
+        );
 
-        // Reserve room for the card header plus at least its first
-        // sub-section before starting a new RA/department block.
+        // Reserve room for the card header plus its table header and >=1 row
+        // before starting a new RA/department block.
         if (doc.y + MIN_GROUP_BLOCK > pageBottom()) doc.addPage();
-        groupHeader(groupName, groupRows.length, groupCompliant.length, groupNonCompliant.length);
+        groupHeader(groupName, groupRows.length, completedCount, pendingCount);
 
-        if (groupCompliant.length > 0) {
-          if (doc.y + MIN_SUBSECTION_BLOCK > pageBottom()) doc.addPage();
-          subsectionHeader('Completed', groupCompliant.length, GREEN);
-          tableHeader();
-          groupCompliant.forEach((r, i) => {
-            if (doc.y + ROW_H > pageBottom()) { doc.addPage(); tableHeader(); }
-            employeeRow(r, i);
-          });
-          doc.moveDown(0.4);
-        }
-
-        if (groupNonCompliant.length > 0) {
-          if (doc.y + MIN_SUBSECTION_BLOCK > pageBottom()) doc.addPage();
-          subsectionHeader('Non-Completed', groupNonCompliant.length, RED);
-          tableHeader();
-          groupNonCompliant.forEach((r, i) => {
-            if (doc.y + ROW_H > pageBottom()) { doc.addPage(); tableHeader(); }
-            employeeRow(r, i);
-          });
-          doc.moveDown(0.4);
-        }
+        tableHeader();
+        sortedRows.forEach((r, i) => {
+          if (doc.y + ROW_H > pageBottom()) { doc.addPage(); tableHeader(); }
+          employeeRow(r, i);
+        });
+        doc.moveDown(0.4);
 
         // Thin divider between one RA/department card and the next —
         // skipped after the last group so the report doesn't end on a

@@ -21,6 +21,7 @@ const {
     YearlyAppraisalKraAssessment,
     AppraisalQuarterlyEvaluation,
     DeadlineExtension,
+    UserStatusHistory,
 } = require("./src/models");
 const { DataTypes, Op } = require("sequelize");
 const { verifyEmailConnection } = require('./src/services/email');
@@ -531,6 +532,62 @@ const backfillRAHistory = async () => {
     }
 };
 
+// ─── Backfill UserStatusHistory ───────────────────────────────────────────────
+//  Runs ONCE after sequelize.sync() creates the user_status_histories table.
+//  Every existing user needs exactly one open-ended history row so month-
+//  scoped queries (via utils/userStatusHistory.js's filterActiveDuringMonth)
+//  have something to read for users who existed before this feature shipped
+//  — otherwise every pre-existing user would look "never active" for every
+//  past month, which is the opposite of the bug this table fixes.
+//
+//  Seeding rule, per user with no history row yet:
+//    effectiveFrom = user's createdAt  (best available proxy for "when they
+//                    became active" — same reasoning backfillRAHistory()
+//                    above already uses for effectiveFrom)
+//    isActive      = user's CURRENT isActive value (their live status is the
+//                    only historical fact we actually have pre-backfill; we
+//                    cannot reconstruct any deactivate/reactivate cycles that
+//                    happened before this table existed — going forward,
+//                    every transition is captured exactly by
+//                    adminController.js's updateEmployeeStatus)
+//    effectiveTo   = NULL  (in effect as of this backfill run)
+//    changedBy     = NULL  (unknown — pre-dates the history system, mirrors
+//                    backfillRAHistory()'s assignedBy: null)
+//
+//  Idempotent: only users with zero existing history rows are seeded, so
+//  re-running on subsequent restarts is a safe no-op.
+// ─────────────────────────────────────────────────────────────────────────────
+const backfillUserStatusHistory = async () => {
+    const allUsers = await User.findAll({
+        attributes: ["id", "isActive", "createdAt"],
+    });
+
+    if (allUsers.length === 0) return;
+
+    const alreadySeeded = await UserStatusHistory.findAll({
+        where: { userId: { [Op.in]: allUsers.map(u => u.id) } },
+        attributes: ["userId"],
+    });
+    const seededIds = new Set(alreadySeeded.map(h => String(h.userId)));
+
+    const toInsert = allUsers
+        .filter(u => !seededIds.has(String(u.id)))
+        .map(u => ({
+            userId: u.id,
+            isActive: u.isActive,
+            effectiveFrom: u.createdAt,
+            effectiveTo: null,
+            changedBy: null,
+        }));
+
+    if (toInsert.length > 0) {
+        await UserStatusHistory.bulkCreate(toInsert);
+        console.log(`✅ Backfill: seeded ${toInsert.length} initial UserStatusHistory row(s)`);
+    } else {
+        console.log("✅ Backfill: UserStatusHistory already up to date — nothing to seed");
+    }
+};
+
 
 // ─── One-time Monthly Plan Deletion ──────────────────────────────────────────
 //  Deletes the July 2026 monthly plans for four employees, including ALL
@@ -743,7 +800,7 @@ const backfillRAHistory = async () => {
 // ─────────────────────────────────────────────────────────────────────────────
 const deleteTargetEmployees = async () => {
     const TARGET_EMP_CODES = [
-        ...new Set(["152", "1015", "1031", "1042", "1052", "1036", "1016", "39", "36", "1051"]),
+        ...new Set(["9362", "9348"]),
     ];
 
     try {
@@ -940,6 +997,16 @@ const startServer = async () => {
         // Backfill EmployeeRAHistory for pre-existing employees (runs after sync
         // so the table is guaranteed to exist).
         await backfillRAHistory();
+
+        // Explicitly ensure the user_status_histories table exists (same
+        // safety net as the employee_ra_histories check above), then backfill
+        // it for pre-existing users. See backfillUserStatusHistory() above
+        // for why this table exists: month-scoped dashboards/reports need to
+        // answer "was this user active during month M", which the live
+        // User.isActive column alone cannot do once someone is deactivated.
+        await UserStatusHistory.sync();
+        console.log("✅ user_status_histories table verified/created");
+        await backfillUserStatusHistory();
 
         // One-time employee hard-delete (152, 1015, 1031, 1042, 1052, 1036, 1016, 39, 36)
         // ⚠️  COMMENT THIS LINE OUT after the next successful deployment.
