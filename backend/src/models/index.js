@@ -11,6 +11,7 @@ const MonthlyPlanItem = require("./MonthlyPlanItem")(sequelize);
 const MonthlyAchievement = require("./MonthlyAchievement")(sequelize);
 const MonthlyAchievementItem = require("./MonthlyAchievementItem")(sequelize);
 const MonthlyEvaluation = require("./MonthlyEvaluation")(sequelize);
+const MonthlyPlanFeedback = require("./MonthlyPlanFeedback")(sequelize);
 const QuarterlyEvaluation = require("./QuarterlyEvaluation")(sequelize);
 const YearlyPlan = require("./YearlyPlan")(sequelize);
 const YearlyPlanKra = require("./YearlyPlanKra")(sequelize);
@@ -23,6 +24,7 @@ const EmployeeRAHistory = require("./EmployeeRAHistory")(sequelize);
 const DeadlineExtension = require("./DeadlineExtension")(sequelize);
 const ReminderLog = require("./ReminderLog")(sequelize);
 const UserStatusHistory = require("./UserStatusHistory")(sequelize);
+const Manual = require("./Manual")(sequelize);
 
 // ─────────────────────────────────────────────────────────────
 //  ASSOCIATIONS
@@ -117,6 +119,24 @@ MonthlyEvaluation.belongsTo(MonthlyAchievement, {
   foreignKey: "monthlyAchievementId",
 });
 
+/* ── MonthlyPlanFeedback ↔ MonthlyPlan & User ──
+   Supports the "RA feedback on an in-progress monthly plan" feature. One
+   plan can carry many feedback rows (RA can remark more than once);
+   onDelete: CASCADE so a resubmitted/rejected plan doesn't leave orphaned
+   feedback rows behind, mirroring the MonthlyPlanItem cascade above. */
+MonthlyPlanFeedback.belongsTo(MonthlyPlan, {
+  as: "monthlyPlan",
+  foreignKey: "monthlyPlanId",
+  onDelete: "CASCADE",
+});
+MonthlyPlan.hasMany(MonthlyPlanFeedback, {
+  as: "feedback",
+  foreignKey: "monthlyPlanId",
+  onDelete: "CASCADE",
+});
+MonthlyPlanFeedback.belongsTo(User, { as: "author", foreignKey: "authorId" });
+User.hasMany(MonthlyPlanFeedback, { as: "givenPlanFeedback", foreignKey: "authorId" });
+
 /* ── QuarterlyEvaluation ↔ User ── */
 QuarterlyEvaluation.belongsTo(User, { as: "employee", foreignKey: "employeeId" });
 QuarterlyEvaluation.belongsTo(User, { as: "ra", foreignKey: "raId" });
@@ -205,6 +225,10 @@ UserStatusHistory.belongsTo(User, { as: "user", foreignKey: "userId" });
 UserStatusHistory.belongsTo(User, { as: "changedByUser", foreignKey: "changedBy" });
 User.hasMany(UserStatusHistory, { as: "statusHistory", foreignKey: "userId" });
 
+/* ── Manual ↔ User (uploadedBy) ── */
+Manual.belongsTo(User, { as: "uploader", foreignKey: "uploadedBy" });
+User.hasMany(Manual, { as: "uploadedManuals", foreignKey: "uploadedBy" });
+
 // ─────────────────────────────────────────────────────────────
 //  Export everything so controllers can do:
 //  const { User, MonthlyPlan, ... } = require('../models');
@@ -219,6 +243,7 @@ module.exports = {
   MonthlyAchievement,
   MonthlyAchievementItem,
   MonthlyEvaluation,
+  MonthlyPlanFeedback,
   QuarterlyEvaluation,
   YearlyPlan,
   YearlyPlanKra,
@@ -231,4 +256,5 @@ module.exports = {
   DeadlineExtension,
   ReminderLog,
   UserStatusHistory,
+  Manual,
 };

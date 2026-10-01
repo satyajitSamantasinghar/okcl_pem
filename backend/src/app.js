@@ -10,7 +10,8 @@ const mdRoutes = require("./routes/mdRoutes");
 const profileRoutes = require("./routes/profileRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 const configRoutes = require("./routes/configRoutes");
-const adminRoutes  = require("./routes/adminRoutes");
+const adminRoutes = require("./routes/adminRoutes");
+const manualRoutes = require('./routes/manualRoutes');
 
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
@@ -57,6 +58,7 @@ app.use("/api/notifications", notificationRoutes);
 app.use("/api/profile", profileRoutes);
 app.use("/api/config", configRoutes);
 app.use("/api/admin", adminRoutes);
+app.use('/api/manuals', manualRoutes);
 
 // ── Serve React frontend (must come AFTER all /api routes) ────────────────────
 app.use(express.static(path.join(__dirname, '../dist')));

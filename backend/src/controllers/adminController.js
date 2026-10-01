@@ -3,7 +3,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 //  ADMIN CONTROLLER
 //
-//  Four handlers:
+//  Six handlers:
 //    1. getDashboardSummary   — org-wide + per-dept counts (month-scoped)
 //    2. getEmployeeList       — paginated, filterable, sortable employee list
 //       (month-scoped; also filterable by active/inactive status)
@@ -14,19 +14,30 @@
 //       the "mark an employee who has left the company as inactive" control.
 //       Not month-scoped — isActive is a point-in-time flag on the user, not
 //       a per-month fact.
+//    5. getActivityLogReport  — paginated, filterable list of an employee's
+//       OWN AuditLog entries for the month (draft saves, submits, resubmits,
+//       "Add More" appends — see utils/auditActionLabels.js for the exact
+//       action set). Does NOT write any new AuditLog rows; it only reads
+//       ones employeeController.js already writes on every relevant action.
+//    6. exportActivityLogReportPdf — streams a PDF of the same data, grouped
+//       by department (default) or by Reporting Authority (?groupBy=ra),
+//       one employee per card, chronological entries underneath.
 //
-//  The first three share a single helper (fetchMonthlyComplianceData) that
+//  Handlers 1–3 share a single helper (fetchMonthlyComplianceData) that
 //  does the heavy DB lifting once per request — no N+1 per-employee loops.
+//  Handlers 5–6 share fetchEmployeeActivityData, which reuses
+//  fetchMonthlyComplianceData purely for its employee roster (department,
+//  role, active-during-month status) rather than re-deriving that logic.
 //
 //  Completeness definition is always delegated to isAchievementCompleteForPlan
 //  (the single shared implementation) — never re-derived inline.
 //
-//  The RA-grouped export resolves "which RA is this employee mapped to this
-//  month" via EmployeeRAHistory (date-overlap), NOT the live
-//  User.reportingAuthorityId snapshot — see fetchEmployeeIdsByRAForMonth for
-//  why. This mirrors raController.js's getRADashboard query; if that ever
-//  gets extracted into a shared util, point this at it instead of hand-
-//  keeping two copies in sync.
+//  The RA-grouped views (export #3 and #6) resolve "which RA is this
+//  employee mapped to this month" via EmployeeRAHistory (date-overlap), NOT
+//  the live User.reportingAuthorityId snapshot — see
+//  fetchEmployeeIdsByRAForMonth for why. This mirrors raController.js's
+//  getRADashboard query; if that ever gets extracted into a shared util,
+//  point this at it instead of hand-keeping two copies in sync.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const { Op, QueryTypes } = require('sequelize');
@@ -44,6 +55,11 @@ const {
 
 const { isAchievementCompleteForPlan } = require('../utils/achievementCompleteness');
 const { filterActiveDuringMonth } = require('../utils/userStatusHistory');
+const {
+  describeAuditAction,
+  entityTypeLabel,
+  EMPLOYEE_ACTIVITY_ENTITY_TYPES,
+} = require('../utils/auditActionLabels');
 
 /* ─── Validation helper ────────────────────────────────────────────────────── */
 function validateMonth(month) {
@@ -971,7 +987,7 @@ exports.exportComplianceReportPdf = async (req, res) => {
       }
 
       legendLine('Not Started', RED,
-        'No progress/achievement has been submitted for this month\'s plan at all.');
+        'No progress has been submitted for this month\'s plan at all.');
       legendLine('Incomplete', AMBER,
         'Plan and progress were both submitted, but plan item(s) were added afterward via ' +
         '"Add More Plans" and progress has not yet been submitted for those newly added item(s).');
@@ -1010,6 +1026,481 @@ exports.exportComplianceReportPdf = async (req, res) => {
     // Only send error header if headers haven't been flushed yet
     if (!res.headersSent) {
       return res.status(500).json({ message: 'Failed to generate PDF', error: err.message });
+    }
+  }
+};
+
+/* ═════════════════════════════════════════════════════════════════════════════
+   EMPLOYEE ACTIVITY LOG REPORT
+   ─────────────────────────────────────────────────────────────────────────────
+   Reads AuditLog — does not write to it. Every action shown here
+   (DRAFT_SAVE / DRAFT_UPDATE / SUBMIT / RESUBMIT / ADD_PLAN_ITEMS /
+   ADD_ACHIEVEMENT_ITEMS across Monthly Plan, Monthly Progress, Yearly Plan,
+   and Yearly Appraisal Report) is already written by employeeController.js
+   at the point the employee actually performs it — see
+   utils/auditActionLabels.js for the full action-to-label mapping and for
+   why supervisory/admin actions (RA's EVALUATE/RA_REJECT, admin's
+   ACTIVATE_USER/DEACTIVATE_USER, etc.) are deliberately excluded from this
+   report — this is "what did the employee themselves do," not "everything
+   that touched their record."
+═════════════════════════════════════════════════════════════════════════════ */
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   SHARED DATA HELPER
+   ─────────────────────────────────────────────────────────────────────────────
+   Returns every AuditLog entry written BY an active-during-`month`
+   EMPLOYEE/RA user (per fetchMonthlyComplianceData's roster — same
+   month-aware isActive logic the compliance dashboard uses, so this
+   report's roster can't silently drift from that one's), for entityTypes in
+   EMPLOYEE_ACTIVITY_ENTITY_TYPES, timestamp-bounded to the calendar month —
+   enriched with the employee's name/code/department/role, their resolved
+   Reporting Authority for the month (same EmployeeRAHistory overlap query
+   the RA-grouped compliance export uses), and a human-readable action label.
+
+   `filters.entityType` narrows to one entity type (the caller validates it
+   against EMPLOYEE_ACTIVITY_ENTITY_TYPES first). Omitted → all four.
+────────────────────────────────────────────────────────────────────────────── */
+async function fetchEmployeeActivityData(month, filters = {}) {
+  const roster = await fetchMonthlyComplianceData(month, 'active');
+  if (roster.length === 0) return { roster: [], rosterById: new Map(), logs: [] };
+
+  const rosterById = new Map(roster.map(r => [r.id, r]));
+  const employeeIds = roster.map(r => r.id);
+
+  const [year, mon] = month.split('-').map(Number);
+  const startOfMonth = new Date(year, mon - 1, 1, 0, 0, 0, 0);
+  const endOfMonth = new Date(year, mon, 0, 23, 59, 59, 999);
+
+  const rawLogs = await AuditLog.findAll({
+    where: {
+      userId: { [Op.in]: employeeIds },
+      entityType: {
+        [Op.in]: filters.entityType ? [filters.entityType] : EMPLOYEE_ACTIVITY_ENTITY_TYPES,
+      },
+      timestamp: { [Op.gte]: startOfMonth, [Op.lte]: endOfMonth },
+    },
+    attributes: ['id', 'userId', 'action', 'entityType', 'entityId', 'timestamp'],
+    order: [['timestamp', 'DESC']],
+    raw: true,
+  });
+
+  // employeeId → [RA name, ...] (more than one only if reassigned mid-month —
+  // same legitimate multi-RA overlap exportComplianceReportPdf's groupByRA
+  // already handles).
+  const employeeIdsByRA = await fetchEmployeeIdsByRAForMonth(month);
+  const raNamesByEmployeeId = new Map();
+  for (const [raId, empIdSet] of employeeIdsByRA.entries()) {
+    const ra = rosterById.get(raId);
+    if (!ra) continue; // RA wasn't active during this month per the roster
+    for (const empId of empIdSet) {
+      if (!raNamesByEmployeeId.has(empId)) raNamesByEmployeeId.set(empId, []);
+      raNamesByEmployeeId.get(empId).push(ra.name);
+    }
+  }
+
+  const logs = rawLogs.map(log => {
+    const emp = rosterById.get(log.userId);
+    return {
+      id: log.id,
+      timestamp: log.timestamp,
+      employeeId: log.userId,
+      name: emp ? emp.name : 'Unknown',
+      employeeCode: emp ? emp.employeeCode : '—',
+      department: emp ? emp.department : 'Unassigned',
+      role: emp ? emp.role : null,
+      reportingAuthority: (raNamesByEmployeeId.get(log.userId) || []).join(', ') || null,
+      entityType: log.entityType,
+      entityTypeLabel: entityTypeLabel(log.entityType),
+      action: log.action,
+      actionLabel: describeAuditAction(log.entityType, log.action),
+      entityId: log.entityId,
+    };
+  });
+
+  return { roster, rosterById, logs };
+}
+
+/* ─── Group flat log entries into one bucket per employee, entries sorted
+   chronologically (oldest → newest, so each employee's card reads as a
+   timeline) — used only by the PDF export; the JSON endpoint returns a flat,
+   paginated, timestamp-sorted list instead (see getActivityLogReport). ──── */
+function groupLogsByEmployee(logs) {
+  const map = new Map();
+  for (const log of logs) {
+    if (!map.has(log.employeeId)) {
+      map.set(log.employeeId, {
+        employeeId: log.employeeId,
+        name: log.name,
+        employeeCode: log.employeeCode,
+        department: log.department,
+        role: log.role,
+        reportingAuthority: log.reportingAuthority,
+        entries: [],
+      });
+    }
+    map.get(log.employeeId).entries.push(log);
+  }
+  for (const emp of map.values()) {
+    emp.entries.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+  }
+  return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/* ─── Group employee-activity buckets by Department ─────────────────────── */
+function groupEmployeesByDept(employees) {
+  const map = new Map();
+  for (const e of employees) {
+    if (!map.has(e.department)) map.set(e.department, []);
+    map.get(e.department).push(e);
+  }
+  return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+}
+
+/* ─── Group employee-activity buckets by Reporting Authority ────────────────
+   Mirrors groupByRA's "Unassigned RA" bucket for anyone with no RA match
+   this month. Unlike groupByRA, this doesn't need the two-pass
+   superior/subordinate resolution — an RA's own logged activity (they carry
+   the same plan/progress obligations as an employee) simply appears once,
+   directly under whichever RA THEY report to, same as any other employee;
+   it is not nested under a "team" concept the way the compliance export's
+   card tallies are. ─────────────────────────────────────────────────────── */
+function groupEmployeesByRA(employees) {
+  const map = new Map();
+  const unassigned = [];
+  for (const e of employees) {
+    const raNames = e.reportingAuthority ? e.reportingAuthority.split(', ') : [];
+    if (raNames.length === 0) {
+      unassigned.push(e);
+      continue;
+    }
+    for (const raName of raNames) {
+      if (!map.has(raName)) map.set(raName, []);
+      map.get(raName).push(e);
+    }
+  }
+  const groups = [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  if (unassigned.length > 0) groups.push(['Unassigned RA', unassigned]);
+  return groups;
+}
+
+/* ─── 5. GET /api/admin/activity-report ──────────────────────────────────────
+   Flat, paginated, filterable list of individual AuditLog entries for the
+   month — one row per logged action (not one row per employee), sorted by
+   timestamp (most recent first) by default.
+
+   Query params:
+     month       (required, YYYY-MM)
+     department  (optional — exact match on the normalized department value
+                  returned in this response's own `departments` list)
+     ra          (optional — Reporting Authority name, exact match against
+                  this response's own `reportingAuthorities` list)
+     entityType  (optional — one of EMPLOYEE_ACTIVITY_ENTITY_TYPES)
+     search      (optional — matches employee name or employeeCode)
+     sort        (timestamp | name | department — default timestamp)
+     order       (asc | desc — default desc)
+     page, limit (pagination — limit capped at 200, same shape as
+                  getEmployeeList)
+────────────────────────────────────────────────────────────────────────────── */
+exports.getActivityLogReport = async (req, res) => {
+  try {
+    const { month, department, ra, search, sort = 'timestamp', order = 'desc' } = req.query;
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(200, Math.max(1, parseInt(req.query.limit) || 25));
+
+    if (!validateMonth(month)) {
+      return res.status(400).json({ message: 'month query param is required (YYYY-MM)' });
+    }
+
+    let entityType;
+    if (req.query.entityType) {
+      if (!EMPLOYEE_ACTIVITY_ENTITY_TYPES.includes(req.query.entityType)) {
+        return res.status(400).json({
+          message: `entityType must be one of: ${EMPLOYEE_ACTIVITY_ENTITY_TYPES.join(', ')}`,
+        });
+      }
+      entityType = req.query.entityType;
+    }
+
+    const { roster, logs } = await fetchEmployeeActivityData(month, { entityType });
+
+    // ── Facets for the filter dropdowns — derived from the full month's
+    //    data, BEFORE department/ra/search narrowing, so picking one filter
+    //    doesn't shrink the option list for the others. ─────────────────────
+    const departments = [...new Set(logs.map(r => r.department))].sort((a, b) => a.localeCompare(b));
+    const reportingAuthorities = [...new Set(
+      logs.flatMap(r => (r.reportingAuthority ? r.reportingAuthority.split(', ') : []))
+    )].sort((a, b) => a.localeCompare(b));
+    const employeesWithActivity = new Set(logs.map(r => r.employeeId)).size;
+
+    // ── Filters (JS, same low-org-size rationale getEmployeeList uses) ─────
+    let rows = logs;
+    if (department) rows = rows.filter(r => r.department === department);
+    if (ra) rows = rows.filter(r => (r.reportingAuthority || '').split(', ').includes(ra));
+    if (search) {
+      const q = search.trim().toLowerCase();
+      rows = rows.filter(r =>
+        (r.name || '').toLowerCase().includes(q) ||
+        (r.employeeCode || '').toLowerCase().includes(q)
+      );
+    }
+
+    // ── Sort ────────────────────────────────────────────────────────────
+    const sortDir = order === 'asc' ? 1 : -1;
+    rows = [...rows].sort((a, b) => {
+      switch (sort) {
+        case 'name': return sortDir * (a.name || '').localeCompare(b.name || '');
+        case 'department': return sortDir * (a.department || '').localeCompare(b.department || '');
+        case 'timestamp':
+        default:
+          return sortDir * (new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+      }
+    });
+
+    // ── Paginate ────────────────────────────────────────────────────────
+    const total = rows.length;
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    const pageRows = rows.slice((page - 1) * limit, page * limit);
+
+    return res.json({
+      month,
+      totalEntries: logs.length,
+      employeesWithActivity,
+      trackedEmployees: roster.length,
+      departments,
+      reportingAuthorities,
+      page,
+      limit,
+      total,
+      totalPages,
+      data: pageRows,
+    });
+  } catch (err) {
+    console.error('[adminController] getActivityLogReport error:', err);
+    return res.status(500).json({ message: 'Failed to load activity log report', error: err.message });
+  }
+};
+
+/* ─── 6. GET /api/admin/activity-report/export-pdf ───────────────────────────
+   Same underlying data as getActivityLogReport, unpaginated (the whole
+   month), laid out as one card per Department/Reporting Authority, each
+   containing one sub-block per employee with that employee's activity
+   listed chronologically underneath.
+
+   Employees with zero activity this month are not listed — this is an
+   activity LOG, not a compliance report; "who submitted nothing" is already
+   covered by the existing exportComplianceReportPdf endpoint, and repeating
+   that list here (with nothing under it) would just be noise.
+
+   Query params: month (required), groupBy (department default | ra),
+   entityType (optional, same validation as the JSON endpoint).
+────────────────────────────────────────────────────────────────────────────── */
+exports.exportActivityLogReportPdf = async (req, res) => {
+  try {
+    const { month } = req.query;
+    if (!validateMonth(month)) {
+      return res.status(400).json({ message: 'month query param is required (YYYY-MM)' });
+    }
+
+    let entityType;
+    if (req.query.entityType) {
+      if (!EMPLOYEE_ACTIVITY_ENTITY_TYPES.includes(req.query.entityType)) {
+        return res.status(400).json({
+          message: `entityType must be one of: ${EMPLOYEE_ACTIVITY_ENTITY_TYPES.join(', ')}`,
+        });
+      }
+      entityType = req.query.entityType;
+    }
+
+    const groupBy = req.query.groupBy === 'ra' ? 'ra' : 'department';
+
+    const [year, mon] = month.split('-').map(Number);
+    const monthLabel = new Date(year, mon - 1, 1).toLocaleString('en-US', {
+      month: 'long', year: 'numeric',
+    });
+
+    const { logs } = await fetchEmployeeActivityData(month, { entityType });
+    const employees = groupLogsByEmployee(logs);
+    const groups = groupBy === 'ra' ? groupEmployeesByRA(employees) : groupEmployeesByDept(employees);
+    const groupLabel = groupBy === 'ra' ? 'Reporting Authority' : 'Department';
+
+    // ── Build PDF ───────────────────────────────────────────────────────
+    const PDFDocument = require('pdfkit');
+    const doc = new PDFDocument({ margin: 50, size: 'A4', bufferPages: true });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="activity-log-${month}${groupBy === 'ra' ? '-by-ra' : ''}.pdf"`
+    );
+    doc.pipe(res);
+
+    // ── Colour palette — intentionally matches exportComplianceReportPdf's
+    //    palette (same hex values) so every admin PDF in this app reads as
+    //    one consistent family, without importing state across the two
+    //    independent PDFDocument instances. ─────────────────────────────
+    const PRIMARY = '#185FA5';
+    const GREEN = '#3B6D11';
+    const GREY_DARK = '#1F2937';
+    const GREY_MID = '#6B7280';
+    const GREY_LITE = '#F3F4F6';
+    const WHITE = '#FFFFFF';
+
+    const pageW = doc.page.width - doc.options.margin * 2;
+    const left = doc.options.margin;
+    const MARGIN = doc.options.margin;
+    const ROW_H = 16;
+    const ENTRY_HEADER_H = 16;
+    const CARD_HEADER_H = 22;
+    const MIN_CARD_BLOCK = CARD_HEADER_H + ENTRY_HEADER_H + ROW_H;
+    function pageBottom() { return doc.page.height - MARGIN; }
+
+    function hRule(y, color = '#E5E7EB') {
+      doc.moveTo(left, y).lineTo(left + pageW, y).strokeColor(color).lineWidth(0.5).stroke();
+    }
+
+    function sectionTitle(text, color = PRIMARY) {
+      doc.y += 4;
+      doc.fontSize(13).fillColor(color).font('Helvetica-Bold')
+        .text(text, left, doc.y, { width: pageW });
+      doc.y += 16;
+      hRule(doc.y, color);
+      doc.y += 6;
+      doc.x = left;
+    }
+
+    // Group card header — right-hand tally is "N employees / M log entries"
+    // rather than Completed/Pending, since this report has no completeness
+    // concept the way the compliance report does.
+    function groupHeader(groupName, employeeCount, entryCount) {
+      const y = doc.y;
+      const boxH = 22;
+      doc.rect(left, y, pageW, boxH).fill(GREY_LITE);
+      doc.fontSize(10.5).font('Helvetica-Bold').fillColor(GREY_DARK)
+        .text(groupName, left + 8, y + 6, { width: pageW * 0.55, lineBreak: false });
+      doc.fontSize(8).font('Helvetica-Bold').fillColor(GREY_MID)
+        .text(
+          `${employeeCount} employee${employeeCount !== 1 ? 's' : ''}  ·  ${entryCount} log ${entryCount !== 1 ? 'entries' : 'entry'}`,
+          left + pageW * 0.55, y + 7, { width: pageW * 0.4, align: 'right', lineBreak: false }
+        );
+      doc.x = left;
+      doc.y = y + boxH + 8;
+    }
+
+    function employeeHeader(emp) {
+      const y = doc.y;
+      doc.fontSize(9.5).font('Helvetica-Bold').fillColor(PRIMARY)
+        .text(
+          `${emp.name}  (${emp.employeeCode})${emp.role === 'RA' ? '  — RA' : ''}`,
+          left + 4, y, { width: pageW - 8, lineBreak: false }
+        );
+      doc.x = left;
+      doc.y = y + 14;
+    }
+
+    function entryTableHeader() {
+      const y = doc.y;
+      doc.rect(left + 4, y, pageW - 8, ENTRY_HEADER_H).fill(PRIMARY);
+      doc.fontSize(7.5).font('Helvetica-Bold').fillColor(WHITE);
+      doc.text('Timestamp', left + 8, y + 3, { width: 130, lineBreak: false });
+      doc.text('Action', left + 140, y + 3, { width: 260, lineBreak: false });
+      doc.text('Record Type', left + 400, y + 3, { width: pageW - 8 - 360, lineBreak: false });
+      doc.x = left;
+      doc.y = y + ENTRY_HEADER_H;
+    }
+
+    function entryRow(entry, idx) {
+      const y = doc.y;
+      const bg = idx % 2 === 0 ? GREY_LITE : WHITE;
+      doc.rect(left + 4, y, pageW - 8, ROW_H).fill(bg);
+      doc.fontSize(7.5).font('Helvetica').fillColor(GREY_DARK);
+      doc.text(
+        new Date(entry.timestamp).toLocaleString('en-IN', {
+          day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+        }),
+        left + 8, y + 3, { width: 130, lineBreak: false }
+      );
+      doc.text(entry.actionLabel, left + 140, y + 3, { width: 260, lineBreak: false });
+      doc.fillColor(GREEN)
+        .text(entry.entityTypeLabel, left + 400, y + 3, { width: pageW - 8 - 360, lineBreak: false });
+      doc.x = left;
+      doc.y = y + ROW_H;
+    }
+
+    // ── Cover ───────────────────────────────────────────────────────────
+    doc.rect(0, 0, doc.page.width, 80).fill(PRIMARY);
+    doc.fontSize(22).font('Helvetica-Bold').fillColor(WHITE)
+      .text('Employee Activity Log', left, 20, { width: pageW });
+    doc.fontSize(12).font('Helvetica').fillColor('#BFDBFE')
+      .text(
+        `${monthLabel}  ·  Grouped by ${groupLabel}${entityType ? `  ·  ${entityTypeLabel(entityType)} only` : ''}`,
+        left, 50, { width: pageW }
+      );
+    doc.y = 100;
+
+    // Summary box
+    const totalEmployees = employees.length;
+    const totalEntries = logs.length;
+    doc.rect(left, doc.y, pageW, 44).fill(GREY_LITE).stroke(GREY_LITE);
+    const bY = doc.y + 10;
+    doc.fontSize(10).font('Helvetica').fillColor(GREY_MID).text('Employees With Activity', left + 10, bY);
+    doc.fontSize(16).font('Helvetica-Bold').fillColor(GREY_DARK).text(String(totalEmployees), left + 10, bY + 14);
+    doc.fontSize(10).font('Helvetica').fillColor(GREY_MID).text('Total Log Entries', left + 200, bY);
+    doc.fontSize(16).font('Helvetica-Bold').fillColor(PRIMARY).text(String(totalEntries), left + 200, bY + 14);
+    doc.y += 44 + 8;
+
+    // ── Activity, grouped by Department/RA ─────────────────────────────
+    sectionTitle(`Activity by ${groupLabel}`, PRIMARY);
+
+    if (groups.length === 0) {
+      doc.fontSize(9).fillColor(GREY_MID)
+        .text('No employee activity was recorded for the selected month.', left, doc.y, { width: pageW });
+      doc.x = left;
+    } else {
+      groups.forEach(([groupName, groupEmployees], groupIdx) => {
+        const groupEntryCount = groupEmployees.reduce((sum, e) => sum + e.entries.length, 0);
+        if (doc.y + MIN_CARD_BLOCK > pageBottom()) doc.addPage();
+        groupHeader(groupName, groupEmployees.length, groupEntryCount);
+
+        groupEmployees.forEach(emp => {
+          if (doc.y + ENTRY_HEADER_H + ROW_H + 14 > pageBottom()) doc.addPage();
+          employeeHeader(emp);
+          entryTableHeader();
+          emp.entries.forEach((entry, i) => {
+            if (doc.y + ROW_H > pageBottom()) { doc.addPage(); entryTableHeader(); }
+            entryRow(entry, i);
+          });
+          doc.moveDown(0.4);
+        });
+
+        if (groupIdx < groups.length - 1) {
+          if (doc.y + 20 > pageBottom()) doc.addPage();
+          doc.moveDown(0.2);
+          hRule(doc.y);
+          doc.moveDown(0.5);
+        }
+      });
+    }
+
+    // ── Footer on each page ─────────────────────────────────────────────
+    const range = doc.bufferedPageRange();
+    for (let i = range.start; i < range.start + range.count; i++) {
+      doc.switchToPage(i);
+      const pageH = doc.page.height;
+      const pageNum = i - range.start + 1;
+      hRule(pageH - 40);
+      const savedBottomMargin = doc.page.margins.bottom;
+      doc.page.margins.bottom = 0;
+      doc.fontSize(7).fillColor(GREY_MID)
+        .text(`Generated ${new Date().toLocaleString('en-IN')}  |  Page ${pageNum} of ${range.count}`,
+          left, pageH - 30, { width: pageW, align: 'center' });
+      doc.page.margins.bottom = savedBottomMargin;
+    }
+
+    doc.end();
+  } catch (err) {
+    console.error('[adminController] exportActivityLogReportPdf error:', err);
+    if (!res.headersSent) {
+      return res.status(500).json({ message: 'Failed to generate activity log PDF', error: err.message });
     }
   }
 };

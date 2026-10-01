@@ -5,15 +5,19 @@
  * Used by:
  *   - dateMiddleware.js  (enforcement — plan & achievement submission)
  *   - raController.js   (extendDeadline hardening, getDeadlineManagement,
- *                         getMissedDeadlines, getExtendDeadlineContext)
+ *                         getMissedDeadlines, getExtendDeadlineContext,
+ *                         submitMonthlyEvaluation / getMonthlyEvaluationById
+ *                         / submitPlanFeedback — via getEvaluationOpensAt)
  *
- * Both functions are async (they query the DB) and are imported wherever
- * "is this extended?" or "what is the full audit history?" needs answering.
+ * All three functions are async (they query the DB) and are imported
+ * wherever "is this extended?", "what is the full audit history?", or
+ * "when can this be evaluated?" needs answering.
  * No other file replicates this logic — Section 4, rule 2.
  */
 
 const { DeadlineExtension, User } = require("../models");
 const { Op } = require("sequelize");
+const { computeAchievementWindow } = require("./dateHelpers");
 
 /**
  * getEffectiveDeadline
@@ -119,4 +123,46 @@ async function getExtensionHistory({ employeeId, month, year, type }) {
   }));
 }
 
-module.exports = { getEffectiveDeadline, getExtensionHistory };
+/**
+ * getEvaluationOpensAt
+ *
+ * Single source of truth for "when may this monthly record actually be
+ * evaluated." Returns the instant immediately AFTER the plan owner's
+ * achievement submission window closes for that record's own month —
+ * i.e. evaluation opens the day the achievement window ends, taking any
+ * active DeadlineExtension into account via getEffectiveDeadline (so
+ * evaluation can never unlock before the employee's ACTUAL, possibly
+ * extended, deadline — the same deadline allowMonthlyAchievementSubmission
+ * enforces on the submission side).
+ *
+ * For a regular EMPLOYEE (achievementDay: "last", offset 0) this resolves
+ * to the 1st of the following month. For an RA's own plan (achievementDay:
+ * 3, offset 1 — see configController.js), it correctly resolves to the 4th
+ * of the month after next, NOT a hardcoded "1st" — so an MD evaluating an
+ * RA's own monthly plan can never do so before the RA's own (later)
+ * achievement deadline has actually closed.
+ *
+ * @param {{ employeeId: string, month: string,
+ *           config: ReturnType<typeof import('../controllers/configController').parseDeadlineConfig> }} params
+ *   `config` must already be resolved by the CALLER for the PLAN OWNER's
+ *   role (not the evaluator's) — deliberately not resolved in here, so
+ *   this file's import list stays limited to models + dateHelpers, matching
+ *   its existing convention (see header comment).
+ * @returns {Promise<Date>}
+ */
+async function getEvaluationOpensAt({ employeeId, month, config }) {
+  const [year, mo] = month.split("-").map(Number);
+  const { windowEnd } = computeAchievementWindow(month, config);
+
+  const { effectiveDeadline } = await getEffectiveDeadline({
+    employeeId,
+    month: mo,
+    year,
+    type: "ACHIEVEMENT",
+    baseDeadline: windowEnd,
+  });
+
+  return new Date(effectiveDeadline.getTime() + 1);
+}
+
+module.exports = { getEffectiveDeadline, getExtensionHistory, getEvaluationOpensAt };

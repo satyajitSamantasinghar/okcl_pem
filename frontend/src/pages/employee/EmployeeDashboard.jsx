@@ -104,6 +104,23 @@ const parseDateOnlyEndOfDay = (dateStr) => {
     return new Date(y, m - 1, d, 23, 59, 59, 999);
 };
 
+// ROOT CAUSE FIX (window-open date showing "Today" instead of "Tomorrow"):
+// achStart/yearly deadlines are calendar-day boundaries, but achStartDiff was
+// computed as Math.floor((achStart - now) / 86400000) — a raw millisecond
+// diff. That's correct for a CLOSING deadline (23:59:59 on day D): any time
+// during day D is < 1 day away from that instant, so floor() correctly gives
+// 0 ("Today"). But it's wrong for an OPENING boundary (00:00:00 on day D):
+// if "now" is any time on day D-1 (e.g. 5:11pm), the millisecond gap to
+// midnight of day D is LESS than 24h, so floor() also gives 0 — even though
+// today is D-1 and the window opens tomorrow. The fix is to compare calendar
+// dates (with time-of-day stripped) rather than raw millisecond gaps.
+const calendarDaysDiff = (targetDate, referenceDate) => {
+    if (!targetDate || !referenceDate) return null;
+    const target = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
+    const ref = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate());
+    return Math.round((target.getTime() - ref.getTime()) / (1000 * 60 * 60 * 24));
+};
+
 // ACTION CENTER — due-by chip for a given deadline Date, relative to a
 // reference Date (pass `now` from fetchData so every chip in the same pass
 // is computed against the same instant).
@@ -248,8 +265,10 @@ const EmployeeDashboard = () => {
                 const achDiff = achDeadline
                     ? Math.floor((achDeadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
                     : 999;
+                // Was Math.floor(ms diff) — see calendarDaysDiff comment above for why
+                // that under-counted the day before an opening boundary as "Today".
                 const achStartDiff = achStart
-                    ? Math.floor((achStart.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+                    ? calendarDaysDiff(achStart, now)
                     : 999;
 
                 const currMonthDisplay = new Date(now.getFullYear(), now.getMonth()).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
@@ -416,7 +435,9 @@ const EmployeeDashboard = () => {
                 }
 
                 // Yearly Plan Deadline: 30 April of FY start year
-                const yearlyPlanDiff = Math.ceil((yearlyPlanDeadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                // Was Math.ceil(ms diff) — same under/over-count bug the planDiff/achDiff
+                // comment above describes, just never patched here. calendarDaysDiff fixes it.
+                const yearlyPlanDiff = calendarDaysDiff(yearlyPlanDeadline, now);
 
                 if (!currentYearly && yearlyPlanDiff >= -30) {
                     dls.push({
@@ -429,13 +450,14 @@ const EmployeeDashboard = () => {
 
                 // Yearly Appraisal Report Deadline: 30 April of FY end year
                 const yearlyAppraisalDeadline = new Date(fyEndYear, 3, 30, 23, 59, 59);
-                const yearlyAppraisalDiff = Math.ceil((yearlyAppraisalDeadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                // Was Math.ceil(ms diff) — same bug class as yearlyPlanDiff above.
+                const yearlyAppraisalDiff = calendarDaysDiff(yearlyAppraisalDeadline, now);
                 
                 const hasAppraisal = appraisals.some(a => a.financialYear === currentFinancialYear && a.status !== 'DRAFT');
                 
                 // Show appraisal deadline if within a reasonable window (e.g. from March 1st of endYear to April 30th)
                 const yearlyAppraisalWindowOpen = new Date(fyEndYear, 2, 1, 0, 0, 0); // 1st March
-                const daysUntilWindowOpen = Math.ceil((yearlyAppraisalWindowOpen.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                const daysUntilWindowOpen = calendarDaysDiff(yearlyAppraisalWindowOpen, now);
 
                 if (!hasAppraisal && yearlyAppraisalDiff >= -30 && daysUntilWindowOpen <= 30) {
                     dls.push({
@@ -770,9 +792,11 @@ const EmployeeDashboard = () => {
                                         <div className={`emp-dash-dl-days ${dl.days < 0 ? 'overdue' : ''}`}>
                                             {dl.days === 0
                                                 ? 'Today'
-                                                : dl.days < 0
-                                                    ? `${Math.abs(dl.days)} day${Math.abs(dl.days) > 1 ? 's' : ''} overdue`
-                                                    : `${dl.days} day${dl.days > 1 ? 's' : ''}`}
+                                                : dl.days === 1
+                                                    ? 'Tomorrow'
+                                                    : dl.days < 0
+                                                        ? `${Math.abs(dl.days)} day${Math.abs(dl.days) > 1 ? 's' : ''} overdue`
+                                                        : `${dl.days} day${dl.days > 1 ? 's' : ''}`}
                                         </div>
                                     </div>
                                 ))

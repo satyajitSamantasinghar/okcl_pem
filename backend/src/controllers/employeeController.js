@@ -34,6 +34,7 @@ const {
   MonthlyAchievement,
   MonthlyAchievementItem,
   MonthlyEvaluation,
+  MonthlyPlanFeedback,
   YearlyPlan,
   YearlyPlanKra,
   YearlyPlanRevisionLog,
@@ -561,11 +562,6 @@ exports.submitMonthlyAchievement = async (req, res) => {
 
         const incoming = Array.isArray(planAchievements) ? planAchievements : [];
 
-        if (incoming.length <= existingItems.length) {
-          await t.rollback();
-          return res.status(400).json({ message: "No new plan items to add progress for." });
-        }
-
         // Identity-based, not sort-order-based: match each existing row to
         // its incoming counterpart by planItemId — the real FK, immune to
         // any reordering that happened between when the client loaded this
@@ -580,21 +576,49 @@ exports.submitMonthlyAchievement = async (req, res) => {
           const key = (entry?.planIndex !== undefined && entry?.planIndex !== null) ? entry.planIndex : idx;
           if (!incomingByPlanIndex.has(key)) incomingByPlanIndex.set(key, entry);
         });
+        const matchIncoming = (row, idx) =>
+          (row.planItemId && incomingByPlanItemId.get(row.planItemId))
+          || incomingByPlanIndex.get(row.planIndex)
+          || incomingByPlanIndex.get(idx);
 
-        const prefixUnchanged = existingItems.every((row, idx) => {
-          const match = (row.planItemId && incomingByPlanItemId.get(row.planItemId))
-            || incomingByPlanIndex.get(row.planIndex)
-            || incomingByPlanIndex.get(idx);
-          return match
-            && (match.achievementDetails || "") === (row.achievementDetails || "")
-            && (match.progress || 0) === (row.progress || 0);
-        });
-        if (!prefixUnchanged) {
+        // ── EDITABLE PROGRESS (Sep 2026) ─────────────────────────────────────
+        // Previously this branch required every existing row to be byte-for-
+        // byte unchanged ("prefixUnchanged") and only allowed appending new
+        // rows. That's relaxed here: an existing progress entry may now be
+        // EDITED (details and/or % complete) at any point before evaluation,
+        // matching the plan-level "RA feedback" feature — an RA can ask the
+        // employee to revise a progress entry, and the employee updates it
+        // in place rather than being locked out. What still can't happen is
+        // an existing entry silently DISAPPEARING from the payload — every
+        // planItemId that already has a MonthlyAchievementItem row must
+        // still be represented, so progress can be corrected but never
+        // quietly dropped.
+        const missingRow = existingItems.find((row, idx) => !matchIncoming(row, idx));
+        if (missingRow) {
           await t.rollback();
-          return res.status(400).json({ message: "Existing progress entries can't be edited once submitted — you can only add progress for newly added plan items." });
+          return res.status(400).json({ message: "Every previously submitted progress entry must remain present — existing entries can be edited, but not removed." });
+        }
+
+        let editedCount = 0;
+        for (let idx = 0; idx < existingItems.length; idx++) {
+          const row = existingItems[idx];
+          const match = matchIncoming(row, idx);
+          const newDetails = match.achievementDetails || "";
+          const newProgress = match.progress || 0;
+          if (newDetails !== (row.achievementDetails || "") || newProgress !== (row.progress || 0)) {
+            row.achievementDetails = newDetails;
+            row.progress = newProgress;
+            await row.save({ transaction: t });
+            editedCount++;
+          }
         }
 
         const newTail = incoming.slice(existingItems.length);
+
+        if (editedCount === 0 && newTail.length === 0) {
+          await t.rollback();
+          return res.status(400).json({ message: "No changes to save." });
+        }
 
         // Same root-cause fix as MonthlyPlanItem above: next planIndex comes
         // from the current MAX(planIndex), not existingItems.length.
@@ -602,41 +626,70 @@ exports.submitMonthlyAchievement = async (req, res) => {
           ? Math.max(...existingItems.map(row => row.planIndex)) + 1
           : 0;
 
-        await MonthlyAchievementItem.bulkCreate(
-          newTail.map((a, i) => ({
-            monthlyAchievementId: existingAchievement.id,
-            // Authoritative link — the whole reason this bug class existed
-            // is that planIndex/array-position was the only thing tying a
-            // progress entry to a plan item. planItemId now does that job
-            // directly; existingItems.length + i is only used to find the
-            // right positional fallback when the client omits planItemId.
-            planItemId: resolvePlanItemId(a, existingItems.length + i),
-            planIndex: nextPlanIndex + i,
-            achievementDetails: a.achievementDetails || "",
-            progress: a.progress || 0,
-            // Same origin-tracking as MonthlyPlanItem: this progress entry
-            // was appended after the achievement was already SUBMITTED.
-            addedVia: "ADD_MORE",
-            addedAt: new Date(),
-          })),
-          { transaction: t }
-        );
+        if (newTail.length > 0) {
+          await MonthlyAchievementItem.bulkCreate(
+            newTail.map((a, i) => ({
+              monthlyAchievementId: existingAchievement.id,
+              // Authoritative link — the whole reason this bug class existed
+              // is that planIndex/array-position was the only thing tying a
+              // progress entry to a plan item. planItemId now does that job
+              // directly; existingItems.length + i is only used to find the
+              // right positional fallback when the client omits planItemId.
+              planItemId: resolvePlanItemId(a, existingItems.length + i),
+              planIndex: nextPlanIndex + i,
+              achievementDetails: a.achievementDetails || "",
+              progress: a.progress || 0,
+              // Same origin-tracking as MonthlyPlanItem: this progress entry
+              // was appended after the achievement was already SUBMITTED.
+              addedVia: "ADD_MORE",
+              addedAt: new Date(),
+            })),
+            { transaction: t }
+          );
+        }
 
         // Keep the legacy concatenated text field in sync. status and
-        // submittedAt are deliberately left untouched — this is an addition,
-        // not a resubmission.
+        // submittedAt are deliberately left untouched — this is an addition
+        // and/or edit, not a resubmission.
         existingAchievement.achievementDetails = resolvedDetails;
         if (additionalAchievement !== undefined) existingAchievement.additionalAchievement = additionalAchievement;
         await existingAchievement.save({ transaction: t });
 
-        await AuditLog.create(
-          { userId: req.user.userId, action: "ADD_ACHIEVEMENT_ITEMS", entityType: "MONTHLY_ACHIEVEMENT", entityId: String(existingAchievement.id), ipAddress: req.ip },
-          { transaction: t }
-        );
+        // Two distinct audit actions so the admin activity report can tell
+        // "added new progress" apart from "revised existing progress" —
+        // both can happen in the same request (edit a couple of entries
+        // and add one more), so both are logged when both occurred.
+        if (editedCount > 0) {
+          await AuditLog.create(
+            { userId: req.user.userId, action: "EDIT_ACHIEVEMENT_ITEMS", entityType: "MONTHLY_ACHIEVEMENT", entityId: String(existingAchievement.id), ipAddress: req.ip },
+            { transaction: t }
+          );
+        }
+        if (newTail.length > 0) {
+          await AuditLog.create(
+            { userId: req.user.userId, action: "ADD_ACHIEVEMENT_ITEMS", entityType: "MONTHLY_ACHIEVEMENT", entityId: String(existingAchievement.id), ipAddress: req.ip },
+            { transaction: t }
+          );
+        }
 
         await t.commit();
-        notifyRAOfAddition(req.user.userId, plan.month, "Monthly Achievement", newTail.length);
-        return res.json({ message: `${newTail.length} new progress item${newTail.length !== 1 ? "s" : ""} added` });
+
+        // NOTE: only the "new items added" case fires an RA notification
+        // today, via the existing notifyAddition() service function — same
+        // as before this change. A pure-edit save (editedCount > 0,
+        // newTail.length === 0) does NOT yet email/notify the RA; it still
+        // saves correctly and is fully visible to the RA on the plan detail
+        // view, and is written to the audit log either way. Wiring up an
+        // email notice for edits just needs one small addition to
+        // services/notificationService.js — see the accompanying note.
+        if (newTail.length > 0) {
+          notifyRAOfAddition(req.user.userId, plan.month, "Monthly Achievement", newTail.length);
+        }
+
+        const parts = [];
+        if (editedCount > 0) parts.push(`${editedCount} progress ${editedCount === 1 ? "entry" : "entries"} updated`);
+        if (newTail.length > 0) parts.push(`${newTail.length} new progress item${newTail.length !== 1 ? "s" : ""} added`);
+        return res.json({ message: parts.join(" and ") });
       }
       // ─────────────────────────────────────────────────────────────────────────
 
@@ -951,6 +1004,14 @@ exports.getMonthlyPlans = async (req, res) => {
         // downstream, get achievement-matched) at the wrong position instead
         // of at the tail. Ordering is applied in JS after the query instead.
         { model: MonthlyPlanItem, as: "planItems" },
+        // RA/MD feedback on this (in-progress) plan — see MonthlyPlanFeedback
+        // model header for why there's no status field. Shown in the
+        // employee's View Details modal, that month's card.
+        {
+          model: MonthlyPlanFeedback,
+          as: "feedback",
+          include: [{ model: User, as: "author", attributes: ["id", "name", "role"] }],
+        },
       ],
       order: [["submittedAt", "DESC"]],
     });
@@ -958,9 +1019,16 @@ exports.getMonthlyPlans = async (req, res) => {
     // Sort planItems by itemOrder (0-based) so the frontend always receives
     // items in the correct plan order regardless of DB insertion/JOIN order —
     // mirrors the planAchievements sort in getMonthlyAchievements below.
+    // Feedback is sorted oldest-first so it reads as a chronological thread.
+    // (`order` inside a nested `include` is silently ignored by Sequelize v6
+    // — same gotcha documented throughout this file — so both are sorted in
+    // JS after the query.)
     plans.forEach((plan) => {
       if (Array.isArray(plan.planItems)) {
         plan.planItems.sort((a, b) => (a.itemOrder ?? 0) - (b.itemOrder ?? 0));
+      }
+      if (Array.isArray(plan.feedback)) {
+        plan.feedback.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
       }
     });
 

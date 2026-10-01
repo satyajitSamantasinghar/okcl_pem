@@ -12,7 +12,7 @@ import {
     FiCheckCircle, FiTrendingUp, FiClipboard, FiMessageSquare,
     FiDownload, FiChevronUp, FiChevronDown, FiChevronLeft,
     FiChevronRight, FiAward, FiCalendar, FiAlertCircle, FiFileText,
-    FiXCircle, FiAlertTriangle,
+    FiXCircle, FiAlertTriangle, FiLock, FiSend, FiMessageCircle,
 } from 'react-icons/fi';
 import { FaFile } from 'react-icons/fa';
 
@@ -251,17 +251,44 @@ const EVAL_STATUS_FILTER_OPTIONS = [
    ALSO submitted progress/achievement covering every plan item (including
    any appended later via "Add More Plans"; see hasAchievement's origin in
    getMonthlyEvaluations / isAchievementCompleteForPlan on the backend).
-   All three conditions must hold:
+   All four conditions must hold:
      1. Not yet evaluated            (status !== 'EVALUATED')
      2. Plan was not rejected        (monthlyPlanId?.status !== 'REJECTED')
      3. Progress has been submitted  (hasAchievement === true)
+     4. Evaluation window is open    (canEvaluate === true — Sep 2026;
+        the employee's own achievement submission window, plus any RA
+        feedback window, must have actually closed first. See
+        getEvaluationOpensAt on the backend.)
 ───────────────────────────────────────── */
 function isActionablePendingEvaluation(ev) {
     return (
         ev.status !== 'EVALUATED' &&
         ev.monthlyPlanId?.status !== 'REJECTED' &&
-        ev.hasAchievement === true
+        ev.hasAchievement === true &&
+        ev.canEvaluate === true
     );
+}
+
+/* ─────────────────────────────────────────
+   ROW PRIORITY — "action needed" rows surface first.
+
+   Standard triage ordering for a work queue (support tickets, approval
+   inboxes, review lists): rows the RA can act on RIGHT NOW — plan
+   submitted AND progress submitted, i.e. the Evaluate button is visible —
+   float to the top, ahead of rows still blocked on the employee (plan or
+   progress pending) or already resolved (evaluated / rejected). This
+   holds regardless of which column header is currently sorted.
+
+   Reuses isActionablePendingEvaluation — the same single source of truth
+   already driving the "Pending Evaluation" KPI card and Status filter —
+   so this can never drift out of sync with when the Evaluate button
+   actually appears.
+
+   0 = actionable now (Evaluate button visible)
+   1 = everything else (plan/progress still pending, rejected, or evaluated)
+───────────────────────────────────────── */
+function getRowPriority(ev) {
+    return isActionablePendingEvaluation(ev) ? 0 : 1;
 }
 
 /* ─────────────────────────────────────────
@@ -585,7 +612,88 @@ const PlanContextPanel = ({ plan, achievement, className = '' }) => {
    DETAIL MODAL (View button)
    New prop: isMissedDeadline (boolean) — changes footer
 ───────────────────────────────────────── */
-const DetailModal = ({ ev, detail, detailLoading, onClose, onEvaluate, onReject, isMissedDeadline, onExtendDeadline }) => {
+/* ─────────────────────────────────────────
+   FEEDBACK THREAD (Sep 2026) — RA/MD remarks on an in-progress monthly
+   plan. Distinct from Reject Plan: non-destructive, the plan and
+   everything already submitted stay exactly as they are. The employee
+   acts on a remark using features that already exist for them — "Add
+   More Plans" and editing an already-submitted progress entry — so this
+   renders as a simple chronological list plus a composer, not a
+   resolve/close workflow. Multiple remarks per plan are normal.
+
+   The composer is shown only while `canPost` is true (i.e. this month's
+   evaluation window hasn't opened yet — see canGiveFeedback in
+   DetailModal below) — the backend enforces the exact same window, so
+   this is a UX nicety, not the source of truth.
+───────────────────────────────────────── */
+const FeedbackThread = ({ planId, feedback, canPost, onPosted }) => {
+    const [message, setMessage] = useState('');
+    const [posting, setPosting] = useState(false);
+
+    const handlePost = async () => {
+        const trimmed = message.trim();
+        if (!trimmed || !planId || posting) return;
+        setPosting(true);
+        try {
+            await api.post(`/ra/monthly-plan/${planId}/feedback`, { message: trimmed });
+            setMessage('');
+            toast.success('Feedback sent to the employee.');
+            onPosted?.();
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Failed to send feedback.');
+        } finally {
+            setPosting(false);
+        }
+    };
+
+    return (
+        <div className="meval-feedback-box">
+            <div className="meval-feedback-hdr">
+                <FiMessageCircle size={13} />
+                <span>Feedback to Employee</span>
+                {feedback.length > 0 && <span className="meval-feedback-count">{feedback.length}</span>}
+            </div>
+
+            {feedback.length > 0 ? (
+                <div className="meval-feedback-list">
+                    {feedback.map(f => (
+                        <div key={f.id} className="meval-feedback-item">
+                            <div className="meval-feedback-item-hdr">
+                                <strong>{f.author?.name || 'Reporting Authority'}</strong>
+                                <span className="meval-feedback-date">{formatDate(f.createdAt)}</span>
+                            </div>
+                            <div className="meval-feedback-msg">{f.message}</div>
+                        </div>
+                    ))}
+                </div>
+            ) : !canPost && (
+                <div className="meval-feedback-empty">No feedback given for this month.</div>
+            )}
+
+            {canPost && (
+                <div className="meval-feedback-composer">
+                    <textarea
+                        className="meval-feedback-input"
+                        rows={2}
+                        placeholder="Ask the employee to add a plan item, or revise a submitted progress entry…"
+                        value={message}
+                        onChange={e => setMessage(e.target.value)}
+                        maxLength={1000}
+                    />
+                    <button
+                        className="btn btn-sm btn-secondary meval-feedback-send"
+                        onClick={handlePost}
+                        disabled={posting || !message.trim()}
+                    >
+                        <FiSend size={13} /> {posting ? 'Sending…' : 'Send'}
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+};
+
+const DetailModal = ({ ev, detail, detailLoading, onClose, onEvaluate, onReject, isMissedDeadline, onExtendDeadline, onFeedbackAdded }) => {
     if (!ev) return null;
 
     const planItems = detail ? getPlanItems(detail.plan) : [];
@@ -603,6 +711,14 @@ const DetailModal = ({ ev, detail, detailLoading, onClose, onEvaluate, onReject,
     // treat progress as done.
     const hasAch = !!detail?.status?.achievementComplete;
     const isEvaluated = detail?.status?.evaluated || ev.status === 'EVALUATED';
+    const isRejected = ev.monthlyPlanId?.status === 'REJECTED' || detail?.plan?.status === 'REJECTED';
+    // Sep 2026: evaluation only unlocks once the plan owner's own
+    // achievement submission window has closed — see getEvaluationOpensAt
+    // on the backend, resolveCanEvaluate in raController.js. Feedback can
+    // still be given for as long as evaluation ISN'T open yet.
+    const canEvaluate = !!detail?.status?.canEvaluate;
+    const evaluationOpensAt = detail?.status?.evaluationOpensAt;
+    const canGiveFeedback = !!detail?.plan && !isEvaluated && !isRejected && !canEvaluate;
 
     const stepperPlan = 'done';
     const stepperAch = hasAch ? 'done' : 'active';
@@ -687,6 +803,12 @@ const DetailModal = ({ ev, detail, detailLoading, onClose, onEvaluate, onReject,
 
                             <PlanContextPanel plan={detail.plan} achievement={detail.achievement} />
 
+                            <FeedbackThread
+                                planId={detail.plan?.id}
+                                feedback={detail.feedback || []}
+                                canPost={canGiveFeedback}
+                                onPosted={onFeedbackAdded}
+                            />
 
                             {/* RA Evaluation box */}
                             <div className="meval-ra-box">
@@ -745,22 +867,30 @@ const DetailModal = ({ ev, detail, detailLoading, onClose, onEvaluate, onReject,
                         <>
                             <span className="meval-vmodal-ftr-state">
                                 {isEvaluated ? 'Evaluated'
-                                    : (ev.monthlyPlanId?.status === 'REJECTED' || detail?.plan?.status === 'REJECTED') ? 'Plan rejected — awaiting resubmission'
+                                    : isRejected ? 'Plan rejected — awaiting resubmission'
+                                    : hasAch && !canEvaluate ? `Locked until ${formatDate(evaluationOpensAt)}`
                                     : hasAch ? 'Awaiting RA review'
                                     : 'Progress pending'}
                             </span>
                             <div style={{ display: 'flex', gap: 8 }}>
-                                {/* Evaluate button: hidden when plan is REJECTED — employee must resubmit first */}
-                                {!isEvaluated
-                                    && hasAch
-                                    && onEvaluate
-                                    && ev.monthlyPlanId?.status !== 'REJECTED'
-                                    && detail?.plan?.status !== 'REJECTED' && (
-                                    <button className="btn btn-primary" onClick={onEvaluate}>
-                                        <FiStar size={13} /> Evaluate
-                                    </button>
+                                {/* Evaluate button: hidden when plan is REJECTED — employee must resubmit first.
+                                    Once progress is complete but the window hasn't opened yet, a disabled
+                                    locked state replaces it instead of just disappearing — the RA can still
+                                    see when it'll unlock, and use the Feedback box above meanwhile. */}
+                                {!isEvaluated && hasAch && !isRejected && (
+                                    canEvaluate ? (
+                                        onEvaluate && (
+                                            <button className="btn btn-primary" onClick={onEvaluate}>
+                                                <FiStar size={13} /> Evaluate
+                                            </button>
+                                        )
+                                    ) : (
+                                        <button className="btn btn-secondary meval-locked-btn" disabled title={`Evaluation unlocks ${formatDate(evaluationOpensAt)}`}>
+                                            <FiLock size={13} /> Unlocks {formatDate(evaluationOpensAt)}
+                                        </button>
+                                    )
                                 )}
-                                {!isEvaluated && ev.monthlyPlanId?.status !== 'REJECTED' && detail?.plan?.status !== 'REJECTED' && onReject && (
+                                {!isEvaluated && !isRejected && onReject && (
                                     <button className="btn btn-danger" onClick={onReject}>
                                         <FiXCircle size={13} /> Reject Plan
                                     </button>
@@ -1348,6 +1478,15 @@ const RAMonthlyEvaluationPage = () => {
         else if (evalStatusFilter === 'PENDING') list = list.filter(ev => ev.status !== 'EVALUATED');
         else if (evalStatusFilter === 'PENDING_EVALUATION') list = list.filter(isActionablePendingEvaluation);
         list = [...list].sort((a, b) => {
+            // Priority tier always wins first — actionable rows (Evaluate
+            // button visible) stay pinned above the rest of the queue no
+            // matter which column the RA has clicked to sort by. The
+            // clicked column then decides order *within* each tier (e.g.
+            // actionable rows sorted by score, and separately the rest
+            // sorted by score) instead of one flat sort ignoring urgency.
+            const priorityDiff = getRowPriority(a) - getRowPriority(b);
+            if (priorityDiff !== 0) return priorityDiff;
+
             let aVal, bVal;
             if (sortField === 'name') { aVal = a.employee?.name || ''; bVal = b.employee?.name || ''; }
             else if (sortField === 'score') { aVal = a.score ?? -1; bVal = b.score ?? -1; }
@@ -1390,6 +1529,18 @@ const RAMonthlyEvaluationPage = () => {
     };
 
     const closeDetail = () => { setDetailItem(null); setDetailData(null); setDetailIsMissed(false); };
+
+    // Silent refresh (no full-modal loading flash) used after posting
+    // feedback — re-fetches the detail record AND the list, so the row's
+    // openFeedbackCount badge and canEvaluate state stay in sync too.
+    const refreshDetail = useCallback(async () => {
+        if (!detailItem) return;
+        try {
+            const res = await api.get(`/ra/monthly-evaluations/${detailItem.id}`);
+            setDetailData({ ...res.data, employee: detailItem.employee });
+            fetchEvaluations();
+        } catch { toast.error('Failed to refresh details'); }
+    }, [detailItem, fetchEvaluations]);
 
     const handleEvaluate = async ({ score, remarks }) => {
         setSubmitting(true);
@@ -1675,8 +1826,16 @@ const RAMonthlyEvaluationPage = () => {
                                             </div>
 
                                             {/* Achievement status / Plan rejection badge */}
-                                            <div className="meval-cell">
+                                            <div className="meval-cell" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                                 <ProgressBadge status={getProgressStatus(ev)} />
+                                                {ev.openFeedbackCount > 0 && (
+                                                    <span
+                                                        className="meval-feedback-pill"
+                                                        title={`${ev.openFeedbackCount} feedback message${ev.openFeedbackCount !== 1 ? 's' : ''} given this month`}
+                                                    >
+                                                        <FiMessageCircle size={11} /> {ev.openFeedbackCount}
+                                                    </span>
+                                                )}
                                             </div>
 
                                             {/* Score */}
@@ -1697,17 +1856,27 @@ const RAMonthlyEvaluationPage = () => {
                                                 >
                                                     <FiEye size={13} /> View
                                                 </button>
-                                                {/* Evaluate: only shown AFTER the employee submits their progress/achievement */}
+                                                {/* Evaluate: only shown once progress is submitted AND the
+                                                    evaluation window has opened (see canEvaluate, Sep 2026) */}
                                                 {ev.status !== 'EVALUATED'
                                                     && ev.monthlyPlanId?.status !== 'REJECTED'
                                                     && hasAch && (
-                                                    <button
-                                                        className="btn btn-sm btn-primary"
-                                                        onClick={() => setEvaluatingItem(ev)}
-                                                        title="Evaluate — progress has been submitted"
-                                                    >
-                                                        <FiStar size={13} /> Evaluate
-                                                    </button>
+                                                    ev.canEvaluate ? (
+                                                        <button
+                                                            className="btn btn-sm btn-primary"
+                                                            onClick={() => setEvaluatingItem(ev)}
+                                                            title="Evaluate — progress has been submitted"
+                                                        >
+                                                            <FiStar size={13} /> Evaluate
+                                                        </button>
+                                                    ) : (
+                                                        <span
+                                                            className="meval-locked-pill"
+                                                            title={`Evaluation unlocks ${formatDate(ev.evaluationOpensAt)}`}
+                                                        >
+                                                            <FiLock size={11} /> Locked
+                                                        </span>
+                                                    )
                                                 )}
                                                 {/* Reject Plan: allowed as long as not yet evaluated or already rejected */}
                                                 {ev.status !== 'EVALUATED' && ev.monthlyPlanId?.status !== 'REJECTED' && (
@@ -1968,11 +2137,15 @@ const RAMonthlyEvaluationPage = () => {
                     detailLoading={detailLoading}
                     onClose={closeDetail}
                     isMissedDeadline={detailIsMissed}
+                    onFeedbackAdded={refreshDetail}
                     onEvaluate={
-                        // Block evaluation when plan is rejected — employee must resubmit first
+                        // Block evaluation when plan is rejected, or the evaluation
+                        // window hasn't opened yet — employee must resubmit first,
+                        // or the window must close, respectively.
                         detailIsMissed
                         || detailItem.monthlyPlanId?.status === 'REJECTED'
                         || detailData?.plan?.status === 'REJECTED'
+                        || !detailData?.status?.canEvaluate
                             ? undefined
                             : () => { closeDetail(); setEvaluatingItem(detailItem); }
                     }

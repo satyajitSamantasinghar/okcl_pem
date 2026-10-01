@@ -26,6 +26,7 @@ const {
   MonthlyAchievement,
   MonthlyAchievementItem,
   MonthlyEvaluation,
+  MonthlyPlanFeedback,
   QuarterlyEvaluation,
   YearlyPlan,
   YearlyPlanKra,
@@ -44,9 +45,9 @@ const { filterActiveDuringMonth } = require("../utils/userStatusHistory");
 
 // Deadline extension helpers — single source of truth
 const { parseDeadlineConfig, normalizeRole, getExtensionCeiling } = require("./configController");
-const { getEffectiveDeadline, getExtensionHistory } = require("../utils/deadlineResolver");
-const { GO_LIVE, buildDeadlineDate } = require("../utils/dateHelpers");
-const { notifyEvaluation, notifyRejection, notifyDeadlineExtension } = require("../services/notificationService");
+const { getEffectiveDeadline, getExtensionHistory, getEvaluationOpensAt } = require("../utils/deadlineResolver");
+const { GO_LIVE, buildDeadlineDate, computeAchievementWindow } = require("../utils/dateHelpers");
+const { notifyEvaluation, notifyRejection, notifyDeadlineExtension, notifyFeedback } = require("../services/notificationService");
 // Single source of truth for "is a SUBMITTED achievement actually complete
 // for its plan" — shared with services/reminderService.js. See that file's
 // header for why this moved out of being controller-local.
@@ -77,6 +78,39 @@ async function notifyEmployeeOfRejection(employeeId, raId, month, remarks) {
   } catch (err) {
     console.error("[notification] Rejection notice failed:", err.message);
   }
+}
+
+// Sibling of notifyEmployeeOfRejection/notifyEmployeeOfEvaluation, but for
+// the new "RA feedback on an in-progress plan" feature (Sep 2026) — see
+// submitPlanFeedback below. notifyFeedback is now implemented in
+// services/notificationService.js and exported correctly. Any failure here
+// (e.g. email config issues) is non-fatal — feedback already saved to DB.
+async function notifyEmployeeOfFeedback(employeeId, raId, month, message) {
+  try {
+    const employee = await User.findByPk(employeeId, { attributes: ["id", "name", "email"] });
+    if (!employee?.email) return;
+    const reportingAuthority = await User.findByPk(raId, { attributes: ["id", "name"] });
+    await notifyFeedback({ employee, reportingAuthority, period: month, type: "Monthly Plan", message });
+  } catch (err) {
+    console.error("[notification] Plan feedback notice failed:", err.message);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EVALUATION-WINDOW HELPER
+//
+// Single-record resolver used by submitMonthlyEvaluation (authoritative
+// enforcement) and getMonthlyEvaluationById (detail view — same authority,
+// since it's a single record and the extra DeadlineExtension lookup is
+// cheap here). getMonthlyEvaluations (the LIST endpoint) deliberately does
+// NOT use this — see the comment there for why a batched, extension-unaware
+// approximation is used instead to avoid an N+1 query per row.
+// ─────────────────────────────────────────────────────────────────────────────
+async function resolveCanEvaluate(employeeId, month) {
+  const owner = await User.findByPk(employeeId, { attributes: ["role"] });
+  const config = parseDeadlineConfig(normalizeRole(owner?.role));
+  const evaluationOpensAt = await getEvaluationOpensAt({ employeeId, month, config });
+  return { evaluationOpensAt, canEvaluate: new Date() >= evaluationOpensAt };
 }
 
 /* ─── 1. RA DASHBOARD ────────────────────────────────────────────────────────── */
@@ -570,6 +604,23 @@ exports.submitMonthlyEvaluation = async (req, res) => {
       }
     }
 
+    // ── BUSINESS RULE (Sep 2026): Evaluation window ──────────────────────
+    // The employee must keep the ability to revise their plan/progress (add
+    // a plan item, edit progress, act on RA feedback) for the whole of
+    // their own achievement submission window — evaluation cannot lock that
+    // in early. getEvaluationOpensAt resolves to the instant right after
+    // that window closes for THIS record's month, for the PLAN OWNER's own
+    // role (an RA's own plan uses the RA achievement config, not EMPLOYEE),
+    // and accounts for any active deadline extension. For a normal employee
+    // this is exactly the 1st of the following month.
+    const { evaluationOpensAt, canEvaluate } = await resolveCanEvaluate(evaluation.employeeId, evaluation.month);
+    if (!canEvaluate) {
+      return res.status(400).json({
+        message: `Cannot evaluate yet: the progress submission window for ${evaluation.month} is still open. Evaluation unlocks on ${evaluationOpensAt.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}.`,
+        evaluationOpensAt,
+      });
+    }
+
     // Validate score range
     const numScore = Number(score);
     if (!Number.isInteger(numScore) || numScore < 1 || numScore > 10) {
@@ -768,7 +819,9 @@ exports.getMonthlyEvaluations = async (req, res) => {
     const evaluations = await MonthlyEvaluation.findAll({
       where,
       include: [
-        { model: User, as: "employee", attributes: ["id", "name", "employeeCode", "department"] },
+        // `role` added so canEvaluate/evaluationOpensAt below can resolve the
+        // right deadline config (EMPLOYEE vs RA) without a per-row query.
+        { model: User, as: "employee", attributes: ["id", "name", "employeeCode", "department", "role"] },
         {
           // NOTE: `order` inside a nested `include` is silently ignored by
           // Sequelize v6 (see the note in employeeController.js's
@@ -847,6 +900,42 @@ exports.getMonthlyEvaluations = async (req, res) => {
       });
     }
 
+    // ── Open feedback count, batched (one query for the whole page) ──────
+    const feedbackRows = planIds.length > 0
+      ? await MonthlyPlanFeedback.findAll({
+        where: { monthlyPlanId: { [Op.in]: planIds } },
+        attributes: ["monthlyPlanId"],
+      })
+      : [];
+    const feedbackCountByPlanId = new Map();
+    feedbackRows.forEach(f => {
+      const key = String(f.monthlyPlanId);
+      feedbackCountByPlanId.set(key, (feedbackCountByPlanId.get(key) || 0) + 1);
+    });
+
+    // ── canEvaluate / evaluationOpensAt, batched and extension-UNAWARE ────
+    // Deliberately uses only the base achievementDay/offset config (no
+    // DeadlineExtension lookup) so the whole page resolves with zero extra
+    // per-row queries — computeAchievementWindow is pure/sync once each
+    // employee's role is known (already fetched via the `employee.role`
+    // include above). This is a display-only approximation: in the rare
+    // case an employee has an active achievement-deadline extension, this
+    // list may show a row as "opens <date>" slightly earlier than the true,
+    // extended date. The single-record paths — getMonthlyEvaluationById
+    // (the detail modal) and the actual submitMonthlyEvaluation action —
+    // both use resolveCanEvaluate, which IS extension-aware, so the row
+    // can never actually be evaluated early even if this list looks
+    // optimistic; opening the detail view always shows the true date.
+    const now = new Date();
+    const evalWindowById = new Map();
+    evaluations.forEach(ev => {
+      const role = normalizeRole(ev.employee?.role);
+      const config = parseDeadlineConfig(role);
+      const { windowEnd } = computeAchievementWindow(ev.month, config);
+      const evaluationOpensAt = new Date(windowEnd.getTime() + 1);
+      evalWindowById.set(String(ev.id), { evaluationOpensAt, canEvaluate: now >= evaluationOpensAt });
+    });
+
     const response = evaluations.map(ev => ({
       id: ev.id,
       employee: ev.employee,
@@ -856,6 +945,8 @@ exports.getMonthlyEvaluations = async (req, res) => {
       status: ev.status,
       monthlyPlanId: ev.monthlyPlan,
       hasAchievement: ev.monthlyPlanId ? achSet.has(String(ev.monthlyPlanId)) : false,
+      openFeedbackCount: ev.monthlyPlanId ? (feedbackCountByPlanId.get(String(ev.monthlyPlanId)) || 0) : 0,
+      ...(evalWindowById.get(String(ev.id)) || { canEvaluate: false, evaluationOpensAt: null }),
     }));
 
     res.json({ page, limit, totalRecords: totalCount, totalPages: Math.ceil(totalCount / limit), data: response });
@@ -918,9 +1009,29 @@ exports.getMonthlyEvaluationById = async (req, res) => {
 
     const canViewScore = ["RA", "HRD", "MD"].includes(req.user.role);
 
+    // RA feedback thread for this plan — oldest first, so it reads as a
+    // chronological record of what was asked and when. Uses the single-
+    // record, extension-aware resolveCanEvaluate (unlike the list endpoint,
+    // this is one record so the extra DeadlineExtension lookup is cheap),
+    // making this detail view authoritative for the "when does this
+    // unlock" question — the RA Monthly Evaluation page's Evaluate button
+    // should gate on THIS canEvaluate, not the list endpoint's.
+    const feedback = planDoc
+      ? await MonthlyPlanFeedback.findAll({
+        where: { monthlyPlanId: planDoc.id },
+        include: [{ model: User, as: "author", attributes: ["id", "name", "role"] }],
+        order: [["createdAt", "ASC"]],
+      })
+      : [];
+
+    const evaluationWindow = planDoc
+      ? await resolveCanEvaluate(evaluation.employeeId, evaluation.month)
+      : { canEvaluate: false, evaluationOpensAt: null };
+
     res.json({
       plan: planDoc,
       achievement: achievement || null,
+      feedback,
       remarks: evaluation.remarks || null,
       score: canViewScore ? evaluation.score : null,
       status: {
@@ -928,6 +1039,7 @@ exports.getMonthlyEvaluationById = async (req, res) => {
         achievementSubmitted: !!achievement,
         achievementComplete,
         evaluated: evaluation.status === "EVALUATED",
+        ...evaluationWindow,
       },
     });
   } catch (error) {
@@ -1517,6 +1629,86 @@ exports.rejectMonthlyPlan = async (req, res) => {
     res.json({ message: "Monthly plan rejected successfully." });
   } catch (error) {
     res.status(500).json({ message: "Failed to reject monthly plan", error: error.message });
+  }
+};
+
+/* ─── RA / MD: SUBMIT PLAN FEEDBACK (Sep 2026) ──────────────────────────────────
+   Distinct from rejectMonthlyPlan above: rejection invalidates the whole
+   plan and forces a resubmit (version bump, achievement wiped). This is a
+   lightweight, non-destructive remark — the plan stays exactly as it is,
+   the employee keeps everything already submitted, and can act on the
+   remark using the features that already exist for them: "Add More Plans"
+   and, as of this same change-set, editing an already-submitted progress
+   entry. Multiple remarks per plan are expected; there's no accept/resolve
+   step (see MonthlyPlanFeedback model header for why).
+──────────────────────────────────────────────────────────────────────────── */
+exports.submitPlanFeedback = async (req, res) => {
+  try {
+    const { message } = req.body;
+    if (!message || !message.trim()) {
+      return res.status(400).json({ message: "Feedback message is required." });
+    }
+
+    const plan = await MonthlyPlan.findByPk(req.params.id, {
+      attributes: ["id", "employeeId", "month", "status"],
+    });
+    if (!plan) return res.status(404).json({ message: "Monthly plan not found." });
+
+    // ── Ownership check — same "does this employee report to me" check
+    // already used for MD in submitMonthlyEvaluation above; used for RA
+    // here too (rather than requiring a MonthlyEvaluation row to already
+    // exist, which it may not if the RA hasn't opened their list for this
+    // month yet — that row is created lazily by getMonthlyEvaluations). ──
+    const emp = await User.findByPk(plan.employeeId, { attributes: ["id", "reportingAuthorityId"] });
+    if (!emp || String(emp.reportingAuthorityId) !== String(req.user.userId)) {
+      return res.status(403).json({ message: "You are not authorized to give feedback on this plan." });
+    }
+
+    if (plan.status === "DRAFT") {
+      return res.status(400).json({ message: "This plan hasn't been submitted yet — feedback can only be given on a submitted plan." });
+    }
+
+    // ── Window check — feedback only makes sense while the employee can
+    // still act on it: reuse the exact same gate that unlocks Evaluate, so
+    // the feedback window and the evaluation lock can never drift apart. ──
+    const { canEvaluate, evaluationOpensAt } = await resolveCanEvaluate(plan.employeeId, plan.month);
+    if (canEvaluate) {
+      return res.status(400).json({
+        message: `Feedback can no longer be added for ${plan.month} — the evaluation window opened on ${evaluationOpensAt.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}.`,
+      });
+    }
+
+    const feedback = await MonthlyPlanFeedback.create({
+      monthlyPlanId: plan.id,
+      authorId: req.user.userId,
+      message: message.trim(),
+    });
+
+    await AuditLog.create({ userId: req.user.userId, action: "PLAN_FEEDBACK", entityType: "MONTHLY_PLAN", entityId: String(plan.id), ipAddress: req.ip });
+
+    // In-app notification — same Notification.create shape as
+    // rejectMonthlyPlan above, so it renders in the employee's existing
+    // notification bell with no frontend changes needed for that part.
+    // NOTE: "MONTHLY_PLAN_FEEDBACK" is NOT in the Notification model's ENUM
+    // (only MONTHLY_PLAN_REJECTED, YEARLY_*, MONTHLY_EVALUATED, QUARTERLY_EVALUATED,
+    // YEARLY_REPORT_EVALUATED, GENERAL are valid). Using that value caused Sequelize
+    // to throw a validation error inside the outer try/catch, which returned HTTP 500
+    // to the client — even though the feedback had already been saved — making the
+    // toast show "Failed to submit feedback" while the DB had the record.
+    // Fixed: use "GENERAL" (a valid ENUM value) until a DB migration adds
+    // MONTHLY_PLAN_FEEDBACK to the notifications table's type column.
+    await Notification.create({
+      userId: plan.employeeId, type: "GENERAL",
+      title: "Feedback from your Reporting Authority",
+      message: `Your Reporting Authority left feedback on your ${plan.month} monthly plan: "${feedback.message}"`,
+      entityType: "MONTHLY_PLAN", entityId: String(plan.id),
+    });
+    notifyEmployeeOfFeedback(plan.employeeId, req.user.userId, plan.month, feedback.message);
+
+    const author = await User.findByPk(req.user.userId, { attributes: ["id", "name", "role"] });
+    res.status(201).json({ id: feedback.id, message: feedback.message, createdAt: feedback.createdAt, author });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to submit feedback", error: error.message });
   }
 };
 

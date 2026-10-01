@@ -1,0 +1,268 @@
+/* ─────────────────────────────────────────────────────
+   MY MANUALS PAGE — MyManualsPage.css
+   Shared Employee/RA-facing help center. Same design
+   tokens as AdminDashboard.css/ManualsPage.css, own
+   class prefix (hlp-) to avoid collisions.
+───────────────────────────────────────────────────── */
+
+.hlp-root {
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+    padding: 28px 32px 48px;
+    min-height: 100vh;
+    background: var(--bg-page, #F8F9FC);
+    font-family: 'Inter', 'Segoe UI', sans-serif;
+    color: var(--text-primary, #1F2937);
+}
+
+@keyframes hlpFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.hlp-root.fade-in {
+    animation: hlpFadeIn 0.35s ease both;
+}
+
+/* ── Page Header ── */
+.hlp-page-eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-muted, #6B7280);
+    margin-bottom: 4px;
+}
+
+.hlp-page-title {
+    font-size: 1.65rem;
+    font-weight: 800;
+    color: var(--text-primary, #1F2937);
+    margin: 0 0 4px;
+    letter-spacing: -0.3px;
+}
+
+.hlp-page-sub {
+    font-size: 0.875rem;
+    color: var(--text-muted, #6B7280);
+    margin: 0;
+}
+
+/* ── Search ── */
+.hlp-search-wrap {
+    position: relative;
+    max-width: 420px;
+}
+
+.hlp-search-icon {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted, #6B7280);
+}
+
+.hlp-search-wrap input {
+    width: 100%;
+    padding: 11px 34px;
+    border: 1px solid var(--border-default, #E5E7EB);
+    border-radius: 10px;
+    font-size: 0.87rem;
+    box-sizing: border-box;
+    background: var(--bg-card, #fff);
+}
+
+.hlp-search-clear {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: var(--text-muted, #6B7280);
+    cursor: pointer;
+}
+
+/* ── Category sections ── */
+.hlp-category-section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.hlp-category-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-primary, #1F2937);
+    margin: 0;
+    padding-left: 2px;
+}
+
+.hlp-manual-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+}
+
+/* ── Manual card ── */
+.hlp-manual-card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background: var(--bg-card, #fff);
+    border: 1px solid var(--border-default, #E5E7EB);
+    border-radius: 14px;
+    padding: 18px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.hlp-manual-card:hover {
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+    transform: translateY(-2px);
+}
+
+.hlp-manual-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: #EEF2FF;
+    color: #185FA5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.hlp-manual-info h3 {
+    margin: 0 0 4px;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-primary, #1F2937);
+}
+
+.hlp-manual-info p {
+    margin: 0 0 8px;
+    font-size: 0.83rem;
+    color: var(--text-secondary, #4B5563);
+    line-height: 1.4;
+}
+
+.hlp-manual-meta {
+    font-size: 0.72rem;
+    color: var(--text-muted, #6B7280);
+}
+
+.hlp-manual-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: auto;
+}
+
+.hlp-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 9px 12px;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.15s ease;
+}
+
+.hlp-btn--primary {
+    background: #185FA5;
+    color: #fff;
+}
+
+.hlp-btn--primary:hover {
+    background: #14508c;
+}
+
+.hlp-btn--secondary {
+    background: #fff;
+    border-color: var(--border-default, #E5E7EB);
+    color: var(--text-secondary, #4B5563);
+}
+
+.hlp-btn--secondary:hover {
+    background: var(--bg-muted, #F3F4F6);
+}
+
+.hlp-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.hlp-btn-spinner {
+    width: 12px;
+    height: 12px;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: hlpSpin 0.6s linear infinite;
+    display: inline-block;
+}
+
+@keyframes hlpSpin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* ── Loading / Empty ── */
+.hlp-loading,
+.hlp-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 60px 20px;
+    color: var(--text-muted, #6B7280);
+    text-align: center;
+}
+
+.hlp-empty h3 {
+    margin: 0;
+    color: var(--text-primary, #1F2937);
+}
+
+.hlp-empty p {
+    margin: 0;
+    font-size: 0.85rem;
+}
+
+.hlp-spinner {
+    width: 28px;
+    height: 28px;
+    border: 3px solid rgba(0, 0, 0, 0.1);
+    border-top-color: #185FA5;
+    border-radius: 50%;
+    animation: hlpSpin 0.7s linear infinite;
+}
+
+/* ── Mobile ── */
+@media (max-width: 768px) {
+    .hlp-root {
+        padding: 20px 16px 40px;
+    }
+
+    .hlp-manual-grid {
+        grid-template-columns: 1fr;
+    }
+}

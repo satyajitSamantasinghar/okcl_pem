@@ -1,0 +1,532 @@
+/* ─────────────────────────────────────────────────────
+   MANUALS PAGE — ManualsPage.css
+   Same design tokens as AdminDashboard.css, own class
+   prefix (mnl-) to avoid clashing with adm- selectors.
+───────────────────────────────────────────────────── */
+
+.mnl-root {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    padding: 28px 32px 48px;
+    min-height: 100vh;
+    background: var(--bg-page, #F8F9FC);
+    font-family: 'Inter', 'Segoe UI', sans-serif;
+    color: var(--text-primary, #1F2937);
+}
+
+@keyframes mnlFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.mnl-root.fade-in {
+    animation: mnlFadeIn 0.35s ease both;
+}
+
+/* ── Page Header ── */
+.mnl-page-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.mnl-page-eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-muted, #6B7280);
+    margin-bottom: 4px;
+}
+
+.mnl-page-title {
+    font-size: 1.65rem;
+    font-weight: 800;
+    color: var(--text-primary, #1F2937);
+    margin: 0 0 4px;
+    letter-spacing: -0.3px;
+}
+
+.mnl-page-sub {
+    font-size: 0.875rem;
+    color: var(--text-muted, #6B7280);
+    margin: 0;
+}
+
+.mnl-upload-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--primary-gradient, #185FA5);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    padding: 11px 18px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(24, 95, 165, 0.25);
+    transition: transform 0.15s ease;
+}
+
+.mnl-upload-btn:hover {
+    transform: translateY(-1px);
+}
+
+/* ── Toolbar ── */
+.mnl-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    background: var(--bg-card, #fff);
+    border: 1px solid var(--border-default, #E5E7EB);
+    border-radius: 12px;
+    padding: 12px 16px;
+}
+
+.mnl-search-wrap {
+    position: relative;
+    flex: 1;
+    min-width: 220px;
+}
+
+.mnl-search-icon {
+    position: absolute;
+    left: 11px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted, #6B7280);
+}
+
+.mnl-search-wrap input {
+    width: 100%;
+    padding: 9px 32px;
+    border: 1px solid var(--border-default, #E5E7EB);
+    border-radius: 8px;
+    font-size: 0.85rem;
+    box-sizing: border-box;
+}
+
+.mnl-search-clear {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: var(--text-muted, #6B7280);
+    cursor: pointer;
+}
+
+.mnl-filter-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.mnl-filter-group label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-muted, #6B7280);
+    white-space: nowrap;
+}
+
+.mnl-filter-group select {
+    border: 1px solid var(--border-default, #E5E7EB);
+    border-radius: 8px;
+    padding: 7px 10px;
+    font-size: 0.82rem;
+    background: #fff;
+}
+
+.mnl-clear-filters {
+    background: none;
+    border: none;
+    color: var(--primary, #185FA5);
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+/* ── Table ── */
+.mnl-table-card {
+    background: var(--bg-card, #fff);
+    border: 1px solid var(--border-default, #E5E7EB);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.mnl-table-scroll {
+    overflow-x: auto;
+}
+
+.mnl-table-head,
+.mnl-table-row {
+    display: grid;
+    grid-template-columns: 2.4fr 1fr 1.1fr 1.4fr 0.9fr 1.3fr;
+    gap: 12px;
+    align-items: center;
+    padding: 12px 16px;
+    min-width: 780px;
+}
+
+.mnl-table-head {
+    background: #185FA5;
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.mnl-table-body .mnl-table-row {
+    border-top: 1px solid var(--border-default, #E5E7EB);
+    animation: mnlFadeIn 0.3s ease both;
+}
+
+.mnl-table-body .mnl-table-row:hover {
+    background: #FAFBFF;
+}
+
+.mnl-cell {
+    font-size: 0.85rem;
+}
+
+.mnl-cell--title {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.mnl-cell--title strong {
+    color: var(--text-primary, #1F2937);
+}
+
+.mnl-cell--title span {
+    color: var(--text-muted, #6B7280);
+    font-size: 0.78rem;
+}
+
+.mnl-cell--roles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.mnl-cell--file {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.mnl-cell--file span:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.mnl-file-meta {
+    font-size: 0.72rem;
+    color: var(--text-muted, #6B7280);
+}
+
+.mnl-cell--actions {
+    display: flex;
+    gap: 6px;
+}
+
+.mnl-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 9px;
+    border-radius: 20px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.mnl-badge--category {
+    background: #EEF2FF;
+    color: #4338CA;
+}
+
+.mnl-badge--role {
+    background: #F3F4F6;
+    color: #374151;
+}
+
+.mnl-badge--active {
+    background: #ECFDF5;
+    color: #059669;
+}
+
+.mnl-badge--inactive {
+    background: #FEF2F2;
+    color: #B91C1C;
+}
+
+.mnl-action-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    border: 1px solid var(--border-default, #E5E7EB);
+    background: #fff;
+    color: var(--text-secondary, #4B5563);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.mnl-action-btn:hover {
+    background: var(--bg-muted, #F3F4F6);
+}
+
+.mnl-action-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.mnl-btn-spinner {
+    width: 12px;
+    height: 12px;
+    border: 2px solid rgba(0, 0, 0, 0.15);
+    border-top-color: #185FA5;
+    border-radius: 50%;
+    animation: mnlSpin 0.6s linear infinite;
+    display: inline-block;
+}
+
+@keyframes mnlSpin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* ── Loading / Empty ── */
+.mnl-loading,
+.mnl-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 60px 20px;
+    color: var(--text-muted, #6B7280);
+    text-align: center;
+}
+
+.mnl-empty h3 {
+    margin: 0;
+    color: var(--text-primary, #1F2937);
+}
+
+.mnl-empty p {
+    margin: 0;
+    font-size: 0.85rem;
+}
+
+.mnl-spinner {
+    width: 28px;
+    height: 28px;
+    border: 3px solid rgba(0, 0, 0, 0.1);
+    border-top-color: #185FA5;
+    border-radius: 50%;
+    animation: mnlSpin 0.7s linear infinite;
+}
+
+/* ── Modal ── */
+.mnl-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 20px;
+}
+
+.mnl-modal {
+    background: #fff;
+    border-radius: 14px;
+    width: 100%;
+    max-width: 520px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
+}
+
+.mnl-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 22px;
+    border-bottom: 1px solid var(--border-default, #E5E7EB);
+}
+
+.mnl-modal-header h3 {
+    margin: 0;
+    font-size: 1.05rem;
+}
+
+.mnl-modal-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-muted, #6B7280);
+    font-size: 1.1rem;
+}
+
+.mnl-modal-body {
+    padding: 20px 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.mnl-form-row {
+    display: flex;
+    gap: 14px;
+}
+
+.mnl-form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1;
+}
+
+.mnl-form-group--narrow {
+    flex: 0 0 120px;
+}
+
+.mnl-form-group label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-secondary, #374151);
+}
+
+.mnl-form-group input[type="text"],
+.mnl-form-group input[type="number"],
+.mnl-form-group textarea {
+    border: 1px solid var(--border-default, #E5E7EB);
+    border-radius: 8px;
+    padding: 9px 12px;
+    font-size: 0.87rem;
+    font-family: inherit;
+    resize: vertical;
+}
+
+.mnl-role-pills {
+    display: flex;
+    gap: 8px;
+}
+
+.mnl-role-pill {
+    border: 1.5px solid var(--border-default, #E5E7EB);
+    background: #fff;
+    border-radius: 20px;
+    padding: 7px 16px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-secondary, #4B5563);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.mnl-role-pill--active {
+    background: #185FA5;
+    border-color: #185FA5;
+    color: #fff;
+}
+
+.mnl-file-picker {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 1.5px dashed var(--border-default, #D1D5DB);
+    border-radius: 8px;
+    padding: 12px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    color: var(--text-secondary, #4B5563);
+    transition: all 0.15s ease;
+}
+
+.mnl-file-picker:hover {
+    border-color: #185FA5;
+    color: #185FA5;
+}
+
+.mnl-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 16px 22px;
+    border-top: 1px solid var(--border-default, #E5E7EB);
+}
+
+.mnl-btn-primary,
+.mnl-btn-secondary {
+    padding: 9px 18px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+}
+
+.mnl-btn-primary {
+    background: #185FA5;
+    color: #fff;
+}
+
+.mnl-btn-primary:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+
+.mnl-btn-secondary {
+    background: var(--bg-muted, #F3F4F6);
+    color: var(--text-secondary, #4B5563);
+}
+
+/* ── Mobile ── */
+@media (max-width: 768px) {
+    .mnl-root {
+        padding: 20px 16px 40px;
+    }
+
+    .mnl-table-head,
+    .mnl-table-row {
+        min-width: 700px;
+    }
+
+    .mnl-form-row {
+        flex-direction: column;
+    }
+
+    .mnl-form-group--narrow {
+        flex: 1;
+    }
+}

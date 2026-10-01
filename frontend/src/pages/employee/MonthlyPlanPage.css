@@ -2728,3 +2728,172 @@
     font-style: italic;
     opacity: 0.85;
 }
+
+/* ═════════════════════════════════════════════════════════════════════
+   RA/MD FEEDBACK ON IN-PROGRESS PLAN (Sep 2026)
+   Indigo palette throughout — distinct from red (.mp-rejection-banner /
+   .dmod-rejection-alert) and the muted "locked" tag — reads as
+   informational / in-progress, not an error.
+═════════════════════════════════════════════════════════════════════ */
+
+/* ── Card-level banner ── */
+.mp-feedback-banner {
+    margin: 0 12px;
+    padding: 12px;
+    background: rgba(79, 70, 229, .06);
+    border: 1px solid rgba(79, 70, 229, .22);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.mp-feedback-banner-hdr {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: .6875rem;
+    color: #4338CA;
+    font-weight: 700;
+}
+
+.mp-feedback-banner-count {
+    background: #4F46E5;
+    color: #fff;
+    font-size: .625rem;
+    font-weight: 700;
+    border-radius: 999px;
+    padding: 1px 6px;
+    line-height: 1.4;
+}
+
+.mp-feedback-banner-msg {
+    font-size: .75rem;
+    color: var(--text-secondary);
+    font-style: italic;
+    line-height: 1.4;
+    border-left: 2px solid rgba(79, 70, 229, .3);
+    padding: 4px 8px;
+}
+
+.mp-feedback-banner-cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    align-self: flex-start;
+    background: none;
+    border: none;
+    padding: 0;
+    color: #4F46E5;
+    font-size: .6875rem;
+    font-weight: 700;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: .3px;
+}
+
+.mp-feedback-banner-cta:hover {
+    color: #3730A3;
+    text-decoration: underline;
+}
+
+/* ── "Previously submitted" tag in the (now editable) achievement row ── */
+.mp-plan-prior-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: 6px;
+    padding: 2px 8px;
+    border-radius: 100px;
+    background: rgba(79, 70, 229, .1);
+    color: #4F46E5;
+    font-size: 0.625rem;
+    font-weight: 600;
+}
+
+/* ── Detail-modal feedback thread (read-only — employee views, doesn't post) ── */
+.dmod-feedback-section {
+    background: rgba(79, 70, 229, .04);
+    border: 1px solid rgba(79, 70, 229, .18);
+    border-radius: 10px;
+    padding: 12px 14px;
+}
+
+.dmod-feedback-section .dmod-sec-title {
+    color: #4338CA;
+}
+
+.dmod-feedback-section .dmod-sec-badge {
+    color: #4F46E5;
+    background: #EEF2FF;
+    border-color: rgba(79, 70, 229, .25);
+}
+
+.dmod-feedback-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 10px;
+    max-height: 220px;
+    overflow-y: auto;
+}
+
+.dmod-feedback-item {
+    background: #fff;
+    border: 1px solid rgba(79, 70, 229, .15);
+    border-radius: 8px;
+    padding: 8px 10px;
+}
+
+.dmod-feedback-item-hdr {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 3px;
+}
+
+.dmod-feedback-item-hdr>strong {
+    font-size: 12px;
+    color: #312E81;
+}
+
+.dmod-feedback-date {
+    font-size: 11px;
+    color: #6366F1;
+    opacity: .8;
+    white-space: nowrap;
+}
+
+.dmod-feedback-msg {
+    font-size: 13px;
+    color: #3730A3;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin: 0;
+}
+
+/* ── "Edit Progress" button inside the Plans & Progress section header ──
+   margin-left: auto pushes it to the end regardless of the header's
+   space-between — works whether the header has 2 or 3 children. */
+.dmod-sec-edit-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: auto;
+    background: none;
+    border: 1px solid rgba(79, 70, 229, .3);
+    border-radius: 999px;
+    padding: 3px 10px;
+    color: #4F46E5;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all .15s;
+}
+
+.dmod-sec-edit-btn:hover {
+    background: #EEF2FF;
+    border-color: #4F46E5;
+}

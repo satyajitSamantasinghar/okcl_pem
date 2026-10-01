@@ -131,6 +131,36 @@ async function notifyDeadlineExtension({ employee, reportingAuthority, type, per
 }
 
 /**
+ * Fired when an RA leaves feedback on an in-progress monthly plan.
+ * Notifies the employee so they can act on the remark.
+ * Mirrors the shape of notifyEvaluation / notifyRejection above.
+ */
+async function notifyFeedback({ employee, reportingAuthority, period, type, message }) {
+    if (!employee?.email) {
+        console.warn(`[notification] No employee email on file — skipped feedback notice for employee ${employee?.id}`);
+        return { success: false, error: 'Employee email missing' };
+    }
+
+    const periodLabel = formatPeriod(period);
+
+    return sendMail({
+        to: employee.email,
+        subject: `Feedback on your ${type} — ${periodLabel}`,
+        html: rejectionTemplate({
+            // Reuse rejectionTemplate layout (header + message body) as the
+            // closest existing template until a dedicated feedbackTemplate is
+            // added to emailTemplates.js. The subject line makes the intent clear.
+            employeeName: employee.name,
+            raName: reportingAuthority?.name || 'Your Reporting Authority',
+            period: periodLabel,
+            type,
+            remarks: message,
+        }),
+        logLabel: `${type} Feedback`,
+    });
+}
+
+/**
  * Fired by reminderService.js's scheduled job when an employee/RA has not
  * yet submitted their Monthly Plan or Achievement and the effective
  * deadline (including any RA-granted extension) is within a configured
@@ -194,4 +224,4 @@ async function notifyIncompleteAchievementReminder({ employee, period, deadlineL
     });
 }
 
-module.exports = { notifySubmission, notifyAddition, notifyEvaluation, notifyRejection, notifyDeadlineExtension, notifyDeadlineReminder, notifyIncompleteAchievementReminder };
+module.exports = { notifySubmission, notifyAddition, notifyEvaluation, notifyRejection, notifyDeadlineExtension, notifyFeedback, notifyDeadlineReminder, notifyIncompleteAchievementReminder };

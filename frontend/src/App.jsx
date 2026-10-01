@@ -12,6 +12,7 @@ import UnauthorizedPage from './pages/UnauthorizedPage';
 
 // Shared
 import ProfilePage from './pages/shared/ProfilePage/ProfilePage';
+import MyManualsPage from './pages/shared/MyManualsPage/MyManualsPage';
 
 // Employee
 import EmployeeDashboard from './pages/employee/EmployeeDashboard';
@@ -47,6 +48,8 @@ import MDEmployeeDetailPage from './pages/md/MDEmployeeDetailPage';
 
 // Admin
 import AdminDashboard from './pages/admin/AdminDashboard';
+import ManualsPage from './pages/admin/ManualsPage';
+import AdminActivityReport from './pages/admin/AdminActivityReport';
 
 // ── Smart redirect based on logged-in role and activeView ────────────────────
 //  Uses activeView (not just user.role) so that a refreshed page respects the
@@ -142,6 +145,7 @@ function App() {
             <Route path="monthly-plan" element={<MonthlyPlanPage />} />
             <Route path="quarterly-evaluation" element={<QuarterlyEvaluationPage />} />
             <Route path="yearly-plan" element={<YearlyPlanPage />} />
+            <Route path="manuals" element={<MyManualsPage />} />
             <Route path="profile" element={<ProfilePage />} />
 
           </Route>
@@ -176,6 +180,7 @@ function App() {
             <Route path="my-yearly-plan" element={<YearlyPlanPage />} />
             <Route path="my-quarterly-evaluation" element={<QuarterlyEvaluationPage />} />
             <Route path="profile" element={<ProfilePage />} />
+            <Route path="manuals" element={<MyManualsPage />} />
             <Route path="deadline-management" element={<ExtendDeadlineManagementPage />} />
           </Route>
 
@@ -224,6 +229,8 @@ function App() {
             }
           >
             <Route index element={<AdminDashboard />} />
+            <Route path="activity-report" element={<AdminActivityReport />} />
+            <Route path="manuals" element={<ManualsPage />} />
             <Route path="profile" element={<ProfilePage />} />
           </Route>
 

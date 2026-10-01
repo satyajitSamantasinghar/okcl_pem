@@ -102,6 +102,16 @@ router.put(
   raController.rejectMonthlyPlan
 );
 
+/* RA / MD (in RA-view): Leave feedback on an in-progress (not yet
+   evaluated) monthly plan — see raController.submitPlanFeedback. Distinct
+   from reject: non-destructive, doesn't invalidate the plan. */
+router.post(
+  "/monthly-plan/:id/feedback",
+  verifyToken,
+  authorizeRoles("RA", "MD"),
+  raController.submitPlanFeedback
+);
+
 /* Yearly Appraisal Report Evaluation — first as RA, then MD evaluates again as MD */
 router.put(
   "/yearly-report/:id",

@@ -37,6 +37,24 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+
+    // ── FormData requests (file uploads) ────────────────────────────────────
+    // The instance-level default above sets Content-Type: application/json
+    // on every request. That's fine for normal JSON calls, but it actively
+    // breaks multipart uploads (ManualsPage's create/edit manual calls):
+    // axios only lets the browser attach the multipart boundary
+    // (`multipart/form-data; boundary=...`) when no Content-Type is already
+    // present on the request. Since one is explicitly set here, the FormData
+    // body gets sent labeled as application/json with no boundary, and the
+    // server's multer/busboy parser silently parses zero fields/files —
+    // which is why "A PDF file is required" fired even with a file selected.
+    // Deleting it here lets axios/the browser set the correct multipart
+    // header (with boundary) for exactly these requests, while every other
+    // (JSON) request keeps using the instance default untouched.
+    if (config.data instanceof FormData) {
+      delete config.headers['Content-Type'];
+    }
+
     return config;
   },
   (error) => Promise.reject(error)

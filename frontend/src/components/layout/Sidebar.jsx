@@ -16,6 +16,7 @@ import {
     FiUser,
     FiRepeat,
     FiClock,
+    FiActivity,
 } from 'react-icons/fi';
 import './Sidebar.css';
 
@@ -30,6 +31,7 @@ const navItemsByView = {
         { path: '/employee/monthly-plan',         label: 'Monthly Plan',         icon: <FiCalendar /> },
         { path: '/employee/quarterly-evaluation', label: 'Quarterly Evaluation', icon: <FiBarChart2 /> },
         { path: '/employee/yearly-plan',          label: 'Yearly Plan',          icon: <FiTarget /> },
+         { path: '/employee/manuals',              label: 'Manuals',              icon: <FiFileText /> },
         { path: '/employee/profile',              label: 'My Profile',           icon: <FiUser /> },
     ],
     RA: [
@@ -39,6 +41,7 @@ const navItemsByView = {
         { path: '/ra/deadline-management',    label: 'Deadline Management',  icon: <FiClock /> },
         { path: '/ra/quarterly-evaluation',   label: 'Quarterly Evaluation', icon: <FiBarChart2 /> },
         { path: '/ra/yearly-appraisal',       label: 'Yearly Appraisal',    icon: <FiAward /> },
+        { path: '/ra/manuals',                label: 'Manuals',              icon: <FiFileText /> },
         { path: '/ra/profile',                label: 'My Profile',           icon: <FiUser /> },
     ],
     // RA in "Employee View" — Dashboard links to /employee (EmployeeDashboard, allowed for RA role).
@@ -48,6 +51,7 @@ const navItemsByView = {
         { path: '/ra/my-monthly-plan',          label: 'My Monthly Plan',        icon: <FiCalendar /> },
         { path: '/ra/my-yearly-plan',           label: 'My Yearly Plan',         icon: <FiTarget /> },
         { path: '/ra/my-quarterly-evaluation',  label: 'My Quarterly Evaluation',icon: <FiBarChart2 /> },
+        { path: '/employee/manuals',            label: 'Manuals',                icon: <FiFileText /> },
         { path: '/ra/profile',                  label: 'My Profile',             icon: <FiUser /> },
     ],
     HRD: [
@@ -75,6 +79,15 @@ const navItemsByView = {
         { path: '/ra/yearly-appraisal',       label: 'Yearly Appraisal',    icon: <FiAward /> },
         { path: '/md/profile',                label: 'My Profile',           icon: <FiUser /> },
     ],
+    // ADMIN — previously missing entirely, which is why the sidebar rendered
+    // with zero nav items (resolveNavKey returns 'ADMIN' for the admin role/
+    // view, and navItemsByView.ADMIN was undefined → navItems defaulted to []).
+    ADMIN: [
+        { path: '/admin',                    label: 'Dashboard',      icon: <FiHome /> },
+        { path: '/admin/activity-report',    label: 'Activity Log',   icon: <FiActivity /> },
+        { path: '/admin/manuals',            label: 'Manuals',        icon: <FiFileText /> },
+        { path: '/admin/profile',            label: 'My Profile',     icon: <FiUser /> },
+    ],
 };
 
 // ── Resolve which nav set to render based on role + activeView ────────────────
@@ -85,8 +98,11 @@ const resolveNavKey = (role, activeView) => {
 };
 
 // ── Resolve the "end" prop for NavLink (exact match for index routes) ─────────
+// '/admin' added — without it, the Dashboard link (path: '/admin') stayed
+// active while on any /admin/* sub-route (e.g. /admin/manuals), since NavLink
+// treats a path without `end` as a prefix match.
 const isIndexPath = (path) => {
-    const indexPaths = ['/employee', '/ra', '/hrd', '/md'];
+    const indexPaths = ['/employee', '/ra', '/hrd', '/md', '/admin'];
     return indexPaths.includes(path);
 };
 

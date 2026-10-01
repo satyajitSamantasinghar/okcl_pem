@@ -2907,3 +2907,162 @@
     flex-direction: column;
     gap: 6px;
 }
+
+/* ═════════════════════════════════════════════════════════════════════
+   RA/MD FEEDBACK ON IN-PROGRESS PLAN (Sep 2026)
+   Indigo palette — matches the existing "New — not started" token
+   (#4F46E5 / #EEF2FF / #3730A3) so this reads as "informational /
+   in-progress", distinct from red (rejection) and green (evaluated).
+═════════════════════════════════════════════════════════════════════ */
+.meval-feedback-box {
+    background: #EEF2FF;
+    border: 1.5px solid rgba(79, 70, 229, 0.25);
+    border-radius: 10px;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.meval-feedback-hdr {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8125rem;
+    font-weight: 800;
+    color: #3730A3;
+}
+
+.meval-feedback-hdr>svg {
+    color: #4F46E5;
+    flex-shrink: 0;
+}
+
+.meval-feedback-count {
+    background: #4F46E5;
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 700;
+    border-radius: 999px;
+    padding: 1px 7px;
+    line-height: 1.4;
+}
+
+.meval-feedback-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 220px;
+    overflow-y: auto;
+}
+
+.meval-feedback-item {
+    background: #fff;
+    border: 1px solid rgba(79, 70, 229, 0.15);
+    border-radius: 8px;
+    padding: 8px 10px;
+}
+
+.meval-feedback-item-hdr {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 3px;
+}
+
+.meval-feedback-item-hdr>strong {
+    font-size: 0.75rem;
+    color: #312E81;
+}
+
+.meval-feedback-date {
+    font-size: 0.7rem;
+    color: #6366F1;
+    opacity: 0.8;
+    white-space: nowrap;
+}
+
+.meval-feedback-msg {
+    font-size: 0.8125rem;
+    color: #3730A3;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.meval-feedback-empty {
+    font-size: 0.78rem;
+    color: #6366F1;
+    opacity: 0.75;
+    font-style: italic;
+}
+
+.meval-feedback-composer {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.meval-feedback-input {
+    width: 100%;
+    border: 1.5px solid rgba(79, 70, 229, 0.3);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 0.8125rem;
+    font-family: inherit;
+    color: #312E81;
+    background: #fff;
+    resize: vertical;
+    min-height: 52px;
+}
+
+.meval-feedback-input:focus {
+    outline: none;
+    border-color: #4F46E5;
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
+}
+
+.meval-feedback-send {
+    align-self: flex-end;
+}
+
+/* Row-level "N feedback messages" pill — sits next to the progress badge */
+.meval-feedback-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    background: #EEF2FF;
+    color: #4F46E5;
+    font-size: 0.7rem;
+    font-weight: 700;
+    border-radius: 999px;
+    padding: 2px 7px;
+    border: 1px solid rgba(79, 70, 229, 0.25);
+    white-space: nowrap;
+}
+
+/* Evaluation-window locked state (Sep 2026) — footer button + row pill */
+.meval-locked-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #64748B !important;
+    cursor: not-allowed;
+    opacity: 0.85;
+}
+
+.meval-locked-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: #F1F5F9;
+    color: #64748B;
+    font-size: 0.72rem;
+    font-weight: 600;
+    border-radius: 999px;
+    padding: 3px 9px;
+    border: 1px solid #E2E8F0;
+    white-space: nowrap;
+}

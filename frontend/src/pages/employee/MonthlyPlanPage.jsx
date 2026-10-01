@@ -5,7 +5,8 @@ import toast from 'react-hot-toast';
 import {
     FiSend, FiFileText, FiCheckCircle, FiX, FiCalendar,
     FiTrendingUp, FiMessageSquare, FiClock, FiPlus, FiChevronRight,
-    FiSave, FiSearch, FiEdit3, FiAlertCircle, FiRefreshCw, FiStar, FiLock
+    FiSave, FiSearch, FiEdit3, FiAlertCircle, FiRefreshCw, FiStar, FiLock,
+    FiMessageCircle
 } from 'react-icons/fi';
 import './MonthlyPlanPage.css';
 // FISCAL YEAR FIX — shared fiscal utility
@@ -686,7 +687,7 @@ const MonthlyPlanPage = () => {
         const p = getProgress(plan);
         if (p.isPlanDraft) return { label: 'Plan draft', cls: 'draft' };
         if (p.evalDone) return { label: 'Evaluated', cls: 'evaluated' };
-        if (p.achDone) return { label: 'Achievement added', cls: 'achievement' };
+        if (p.achDone) return { label: 'Progress added', cls: 'achievement' };
         if (p.isDraft) return { label: 'Draft saved', cls: 'draft' };
         if (plan.status === 'REJECTED') return { label: 'Rejected', cls: 'rejected' };
         return { label: 'Plan submitted', cls: 'submitted' };
@@ -1144,25 +1145,35 @@ const MonthlyPlanPage = () => {
             ? Math.round(achItems.reduce((s, a) => s + (Math.min(100, a.progress || 0)), 0) / achItems.length) : 0;
         const monthLabel = formatMonth(achModal.month);
 
-        // Detect append mode the same way renderAchModal does, for wording only.
+        // Detect prior-submission / new-item counts the same way renderAchModal
+        // does, for wording only — Sep 2026: this can now also be a pure edit
+        // (priorCount > 0, newCount === 0), not just "append new items".
         const existingAch = achievementByPlanId[achModal.id];
         const planItemsListForCheck = getPlanItems(achModal);
         const priorAchForCheck = existingAch && existingAch.status !== 'DRAFT'
             ? getEffectivePlanAch(existingAch, planItemsListForCheck.length) : null;
-        const achLockCountForCheck = priorAchForCheck ? priorAchForCheck.length : 0;
-        const isAppendModeForCheck = achLockCountForCheck > 0 && achLockCountForCheck < planItemsListForCheck.length;
+        const priorCountForCheck = priorAchForCheck ? priorAchForCheck.length : 0;
+        const newCountForCheck = planItemsListForCheck.length - priorCountForCheck;
+        const isEditForCheck = priorCountForCheck > 0; // some progress already existed before this save
 
-        setConfirmDialog(isAppendModeForCheck ? {
-            title: 'Add Progress?',
-            message: `You're about to add progress for your newly added plan${planItemsListForCheck.length - achLockCountForCheck !== 1 ? 's' : ''} for ${monthLabel}. Your earlier progress entries stay unchanged, and your Reporting Authority will be notified.`,
-            confirmLabel: 'Yes, Add Progress',
-            onConfirm: () => submitAchievementRequest(false),
-        } : {
-            title: 'Submit Progress?',
-            message: `You're about to submit your monthly progress for ${monthLabel} at ${overallProgress}% overall progress. Once submitted, it will be sent to your Reporting Authority for evaluation.`,
-            confirmLabel: 'Yes, Submit Progress',
-            onConfirm: () => submitAchievementRequest(false),
-        });
+        setConfirmDialog(
+            isEditForCheck && newCountForCheck > 0 ? {
+                title: 'Save Progress?',
+                message: `You're about to update your submitted progress and add progress for ${newCountForCheck} new plan${newCountForCheck !== 1 ? 's' : ''} for ${monthLabel}. Your Reporting Authority will be notified.`,
+                confirmLabel: 'Yes, Save Progress',
+                onConfirm: () => submitAchievementRequest(false),
+            } : isEditForCheck ? {
+                title: 'Save Changes?',
+                message: `You're about to save your updated progress for ${monthLabel}. Your Reporting Authority will see the revised entries.`,
+                confirmLabel: 'Yes, Save Changes',
+                onConfirm: () => submitAchievementRequest(false),
+            } : {
+                title: 'Submit Progress?',
+                message: `You're about to submit your monthly progress for ${monthLabel} at ${overallProgress}% overall progress. Once submitted, it will be sent to your Reporting Authority for evaluation.`,
+                confirmLabel: 'Yes, Submit Progress',
+                onConfirm: () => submitAchievementRequest(false),
+            }
+        );
     };
 
     if (loading) {
@@ -1286,15 +1297,18 @@ const MonthlyPlanPage = () => {
             ? Math.round(achItems.reduce((s, a) => s + (Math.min(100, a.progress || 0)), 0) / achItems.length) : 0;
         const completedCount = achItems.filter(a => a.progress >= 100).length;
 
-        // ── ADD MORE PROGRESS — if achievement was already SUBMITTED (not a
-        // draft), everything up to the count already stored is locked; only
-        // indices beyond that (from newly appended plan items) are editable.
-        // getEffectivePlanAch's structured-data path returns exactly the
-        // stored planAchievements rows, so its length IS the "already
-        // submitted" count — no separate lock-count state needed.
+        // ── EDITABLE PROGRESS (Sep 2026) — previously, everything up to
+        // `priorAch.length` was rendered locked/read-only and only newly
+        // appended plan items were editable. That's relaxed now: an
+        // already-submitted entry can be revised too (e.g. acting on RA
+        // feedback), matching the backend, which now accepts edits to
+        // existing rows via the same endpoint. `priorCount` is kept only to
+        // drive labels/badges ("Previously submitted" tag, button wording,
+        // append-only subtitle) — it no longer disables anything.
         const priorAch = existing && !isDraft ? getEffectivePlanAch(existing, planItemsList.length) : null;
-        const achLockCount = priorAch ? priorAch.length : 0;
-        const isAppendMode = achLockCount > 0 && achLockCount < planItemsList.length;
+        const priorCount = priorAch ? priorAch.length : 0;
+        const hasNewItems = priorCount > 0 && priorCount < planItemsList.length;
+        const isPureEdit = priorCount > 0 && !hasNewItems;
 
         return createPortal(
             <div className="mp-overlay" onClick={requestCloseAchModal}>
@@ -1304,7 +1318,8 @@ const MonthlyPlanPage = () => {
                             <h2>{formatMonth(achModal.month)}</h2>
                             <p className="mp-ach-subtitle">
                                 {isDraft ? 'Continue editing your draft'
-                                    : isAppendMode ? 'Add progress for your newly added plan(s) below — earlier entries are locked.'
+                                    : isPureEdit ? 'Review and revise your submitted progress below.'
+                                    : hasNewItems ? 'Report progress for your newly added plan(s) below, or revise anything already submitted.'
                                     : `Submit Monthly Progress for ${planItemsList.length} plan${planItemsList.length > 1 ? 's' : ''}`}
                             </p>
                         </div>
@@ -1331,26 +1346,8 @@ const MonthlyPlanPage = () => {
                             const safeProgress = Math.min(100, item.progress || 0);
                             const tk = getProgressTokens(safeProgress);
 
-                            // ── Locked row — already-submitted progress, shown for context but
-                            // not editable while adding progress for newly appended plan items.
-                            if (idx < achLockCount) {
-                                return (
-                                    <div key={idx} className="mp-ach-item-row mp-ach-item-row--locked" style={{ borderLeftColor: '#CBD5E1' }}>
-                                        <div className="mp-ach-item-header">
-                                            <CircularProgress progress={safeProgress} size={48} />
-                                            <div className="mp-ach-item-plan-info">
-                                                <div className="mp-ach-item-plan-num">
-                                                    Plan {idx + 1}
-                                                    <span className="mp-plan-locked-tag"><FiLock size={10} /> Already submitted</span>
-                                                </div>
-                                                <div className="mp-ach-item-plan-text">{planText}</div>
-                                            </div>
-                                            <span className="mp-ach-progress-badge" style={{ background: tk.badgeBg, color: tk.badgeText }}>{tk.label}</span>
-                                        </div>
-                                        <p className="mp-ach-locked-details">{item.achievementDetails || '—'}</p>
-                                    </div>
-                                );
-                            }
+                            // Previously-submitted rows stay fully editable now (Sep 2026) —
+                            // only a small tag marks them as such, no more read-only branch.
 
                             return (
                                 <div key={idx} className="mp-ach-item-row" style={{ borderLeftColor: tk.borderColor }}>
@@ -1360,6 +1357,9 @@ const MonthlyPlanPage = () => {
                                             <div className="mp-ach-item-plan-num">
                                                 {/* <span className="mp-plan-seq-num mp-plan-seq-num--sm">{idx + 1}</span> */}
                                                 Plan {idx + 1}
+                                                {idx < priorCount && (
+                                                    <span className="mp-plan-prior-tag"><FiEdit3 size={10} /> Previously submitted</span>
+                                                )}
                                             </div>
                                             <div className="mp-ach-item-plan-text">{planText}</div>
                                         </div>
@@ -1416,13 +1416,13 @@ const MonthlyPlanPage = () => {
                         </div>
                     </div>
                     <div className="mp-ach-actions">
-                        {!isAppendMode && (
+                        {priorCount === 0 && (
                             <button className="btn btn-secondary" disabled={submitting} onClick={() => handleAchSubmit(true)}>
                                 <FiSave /> Save as Draft
                             </button>
                         )}
                         <button className="btn btn-primary" disabled={submitting} onClick={() => handleAchSubmit(false)}>
-                            <FiSend /> {submitting ? 'Submitting...' : isAppendMode ? 'Add Progress' : 'Submit Monthly Progress'}
+                            <FiSend /> {submitting ? 'Submitting...' : isPureEdit ? 'Save Changes' : hasNewItems ? 'Save Progress' : 'Submit Monthly Progress'}
                         </button>
                         <button className="btn btn-secondary" onClick={requestCloseAchModal}>Cancel</button>
                     </div>
@@ -1630,11 +1630,46 @@ const MonthlyPlanPage = () => {
                             </div>
                         )}
 
+                        {/* ── RA/MD FEEDBACK (Sep 2026) — read-only here; the employee acts
+                            on it via "Add More Plans" (card) or the Edit Progress button
+                            in the section header just below, not by replying here. ── */}
+                        {Array.isArray(selectedPlan.feedback) && selectedPlan.feedback.length > 0 && (
+                            <div className="dmod-section dmod-feedback-section">
+                                <div className="dmod-sec-hdr">
+                                    <span className="dmod-sec-title"><FiMessageCircle size={13} style={{ marginRight: 6 }} />Feedback from Reporting Authority</span>
+                                    <span className="dmod-sec-badge">{selectedPlan.feedback.length}</span>
+                                </div>
+                                <div className="dmod-feedback-list">
+                                    {selectedPlan.feedback.map(f => (
+                                        <div key={f.id} className="dmod-feedback-item">
+                                            <div className="dmod-feedback-item-hdr">
+                                                <strong>{f.author?.name || 'Reporting Authority'}</strong>
+                                                <span className="dmod-feedback-date">{formatDate(f.createdAt)}</span>
+                                            </div>
+                                            <p className="dmod-feedback-msg">{f.message}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
                         {/* Plans & Achievements */}
                         <div className="dmod-section">
                             <div className="dmod-sec-hdr">
                                 <span className="dmod-sec-title"><FiFileText size={13} style={{ marginRight: 6 }} />Plans &amp; Progress</span>
                                 <span className="dmod-sec-badge">{planItemsList.length} plan{planItemsList.length !== 1 ? 's' : ''}</span>
+                                {/* Edit Progress — only once something is actually submitted
+                                    (not a draft), not yet evaluated, plan not rejected, and the
+                                    achievement window is still open. Same reopen path as the
+                                    card's own CTA. */}
+                                {achIsSubmitted && !isEval && selectedPlan.status !== 'REJECTED' && detailWindowStatus === 'open' && (
+                                    <button
+                                        className="dmod-sec-edit-btn"
+                                        onClick={() => { setSelectedPlan(null); openAchModal(selectedPlan); }}
+                                    >
+                                        <FiEdit3 size={12} /> Edit Progress
+                                    </button>
+                                )}
                             </div>
                             <div className="dmod-plan-cards">
                                 {planItemsList.map((planText, i) => {
@@ -2105,6 +2140,27 @@ const MonthlyPlanPage = () => {
                                         </button>
                                     </div>
                                 )}
+                                {/* ── RA/MD FEEDBACK (Sep 2026) — non-destructive remarks on an
+                                    in-progress plan; distinct from the rejection banner above.
+                                    Shown whenever any feedback exists, most recent first, so it
+                                    stays visible even after the window that let the employee act
+                                    on it has closed. Full thread + composed response happens via
+                                    View Details / Add More Plans / Edit Progress, not here. ── */}
+                                {Array.isArray(plan.feedback) && plan.feedback.length > 0 && (
+                                    <div className="mp-feedback-banner">
+                                        <div className="mp-feedback-banner-hdr">
+                                            <FiMessageCircle />
+                                            <strong>Feedback from your Reporting Authority</strong>
+                                            {plan.feedback.length > 1 && <span className="mp-feedback-banner-count">{plan.feedback.length}</span>}
+                                        </div>
+                                        <div className="mp-feedback-banner-msg">
+                                            "{plan.feedback[plan.feedback.length - 1].message}"
+                                        </div>
+                                        <button className="mp-feedback-banner-cta" onClick={e => { e.stopPropagation(); setSelectedPlan(plan); }}>
+                                            View Details <FiChevronRight size={12} />
+                                        </button>
+                                    </div>
+                                )}
                                 <div className="mp-section plan">
                                     <div className="mp-section-label">
                                         <FiFileText /> Plan
@@ -2156,15 +2212,22 @@ const MonthlyPlanPage = () => {
                                                 <div className="mp-section-text">{ach.achievementDetails}</div>
                                             )}
                                             <div className="mp-section-date"><FiClock size={10} /> Submitted {formatDateShort(ach.submittedAt)}</div>
-                                            {/* ── ADD MORE PROGRESS — shows only when extra plan items were
-                                                appended after this achievement was already submitted, RA
-                                                hasn't evaluated yet, and the progress window is still open. ── */}
-                                            {!isEval && planItemsList.length > (effectivePlanAch ? effectivePlanAch.length : 0)
-                                                && plan.month === currentMonthDefault && achievementWindowStatus === 'open' && (
-                                                <button className="mp-add-ach-btn mp-add-ach-btn--continue" onClick={() => openAchModal(plan)}>
-                                                    <FiPlus /> Add Progress for New Plan{planItemsList.length - (effectivePlanAch ? effectivePlanAch.length : 0) !== 1 ? 's' : ''}
-                                                </button>
-                                            )}
+                                            {/* ── ADD / EDIT PROGRESS — Sep 2026: reopens for BOTH cases now —
+                                                new plan item(s) needing progress for the first time, AND
+                                                editing an already-submitted entry (e.g. acting on RA
+                                                feedback). Gated the same as before: current month only,
+                                                not yet evaluated, and the achievement window still open —
+                                                the exact same window that unlocks RA feedback. ── */}
+                                            {!isEval && plan.month === currentMonthDefault && achievementWindowStatus === 'open' && (() => {
+                                                const newCount = planItemsList.length - (effectivePlanAch ? effectivePlanAch.length : 0);
+                                                return (
+                                                    <button className="mp-add-ach-btn mp-add-ach-btn--continue" onClick={() => openAchModal(plan)}>
+                                                        {newCount > 0
+                                                            ? <><FiPlus /> Add Progress for New Plan{newCount !== 1 ? 's' : ''}</>
+                                                            : <><FiEdit3 /> Edit Progress</>}
+                                                    </button>
+                                                );
+                                            })()}
                                         </>
                                     ) : isDraftAch ? (
                                         <div className="mp-draft-inline">

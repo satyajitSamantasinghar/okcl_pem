@@ -23,7 +23,7 @@ const {
     DeadlineExtension,
     UserStatusHistory,
 } = require("./src/models");
-const { DataTypes, Op } = require("sequelize");
+const { DataTypes, Op, QueryTypes, Transaction } = require("sequelize");
 const { verifyEmailConnection } = require('./src/services/email');
 const cron = require('node-cron');
 const { runDeadlineReminders } = require('./src/services/reminderService');
@@ -788,10 +788,28 @@ const backfillUserStatusHistory = async () => {
 //  their associated data (plans, achievements, evaluations, appraisals, etc.)
 //  in the correct FK-safe order (leaf → root) inside a single transaction.
 //
+//  TWO-PHASE DESIGN — handles the case where a previous deploy already
+//  deleted the User rows but left child-table rows behind (e.g. because an
+//  earlier version of this function was missing a DELETE step):
+//
+//  Phase 1 — Orphan sweep (always runs)
+//    Scans UserStatusHistory for rows whose userId no longer exists in the
+//    users table. These are the "ghost" rows that make the RA / admin
+//    dashboard show employees that were already removed from the User table.
+//    Deletes them immediately outside any transaction — there is no parent
+//    row to coordinate with, so a plain destroy() is the right primitive.
+//
+//  Phase 2 — Live-user cascade (runs only if any TARGET_EMP_CODES still
+//    exist in the users table)
+//    Full FK-safe cascade (leaf → root) inside a single SERIALIZABLE
+//    transaction. Includes UserStatusHistory so a first-time run is also
+//    clean.
+//
 //  Safety guarantees:
 //    • Idempotent — destroy() on already-gone rows is always a safe no-op.
 //      Re-deploying after this block is commented out causes zero side effects.
-//    • SERIALIZABLE transaction — all-or-nothing; any error rolls back fully.
+//    • SERIALIZABLE transaction (Phase 2) — all-or-nothing; any error rolls
+//      back fully.
 //    • Missing employee codes are silently skipped (warn only), so the server
 //      still starts even if some codes were already deleted.
 //    • Wrapped in try/catch — a failure here NEVER crashes the server.
@@ -804,29 +822,115 @@ const deleteTargetEmployees = async () => {
     ];
 
     try {
-        // ── Resolve employee codes → UUIDs ────────────────────────────────────
+        // ════════════════════════════════════════════════════════════════════
+        // PHASE 1 — Orphan sweep
+        //
+        //  ROOT CAUSE FIX: a previous deploy deleted the User rows without
+        //  also deleting the corresponding UserStatusHistory rows, because
+        //  that table wasn't included in the original function. The
+        //  RA / admin dashboard queries (raController, adminController) resolve
+        //  employees through UserStatusHistory, not the live users table, so
+        //  those employees kept appearing on the dashboard even though their
+        //  User rows were gone.
+        //
+        //  Strategy: find every UserStatusHistory row whose userId has no
+        //  matching row in users, then delete them. This is safe to run even
+        //  if the User rows haven't been deleted yet — in that case the query
+        //  returns zero rows and the destroy() is a no-op.
+        //
+        //  We deliberately do NOT scope this to TARGET_EMP_CODES, because we
+        //  no longer have the original UUIDs (the User rows are gone and there
+        //  is no employeeCode column in UserStatusHistory). Deleting ALL
+        //  orphaned rows is correct — any row without a parent User is stale
+        //  data by definition and should not be driving dashboard queries.
+        // ════════════════════════════════════════════════════════════════════
+        //  Phase 1 runs inside its own transaction so that the SELECT scan,
+        //  the changedBy UPDATE, and the destroy() are one atomic unit — no
+        //  concurrent INSERT can slip a new orphan row between the scan and
+        //  the delete.
+        // ════════════════════════════════════════════════════════════════════
+        const p1 = await sequelize.transaction({
+            isolationLevel: Transaction.ISOLATION_LEVELS.READ_COMMITTED,
+        });
+        try {
+            const orphanRows = await sequelize.query(
+                `SELECT DISTINCT "user_id"
+                   FROM "user_status_histories" ush
+                  WHERE NOT EXISTS (
+                        SELECT 1 FROM "users" u WHERE u."id" = ush."user_id"
+                  )`,
+                { type: QueryTypes.SELECT, transaction: p1 },
+            );
+
+            if (orphanRows.length > 0) {
+                const orphanIds = orphanRows.map(r => r.user_id);
+                console.log(
+                    `🗑️  Employee Cleanup [Phase 1]: found ${orphanIds.length} orphaned ` +
+                    `UserStatusHistory user(s) with no matching User row — deleting.`,
+                );
+
+                // Null out changedBy references that are orphaned (nullable FK
+                // pointing at a since-deleted user). The row itself belongs to a
+                // still-existing subject user and must be preserved — only the
+                // stale actor pointer is cleared.
+                await sequelize.query(
+                    `UPDATE "user_status_histories"
+                        SET "changed_by" = NULL
+                      WHERE "changed_by" IS NOT NULL
+                        AND NOT EXISTS (
+                            SELECT 1 FROM "users" u
+                             WHERE u."id" = "user_status_histories"."changed_by"
+                        )`,
+                    { type: QueryTypes.UPDATE, transaction: p1 },
+                );
+
+                await UserStatusHistory.destroy({
+                    where: { userId: { [Op.in]: orphanIds } },
+                    transaction: p1,
+                });
+
+                console.log(`✅ Employee Cleanup [Phase 1]: orphaned UserStatusHistory rows removed.`);
+            } else {
+                console.log("✅ Employee Cleanup [Phase 1]: no orphaned UserStatusHistory rows found.");
+            }
+
+            await p1.commit();
+        } catch (p1Err) {
+            await p1.rollback();
+            throw p1Err;
+        }
+
+        // ════════════════════════════════════════════════════════════════════
+        // PHASE 2 — Full cascade for employees that still exist in users table
+        // ════════════════════════════════════════════════════════════════════
         const targetUsers = await User.findAll({
             where: { employeeCode: { [Op.in]: TARGET_EMP_CODES } },
             attributes: ["id", "employeeCode", "name"],
         });
 
         if (targetUsers.length === 0) {
-            console.log("✅ Employee Cleanup: none of the target employees found — skipping.");
+            console.log("✅ Employee Cleanup [Phase 2]: none of the target employees found in users table — skipping cascade.");
             return;
         }
 
         const foundCodes = targetUsers.map(u => u.employeeCode);
         const missingCodes = TARGET_EMP_CODES.filter(c => !foundCodes.includes(c));
         if (missingCodes.length > 0) {
-            console.warn(`⚠️  Employee Cleanup: codes not found in DB (already deleted or never existed): ${missingCodes.join(", ")}`);
+            console.warn(
+                `⚠️  Employee Cleanup [Phase 2]: codes not found in DB ` +
+                `(already deleted or never existed): ${missingCodes.join(", ")}`,
+            );
         }
 
         const empIds = targetUsers.map(u => u.id);
         const empWhere = { [Op.in]: empIds };
-        console.log(`🗑️  Employee Cleanup: deleting ${targetUsers.length} employee(s): ${targetUsers.map(u => `${u.name} (${u.employeeCode})`).join(", ")}`);
+        console.log(
+            `🗑️  Employee Cleanup [Phase 2]: deleting ${targetUsers.length} employee(s): ` +
+            `${targetUsers.map(u => `${u.name} (${u.employeeCode})`).join(", ")}`,
+        );
 
         const t = await sequelize.transaction({
-            isolationLevel: require("sequelize").Transaction.ISOLATION_LEVELS.SERIALIZABLE,
+            isolationLevel: Transaction.ISOLATION_LEVELS.SERIALIZABLE,
         });
 
         try {
@@ -929,6 +1033,14 @@ const deleteTargetEmployees = async () => {
             // Step 17 — Notification
             await Notification.destroy({ where: { userId: empWhere }, transaction: t });
 
+            // Step 17b — UserStatusHistory
+            //  Covers both userId (subject) and changedBy (actor who toggled
+            //  the status). Must run before User.destroy() to avoid FK violations.
+            await UserStatusHistory.destroy({
+                where: { [Op.or]: [{ userId: empWhere }, { changedBy: empWhere }] },
+                transaction: t,
+            });
+
             // Step 18a — Null out self-referencing FK on subordinates of any deleted RA
             await User.update(
                 { reportingAuthorityId: null },
@@ -939,7 +1051,7 @@ const deleteTargetEmployees = async () => {
             await User.destroy({ where: { id: empWhere }, transaction: t });
 
             await t.commit();
-            console.log(`✅ Employee Cleanup: successfully deleted ${targetUsers.length} employee(s) and all associated data.`);
+            console.log(`✅ Employee Cleanup [Phase 2]: successfully deleted ${targetUsers.length} employee(s) and all associated data.`);
 
         } catch (txErr) {
             await t.rollback();
