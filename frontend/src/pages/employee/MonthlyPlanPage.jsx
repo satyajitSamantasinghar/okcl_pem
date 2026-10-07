@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 import {
     FiSend, FiFileText, FiCheckCircle, FiX, FiCalendar,
     FiTrendingUp, FiMessageSquare, FiClock, FiPlus, FiChevronRight,
-    FiSave, FiSearch, FiEdit3, FiAlertCircle, FiRefreshCw, FiStar, FiLock,
+    FiSave, FiSearch, FiEdit3, FiAlertCircle, FiRefreshCw, FiLock,
     FiMessageCircle
 } from 'react-icons/fi';
 import './MonthlyPlanPage.css';
@@ -167,6 +167,10 @@ function parseLegacyPlanAch(legacyText, planCount) {
                 result[idx].achievementDetails = header[2].trim();
             }
         } else if (currentIdx >= 0 && line.trim() && !line.match(/^Additional:/i)) {
+            // The "Additional:" guard above is intentional: the extra-progress
+            // feature has been removed, but legacy blobs written while it
+            // existed still carry an "Additional: ..." line. It must never be
+            // folded into the last plan's progress text.
             result[currentIdx].achievementDetails +=
                 (result[currentIdx].achievementDetails ? ' ' : '') + line.trim();
         }
@@ -191,17 +195,6 @@ function getEffectivePlanAch(ach, planCount) {
         if (hasParsedData) return parsed;
     }
     return null;
-}
-
-function parseAdditionalAch(raw) {
-    if (!raw) return [];
-    try {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) return parsed.filter(a => (a.text || '').trim());
-    } catch { /* fall through */ }
-    return raw.split('\n')
-        .filter(l => l.trim() && !l.trim().startsWith('Additional:'))
-        .map(t => ({ text: t.trim() }));
 }
 
 const MONTH_PALETTES = [
@@ -318,8 +311,7 @@ const MonthlyPlanPage = () => {
 
     const [achModal, setAchModal] = useState(null);
     const [achItems, setAchItems] = useState([]);
-    const [additionalAchItems, setAdditionalAchItems] = useState([{ text: '' }]);
-    // UNSAVED-CHANGES GUARD — snapshot of achItems/additionalAchItems taken the
+    // UNSAVED-CHANGES GUARD — snapshot of achItems taken the
     // instant the Achievement modal opens (openAchModal). Compared against the
     // live state on close-attempt so we only warn when the user actually typed
     // something new, not just because a draft happened to have pre-filled text.
@@ -612,12 +604,6 @@ const MonthlyPlanPage = () => {
     const removeResubmitItem = (index) => { if (resubmitItems.length === 1) return; setResubmitItems(resubmitItems.filter((_, i) => i !== index)); };
 
     const updateAchItem = (index, field, value) => { const next = [...achItems]; next[index] = { ...next[index], [field]: value }; setAchItems(next); };
-    const addAdditionalItem = (afterIndex) => { const next = [...additionalAchItems]; next.splice(afterIndex + 1, 0, { text: '' }); setAdditionalAchItems(next); };
-    const updateAdditionalItem = (index, field, value) => { const next = [...additionalAchItems]; next[index] = { ...next[index], [field]: value }; setAdditionalAchItems(next); };
-    const removeAdditionalItem = (index) => {
-        if (additionalAchItems.length === 1) { setAdditionalAchItems([{ text: '' }]); return; }
-        setAdditionalAchItems(additionalAchItems.filter((_, i) => i !== index));
-    };
 
     // Actual network call — only runs after validation has passed and,
     // for a real submission, after the user has confirmed via the dialog.
@@ -682,7 +668,6 @@ const MonthlyPlanPage = () => {
         setAchModal(plan);
 
         let nextAchItems;
-        let nextAdditionalItems;
 
         if (existing) {
             const effective = getEffectivePlanAch(existing, itemList.length);
@@ -721,25 +706,18 @@ const MonthlyPlanPage = () => {
                     achievementDetails: match?.achievementDetails ?? '',
                 };
             });
-
-            if (existing.additionalAchievement) {
-                const parsed = parseAdditionalAch(existing.additionalAchievement);
-                nextAdditionalItems = parsed.length ? parsed : [{ text: '' }];
-            } else { nextAdditionalItems = [{ text: '' }]; }
         } else {
             nextAchItems = itemList.map((_, i) => ({
                 planItemId: itemRows[i]?.id ?? null,
                 achievementDetails: '',
             }));
-            nextAdditionalItems = [{ text: '' }];
         }
 
         setAchItems(nextAchItems);
-        setAdditionalAchItems(nextAdditionalItems);
         // Baseline snapshot for the unsaved-changes guard — taken from the same
         // values we just loaded, so re-opening an unmodified draft never
         // trips a false "discard changes?" warning.
-        achModalSnapshotRef.current = JSON.stringify({ achItems: nextAchItems, additionalAchItems: nextAdditionalItems });
+        achModalSnapshotRef.current = JSON.stringify({ achItems: nextAchItems });
     };
 
     const openResubmitModal = (plan) => {
@@ -766,29 +744,19 @@ const MonthlyPlanPage = () => {
     // ── UNSAVED-CHANGES GUARDS ──────────────────────────────────────────
     // True only when the live form state has *meaningfully* diverged from
     // the snapshot captured at open-time. Values are normalised (trimmed,
-    // empty/untouched extra boxes dropped) before comparing, so merely
-    // clicking "+" for a new blank box never trips a false "discard
-    // changes?" warning; only content the user would actually lose does.
+    // empty/untouched boxes dropped) before comparing, so merely clicking
+    // "+" for a new blank box never trips a false "discard changes?"
+    // warning; only content the user would actually lose does.
     const normalizeAchRows = (items) =>
         (items || []).map(a => ({ achievementDetails: (a.achievementDetails || '').trim() }));
-    const normalizeAdditionalRows = (items) =>
-        (items || [])
-            .map(a => ({ text: (a.text || '').trim() }))
-            .filter(a => a.text); // drop blank, never-touched boxes
     const normalizePlanTexts = (items) => (items || []).map(s => (s || '').trim()).filter(Boolean);
 
     const isAchModalDirty = () => {
         if (!achModal) return false;
         let baseline;
         try { baseline = JSON.parse(achModalSnapshotRef.current) || {}; } catch { return true; }
-        const current = JSON.stringify({
-            achItems: normalizeAchRows(achItems),
-            additionalAchItems: normalizeAdditionalRows(additionalAchItems),
-        });
-        const original = JSON.stringify({
-            achItems: normalizeAchRows(baseline.achItems),
-            additionalAchItems: normalizeAdditionalRows(baseline.additionalAchItems),
-        });
+        const current = JSON.stringify(normalizeAchRows(achItems));
+        const original = JSON.stringify(normalizeAchRows(baseline.achItems));
         return current !== original;
     };
 
@@ -815,7 +783,6 @@ const MonthlyPlanPage = () => {
                 onConfirm: () => {
                     setAchModal(null);
                     setAchItems([]);
-                    setAdditionalAchItems([{ text: '' }]);
                 },
             });
         } else {
@@ -867,7 +834,7 @@ const MonthlyPlanPage = () => {
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [achModal, selectedPlan, resubmitPlan, confirmDialog, achItems, additionalAchItems, resubmitItems, submitting]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [achModal, selectedPlan, resubmitPlan, confirmDialog, achItems, resubmitItems, submitting]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const submitResubmitRequest = async (month, filled, asDraft, wasDraft, isAppend = false) => {
         setSubmitting(true);
@@ -952,10 +919,6 @@ const MonthlyPlanPage = () => {
 
     const submitAchievementRequest = async (asDraft) => {
         setSubmitting(true);
-        const filledAdditional = additionalAchItems
-            .filter(a => a.text.trim())
-            .map(a => ({ text: a.text.trim() }));
-        const additionalStr = filledAdditional.length ? JSON.stringify(filledAdditional) : '';
 
         // PARTIAL SUBMISSION — only include plan items that have progress filled in.
         // Items left blank are excluded from the payload entirely; the backend will
@@ -979,17 +942,17 @@ const MonthlyPlanPage = () => {
         const legacyDetails = achItems
             .filter(a => (a.achievementDetails || '').trim())
             .map((a, i) => `Plan ${i + 1}: ${a.achievementDetails}`)
-            .join('\n') + (additionalStr ? `\nAdditional: ${additionalStr}` : '');
+            .join('\n');
 
         try {
             await api.post('/employee/monthly-achievement', {
                 monthlyPlanId: achModal.id,
                 planAchievements: planAchPayload,
-                additionalAchievement: additionalStr, achievementDetails: legacyDetails,
+                achievementDetails: legacyDetails,
                 status: asDraft ? 'DRAFT' : 'SUBMITTED',
             });
             toast.success(asDraft ? 'Draft saved!' : 'Monthly Progress submitted!');
-            setAchModal(null); setAchItems([]); setAdditionalAchItems([{ text: '' }]);
+            setAchModal(null); setAchItems([]);
             fetchData();
         } catch (err) {
             toast.error(err.response?.data?.message || 'Failed');
@@ -1059,7 +1022,7 @@ const MonthlyPlanPage = () => {
         // ALL plan items have progress (enforced server-side by
         // isAchievementCompleteForPlan), so partial submissions are fully safe.
         const filledCount = achItems.filter(a => (a.achievementDetails || '').trim()).length;
-        const hasAnyFilled = filledCount > 0 || additionalAchItems.some(a => (a.text || '').trim());
+        const hasAnyFilled = filledCount > 0;
 
         if (!asDraft) {
             // At least one plan item must have progress before submitting
@@ -1068,7 +1031,7 @@ const MonthlyPlanPage = () => {
                 return;
             }
         } else {
-            if (!hasAnyFilled) { toast.error('Please describe at least one progress to save as draft'); return; }
+            if (!hasAnyFilled) { toast.error('Please describe progress for at least one plan to save as draft'); return; }
         }
 
         // Drafts are low-stakes and freely editable — save immediately, no confirmation needed.
@@ -1168,35 +1131,6 @@ const MonthlyPlanPage = () => {
         </div>
     );
 
-    const renderAdditionalBox = (item, index) => (
-        <div key={index} className="mp-plan-box-row" style={{ alignItems: 'flex-start' }}>
-            <div className="mp-ach-item-row mp-ach-item-row--amber" style={{ flex: 1, minWidth: 0, marginTop: 0 }}>
-                <div className="mp-ach-item-header">
-                    <span className="mp-plan-seq-num mp-plan-seq-num--amber mp-plan-seq-num--sm">{index + 1}</span>
-                    <div className="mp-ach-item-plan-info">
-                        <div className="mp-ach-item-plan-num">Extra Monthly Progress {index + 1}</div>
-                    </div>
-                    {(additionalAchItems.length > 1 || item.text) && (
-                        <button className="mp-plan-box-remove" onClick={() => removeAdditionalItem(index)} type="button" aria-label={`Remove extra monthly progress ${index + 1}`}><FiX /></button>
-                    )}
-                </div>
-                <div className="mp-ach-item-textarea-wrap">
-                    <label className="mp-ach-ctrl-label" htmlFor={`mp-ach-extra-${index}`} style={{ color: '#854F0B' }}>MONTHLY PROGRESS DETAILS</label>
-                    <textarea
-                        id={`mp-ach-extra-${index}`}
-                        className={`mp-plan-box-textarea mp-plan-box-textarea--amber${item.text ? ' filled-amber' : ''}`}
-                        value={item.text}
-                        onChange={e => updateAdditionalItem(index, 'text', e.target.value)}
-                        placeholder={`Describe extra monthly progress ${index + 1}...`}
-                        rows={3}
-                        style={{ background: 'transparent' }}
-                    />
-                </div>
-            </div>
-            <button className="mp-plan-add-btn" onClick={() => addAdditionalItem(index)} type="button" title="Add another extra achievement"><FiPlus /></button>
-        </div>
-    );
-
     /* ======================================================
        ACHIEVEMENT MODAL
     ====================================================== */
@@ -1293,24 +1227,13 @@ const MonthlyPlanPage = () => {
                                             className={`mp-ach-item-textarea${hasFilled ? ' filled' : ''}`}
                                             value={item.achievementDetails}
                                             onChange={e => updateAchItem(idx, 'achievementDetails', e.target.value)}
-                                            placeholder={`Describe what you have done in Plan ${idx + 1}... (optional — you can leave blank and submit later)`}
+                                            placeholder={`Describe what you have done in Plan ${idx + 1}...`}
                                             rows={3}
                                         />
                                     </div>
                                 </div>
                             );
                         })}
-                        <div className="mp-ach-additional-section">
-                            <div className="mp-ach-additional-header">
-                                <span className="mp-ach-additional-icon"><FiStar /></span>
-                                <span className="mp-ach-additional-title">Additional Monthly Works with Progress</span>
-                                <span className="mp-ach-additional-badge">Optional</span>
-                            </div>
-                            <p className="mp-ach-additional-hint">Additional Monthly works outside your planned work. Click <strong>+</strong> to add more.</p>
-                            <div className="mp-plan-boxes">
-                                {additionalAchItems.map((item, idx) => renderAdditionalBox(item, idx))}
-                            </div>
-                        </div>
                     </div>
                     {/* Partial-submission progress hint in the footer */}
                     {isPartial && (
@@ -1374,18 +1297,6 @@ const MonthlyPlanPage = () => {
             if (rowId && achByPlanItemIdForDetail[rowId]) return achByPlanItemIdForDetail[rowId];
             return isLegacyAchDataForDetail ? (effectivePlanAch?.[i] || null) : null;
         };
-
-        let additionalItems = parseAdditionalAch(ach?.additionalAchievement || '');
-        if (additionalItems.length === 0 && ach?.achievementDetails) {
-            const addlMatch = ach.achievementDetails.match(/Additional:\s*([\s\S]+)/i);
-            if (addlMatch) {
-                const captured = addlMatch[1].trim();
-                try {
-                    const parsed = JSON.parse(captured);
-                    additionalItems = Array.isArray(parsed) ? parsed.filter(a => (a.text || '').trim()) : [{ text: captured }];
-                } catch { additionalItems = [{ text: captured }]; }
-            }
-        }
 
         // Stepper states: 'done' | 'active' | 'idle'
         const s1 = prog.planDone ? 'done' : 'active';
@@ -1634,26 +1545,6 @@ const MonthlyPlanPage = () => {
                                     <span className="dmod-sec-title"><FiTrendingUp size={13} style={{ marginRight: 6 }} />Progress Details</span>
                                 </div>
                                 <p className="dmod-plan-ach-text" style={{ margin: 0 }}>{ach.achievementDetails}</p>
-                            </div>
-                        )}
-
-                        {/* Additional achievements */}
-                        {additionalItems.length > 0 && (
-                            <div className="dmod-section">
-                                <div className="dmod-sec-hdr">
-                                    <span className="dmod-sec-title"><FiStar size={13} style={{ marginRight: 6 }} />Additional Monthly Work with Progress</span>
-                                    <span className="dmod-sec-badge">{additionalItems.length} extra</span>
-                                </div>
-                                <div className="dmod-extra-list">
-                                    {additionalItems.map((item, i) => (
-                                        <div key={i} className="dmod-extra-item">
-                                            <span className="dmod-extra-num">{i + 1}</span>
-                                            <div className="dmod-extra-content">
-                                                <p className="dmod-extra-text">{typeof item === 'string' ? item : (item.text || '')}</p>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
                             </div>
                         )}
 

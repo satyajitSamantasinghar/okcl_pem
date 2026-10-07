@@ -483,7 +483,7 @@ exports.submitMonthlyPlan = async (req, res) => {
 exports.submitMonthlyAchievement = async (req, res) => {
   const t = await sequelize.transaction();
   try {
-    const { monthlyPlanId, achievementDetails, planAchievements, additionalAchievement, status } = req.body;
+    const { monthlyPlanId, achievementDetails, planAchievements, status } = req.body;
     const achStatus = status === "DRAFT" ? "DRAFT" : "SUBMITTED";
 
     // CHANGE: findOne({ _id, employeeId }) → findOne({ where: { id, employeeId } })
@@ -506,16 +506,22 @@ exports.submitMonthlyAchievement = async (req, res) => {
     }
 
     // CHANGE: Rebuild achievementDetails from planAchievements (replaces pre-save hook)
-    const buildAchievementDetails = (planAchs, additional) => {
+    //
+    // NOTE: the "additional / extra progress" feature has been removed. The
+    // `additionalAchievement` request field is no longer read (a stale client
+    // that still sends it is simply ignored, same as the retired `progress`
+    // field), and the legacy MonthlyAchievement.additionalAchievement column
+    // is left untouched so historical rows are preserved.
+    const buildAchievementDetails = (planAchs) => {
       if (!planAchs?.length) return achievementDetails || "";
-      const lines = planAchs.map((a, i) => `Plan ${i + 1}: ${a.achievementDetails || "—"}`);
-      if (additional?.trim()) lines.push(`Additional: ${additional}`);
-      return lines.join("\n");
+      return planAchs
+        .map((a, i) => `Plan ${i + 1}: ${a.achievementDetails || "—"}`)
+        .join("\n");
     };
 
     const resolvedDetails =
       !achievementDetails || achievementDetails.trim() === ""
-        ? buildAchievementDetails(planAchievements, additionalAchievement)
+        ? buildAchievementDetails(planAchievements)
         : achievementDetails;
 
     const existingAchievement = await MonthlyAchievement.findOne({
@@ -658,7 +664,6 @@ exports.submitMonthlyAchievement = async (req, res) => {
         // submittedAt are deliberately left untouched — this is an addition
         // and/or edit, not a resubmission.
         existingAchievement.achievementDetails = resolvedDetails;
-        if (additionalAchievement !== undefined) existingAchievement.additionalAchievement = additionalAchievement;
         await existingAchievement.save({ transaction: t });
 
         // Two distinct audit actions so the admin activity report can tell
@@ -700,7 +705,6 @@ exports.submitMonthlyAchievement = async (req, res) => {
       // ─────────────────────────────────────────────────────────────────────────
 
       existingAchievement.achievementDetails = resolvedDetails;
-      if (additionalAchievement !== undefined) existingAchievement.additionalAchievement = additionalAchievement;
       existingAchievement.status = achStatus;
       if (achStatus === "SUBMITTED") existingAchievement.submittedAt = new Date();
       await existingAchievement.save({ transaction: t });
@@ -746,7 +750,6 @@ exports.submitMonthlyAchievement = async (req, res) => {
         employeeId: req.user.userId,
         monthlyPlanId,
         achievementDetails: resolvedDetails,
-        additionalAchievement: additionalAchievement || "",
         status: achStatus,
       },
       { transaction: t }

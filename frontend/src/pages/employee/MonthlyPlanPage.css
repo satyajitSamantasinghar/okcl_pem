@@ -382,12 +382,6 @@
     border-radius: 5px;
 }
 
-.mp-plan-seq-num--amber {
-    background: rgba(186, 117, 23, .08);
-    border-color: rgba(186, 117, 23, .35);
-    color: #854F0B;
-}
-
 .mp-plan-idx-xs {
     display: inline-flex;
     align-items: center;
@@ -457,17 +451,6 @@
     outline: none;
     border-color: var(--primary);
     box-shadow: 0 0 0 3px rgba(255, 107, 53, .1);
-}
-
-.mp-plan-box-textarea--amber.filled-amber {
-    border-color: #BA7517;
-    background: rgba(186, 117, 23, .03);
-}
-
-.mp-plan-box-textarea--amber:focus {
-    outline: none;
-    border-color: #BA7517;
-    box-shadow: 0 0 0 3px rgba(186, 117, 23, .1);
 }
 
 .mp-ach-modal .mp-plan-box-textarea {
@@ -1595,56 +1578,6 @@
     line-height: 1.5;
 }
 
-/* ── Additional achievements ── */
-.dmod-extra-list {
-    display: flex;
-    flex-direction: column;
-    border: 1px solid #E2E8F0;
-    border-radius: 10px;
-    overflow: hidden;
-}
-
-.dmod-extra-item {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    padding: 13px 16px;
-    background: #FFFFFF;
-    border-bottom: 1px solid #F1F5F9;
-}
-
-.dmod-extra-item:last-child {
-    border-bottom: none;
-}
-
-.dmod-extra-num {
-    width: 20px;
-    height: 20px;
-    min-width: 20px;
-    border-radius: 50%;
-    background: #FEF3C7;
-    color: #92400E;
-    font-size: 10px;
-    font-weight: 600;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    margin-top: 1px;
-}
-
-.dmod-extra-content {
-    flex: 1;
-    min-width: 0;
-}
-
-.dmod-extra-text {
-    font-size: 12.5px;
-    color: #374151;
-    margin: 0 0 8px;
-    line-height: 1.5;
-}
-
 /* ── RA Evaluation ── */
 .dmod-ra-section {
     border: 1px solid #E2E8F0;
@@ -1878,10 +1811,6 @@
     gap: 12px;
 }
 
-.mp-ach-item-row--amber {
-    border-left-color: #F59E0B;
-}
-
 .mp-ach-item-header {
     display: flex;
     align-items: flex-start;
@@ -1950,64 +1879,6 @@
     outline: none;
     border-color: var(--primary);
     box-shadow: 0 0 0 3px rgba(255, 107, 53, .1);
-}
-
-.mp-ach-additional-section {
-    border: 1px solid rgba(186, 117, 23, .3);
-    border-radius: var(--radius-md);
-    padding: 14px 16px;
-    background: rgba(186, 117, 23, .03);
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.mp-ach-additional-header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.mp-ach-additional-icon {
-    width: 26px;
-    height: 26px;
-    border-radius: 50%;
-    background: rgba(186, 117, 23, .15);
-    color: #854F0B;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: .75rem;
-    flex-shrink: 0;
-}
-
-.mp-ach-additional-title {
-    font-size: .8125rem;
-    font-weight: 700;
-    color: var(--text-primary);
-    flex: 1;
-}
-
-.mp-ach-additional-badge {
-    font-size: .5625rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: .3px;
-    background: rgba(186, 117, 23, .12);
-    color: #633806;
-    padding: 2px 8px;
-    border-radius: 100px;
-}
-
-.mp-ach-additional-hint {
-    font-size: .75rem;
-    color: var(--text-muted);
-    margin: 0;
-    line-height: 1.5;
-}
-
-.mp-ach-additional-hint strong {
-    color: #854F0B;
 }
 
 .mp-ach-actions {
@@ -2145,67 +2016,6 @@
 
 .mp-resubmit-btn:hover {
     background: #791F1F;
-}
-
-/* ── Extra achievements on cards ── */
-.mp-card-extras-row {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    margin-top: 8px;
-    padding: 8px 10px;
-    background: linear-gradient(135deg, #FAEEDA 0%, #FFF7EE 100%);
-    border-radius: 8px;
-    border: 1px solid #F0D9B4;
-    color: #854F0B;
-    font-size: 0.6875rem;
-    font-weight: 600;
-}
-
-.mp-card-extras-row>span {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 0.6875rem;
-    font-weight: 700;
-    color: #633806;
-    text-transform: uppercase;
-    letter-spacing: 0.4px;
-}
-
-.mp-card-extras-list {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.mp-card-extra-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    padding: 3px 0;
-    border-top: 1px dashed rgba(186, 117, 23, 0.25);
-}
-
-.mp-card-extra-item:first-child {
-    border-top: none;
-}
-
-.mp-card-extra-text {
-    font-size: 0.75rem;
-    font-weight: 500;
-    color: var(--text-primary);
-    flex: 1;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.mp-card-extra-pct {
-    font-size: 0.6875rem;
-    font-weight: 700;
-    flex-shrink: 0;
 }
 
 /* ============================================================
