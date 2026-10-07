@@ -2,14 +2,6 @@
    MONTHLY PLAN PAGE — v6 (clean SaaS redesign)
 ========================================== */
 
-/* ── Generic reusable progress bar ── */
-.mp-progress-track {
-    width: 100%;
-    background: #E2E8F0;
-    border-radius: 99px;
-    overflow: hidden;
-}
-
 /* ============================================================
    STATS ROW
 ============================================================ */
@@ -798,25 +790,18 @@
     margin-bottom: 4px;
 }
 
-.mp-card-ach-bar-wrap {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.mp-card-ach-overall-pct {
-    font-size: 0.6875rem;
-    font-weight: 700;
-    color: var(--text-primary);
-    white-space: nowrap;
-    min-width: 30px;
-    text-align: right;
-}
-
 .mp-card-ach-summary-text {
-    font-size: 0.6875rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.75rem;
     font-weight: 600;
     color: var(--text-secondary);
+}
+
+.mp-card-ach-summary-text svg {
+    color: #16A34A;
+    flex-shrink: 0;
 }
 
 .mp-draft-inline {
@@ -1352,83 +1337,6 @@
     gap: 20px;
 }
 
-/* ── Overview 2-col cards ── */
-.dmod-overview {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-}
-
-.dmod-ov-card {
-    border: 1px solid #F1F5F9;
-    border-radius: 12px;
-    padding: 18px 20px;
-    background: #F8FAFC;
-    display: flex;
-    flex-direction: column;
-    gap: 9px;
-}
-
-.dmod-ov-label {
-    font-size: 10.5px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.7px;
-    color: #94A3B8;
-    margin: 0;
-}
-
-.dmod-ov-value {
-    font-size: 28px;
-    font-weight: 700;
-    color: #0F172A;
-    margin: 0;
-    line-height: 1.1;
-    letter-spacing: -0.5px;
-}
-
-.dmod-ov-denom {
-    font-size: 15px;
-    font-weight: 400;
-    color: #64748B;
-}
-
-.dmod-ov-bar {
-    height: 4px;
-    background: #E2E8F0;
-    border-radius: 100px;
-    overflow: hidden;
-}
-
-.dmod-ov-fill {
-    height: 100%;
-    border-radius: 100px;
-    transition: width .5s ease;
-}
-
-.dmod-ov-ach-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    flex: 1;
-}
-
-.dmod-ov-pct {
-    font-size: 36px;
-    font-weight: 700;
-    margin: 0;
-    line-height: 1;
-    letter-spacing: -1.5px;
-}
-
-.dmod-ov-sub-note {
-    font-size: 11px;
-    color: #94A3B8;
-    margin: 0;
-    margin-top: 2px;
-}
-
 /* ── Section wrapper ── */
 .dmod-section {
     display: flex;
@@ -1502,7 +1410,7 @@
 
 .dmod-plan-card-title-row {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
     gap: 10px;
 }
@@ -1567,6 +1475,8 @@
 }
 
 .dmod-plan-name {
+    margin: 0;
+    white-space: pre-wrap;
     font-size: 13.5px;
     font-weight: 600;
     color: #1E293B;
@@ -1590,11 +1500,6 @@
     color: #15803D;
 }
 
-.dmod-badge--amber {
-    background: #FFFBEB;
-    color: #B45309;
-}
-
 .dmod-badge--gray {
     background: #F8FAFC;
     color: #64748B;
@@ -1602,11 +1507,53 @@
 
 /* Achievement detail text */
 .dmod-plan-ach-text {
-    font-size: 12.5px;
-    color: #64748B;
+    font-size: 13px;
+    color: #475569;
     line-height: 1.6;
     margin: 0;
     padding-left: 0;
+    white-space: pre-wrap;
+}
+
+/* Small uppercase field label — "PLAN 1" / "PROGRESS DETAILS" */
+.dmod-field-lbl {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: #94A3B8;
+}
+
+/* Progress detail — sits directly beneath its plan inside the same card */
+.dmod-prog-block {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-top: 10px;
+    border-top: 1px solid #F1F5F9;
+}
+
+/* Submission timeline strip (plan / progress submitted dates) */
+.dmod-timeline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 18px;
+    padding: 9px 14px;
+    background: #F8FAFC;
+    border: 1px solid #F1F5F9;
+    border-radius: 10px;
+}
+
+.dmod-timeline-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11.5px;
+    font-weight: 500;
+    color: #64748B;
 }
 
 .dmod-plan-ach-empty {
@@ -1615,37 +1562,6 @@
     font-style: italic;
     margin: 0;
     padding-left: 0;
-}
-
-/* Progress bar row — sits at bottom of each card */
-.dmod-plan-prog-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding-left: 0;
-    padding-top: 2px;
-}
-
-.dmod-plan-prog-bar {
-    flex: 1;
-    height: 6px;
-    background: #E2E8F0;
-    border-radius: 100px;
-    overflow: hidden;
-}
-
-.dmod-plan-prog-fill {
-    height: 100%;
-    border-radius: 100px;
-    transition: width .45s ease;
-}
-
-.dmod-plan-prog-pct {
-    font-size: 11px;
-    font-weight: 600;
-    min-width: 32px;
-    text-align: right;
-    flex-shrink: 0;
 }
 
 /* ── No achievement state ── */
@@ -1863,14 +1779,6 @@
         padding: 12px 16px;
     }
 
-    .dmod-overview {
-        grid-template-columns: 1fr;
-    }
-
-    .dmod-ov-pct {
-        font-size: 28px;
-    }
-
     .dmod-title {
         font-size: 16px;
     }
@@ -1923,55 +1831,6 @@
     margin: 0;
 }
 
-.mp-ach-overall-summary {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    padding: 14px 24px;
-    background: var(--bg-page);
-    border-bottom: 1px solid var(--border-default);
-}
-
-.mp-ach-overall-left {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-
-.mp-ach-overall-label {
-    font-size: .625rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: .4px;
-    color: var(--text-muted);
-}
-
-.mp-ach-overall-pct {
-    font-size: .75rem;
-    font-weight: 700;
-    color: var(--text-primary);
-}
-
-.mp-ach-overall-right {
-    text-align: right;
-    flex-shrink: 0;
-}
-
-.mp-ach-overall-count {
-    display: block;
-    font-size: 1.5rem;
-    font-weight: 800;
-    color: var(--text-primary);
-    line-height: 1;
-}
-
-.mp-ach-overall-count-label {
-    font-size: .6875rem;
-    color: var(--text-muted);
-    font-weight: 500;
-}
-
 .mp-ach-items-container {
     padding: 16px 24px;
     display: flex;
@@ -2010,12 +1869,17 @@
 .mp-ach-item-row {
     border: 1px solid var(--border-default);
     border-left-width: 4px;
+    border-left-color: var(--primary);
     border-radius: var(--radius-md);
     padding: 14px 16px;
     background: var(--bg-page);
     display: flex;
     flex-direction: column;
     gap: 12px;
+}
+
+.mp-ach-item-row--amber {
+    border-left-color: #F59E0B;
 }
 
 .mp-ach-item-header {
@@ -2045,124 +1909,6 @@
     line-height: 1.5;
 }
 
-.mp-ach-progress-badge {
-    flex-shrink: 0;
-    font-size: .625rem;
-    font-weight: 700;
-    padding: 3px 10px;
-    border-radius: 100px;
-    white-space: nowrap;
-    align-self: flex-start;
-    margin-top: 2px;
-}
-
-.mp-ach-progress-controls {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.mp-ach-slider-wrap {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.mp-ach-slider-track-bg {
-    position: relative;
-    flex: 1;
-    height: 20px;
-    display: flex;
-    align-items: center;
-}
-
-.mp-ach-slider-track-bg::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    right: 0;
-    top: 50%;
-    transform: translateY(-50%);
-    height: 8px;
-    border-radius: 99px;
-    background: var(--border-default);
-    z-index: 0;
-}
-
-.mp-ach-slider-fill {
-    position: absolute;
-    left: 0;
-    top: 50%;
-    transform: translateY(-50%);
-    height: 8px;
-    border-radius: 99px;
-    pointer-events: none;
-    transition: width 0.1s ease;
-    z-index: 1;
-}
-
-.mp-ach-range {
-    position: relative;
-    width: 100%;
-    height: 8px;
-    -webkit-appearance: none;
-    appearance: none;
-    border-radius: 99px;
-    outline: none;
-    cursor: pointer;
-    z-index: 2;
-    background: transparent;
-}
-
-.mp-ach-range::-webkit-slider-runnable-track {
-    height: 8px;
-    border-radius: 99px;
-    background: transparent;
-}
-
-.mp-ach-range::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    background: var(--thumb-color, #E85523);
-    border: 3px solid #fff;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, .2);
-    cursor: grab;
-    margin-top: -6px;
-    transition: box-shadow 0.15s;
-}
-
-.mp-ach-range::-webkit-slider-thumb:active {
-    cursor: grabbing;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, .3);
-}
-
-.mp-ach-range::-moz-range-thumb {
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    background: var(--thumb-color, #E85523);
-    border: 3px solid #fff;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, .2);
-    cursor: grab;
-}
-
-.mp-ach-range::-moz-range-track {
-    height: 8px;
-    border-radius: 99px;
-    background: transparent;
-}
-
-.mp-ach-slider-pct {
-    font-size: 0.8125rem;
-    font-weight: 700;
-    min-width: 38px;
-    text-align: right;
-    flex-shrink: 0;
-}
-
 .mp-ach-ctrl-label {
     font-size: .625rem;
     font-weight: 700;
@@ -2171,37 +1917,6 @@
     color: var(--text-muted);
     display: block;
     margin-bottom: 2px;
-}
-
-.mp-ach-progress-btns {
-    display: flex;
-    gap: 4px;
-    flex-wrap: wrap;
-}
-
-.mp-ach-prog-btn {
-    font-size: .625rem;
-    font-weight: 600;
-    padding: 3px 9px;
-    border-radius: 100px;
-    border: 1px solid var(--border-default);
-    background: var(--bg-card);
-    color: var(--text-muted);
-    cursor: pointer;
-    transition: all .15s;
-    white-space: nowrap;
-}
-
-.mp-ach-prog-btn:hover {
-    border-color: var(--primary);
-    color: var(--primary);
-    background: rgba(255, 107, 53, .05);
-}
-
-.mp-ach-prog-btn.active {
-    background: var(--primary);
-    border-color: var(--primary);
-    color: #fff;
 }
 
 .mp-ach-item-textarea-wrap {
@@ -2523,19 +2238,6 @@
     .mp-ach-modal,
     .mp-ach-modal--wide {
         max-width: 100%;
-    }
-
-    .mp-ach-overall-summary {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 10px;
-    }
-
-    .mp-ach-overall-right {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        text-align: left;
     }
 
     .mp-form-month-row {
@@ -2896,4 +2598,93 @@
 .dmod-sec-edit-btn:hover {
     background: #EEF2FF;
     border-color: #4F46E5;
+}
+
+/* ============================================================
+   PARTIAL SUBMISSION — Achievement modal additions
+   Allows employees to submit progress for individual plan items
+   instead of all at once.
+============================================================ */
+
+/* Info banner shown at the top of the achievement modal */
+.mp-partial-submit-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 16px;
+    margin: 12px 20px 0;
+    background: #EFF6FF;
+    border: 1px solid #BFDBFE;
+    border-radius: 10px;
+    font-size: 13px;
+    color: #1E40AF;
+    line-height: 1.5;
+}
+
+.mp-partial-submit-notice svg {
+    flex-shrink: 0;
+    margin-top: 1px;
+    color: #3B82F6;
+}
+
+/* Footer hint showing "submitting N of M plans" */
+.mp-ach-partial-hint {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    background: #FFFBEB;
+    border-top: 1px solid #FDE68A;
+    font-size: 12.5px;
+    color: #92400E;
+}
+
+.mp-ach-partial-hint svg {
+    flex-shrink: 0;
+    color: #D97706;
+}
+
+/* Unfilled plan item row — softer, less prominent */
+.mp-ach-item-row--unfilled {
+    opacity: 0.8;
+}
+
+.mp-ach-item-row--unfilled:hover {
+    opacity: 1;
+}
+
+/* Seq number when plan has progress filled — green accent */
+.mp-plan-seq-num--filled {
+    background: #DCFCE7 !important;
+    color: #15803D !important;
+    border-color: #86EFAC !important;
+}
+
+/* "Progress filled" tag for a plan item that has been filled in */
+.mp-plan-filled-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: 6px;
+    padding: 2px 8px;
+    background: #DCFCE7;
+    color: #15803D;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 600;
+}
+
+/* "Optional — can submit later" tag for an unfilled plan item */
+.mp-plan-optional-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: 6px;
+    padding: 2px 8px;
+    background: #F3F4F6;
+    color: #6B7280;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 500;
+    font-style: italic;
 }

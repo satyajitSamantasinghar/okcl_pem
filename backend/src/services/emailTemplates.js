@@ -172,5 +172,40 @@ function deadlineExtensionTemplate({ employeeName, raName, type, period, newDead
   });
 }
 
+// ─── Monthly Plan Window Open ───────────────────────────────────────────────
+// Fired on the 1st of each month to inform every active employee and RA that
+// the Monthly Plan submission window is now open. The `role` parameter drives
+// the CTA URL so employees land on their plan page and RAs on their dashboard,
+// while the body copy is identical in both cases — the announcement is the
+// same regardless of role; only the action destination differs.
+//
+// `planDeadline`  — human-readable deadline label for the PLAN submission
+//                  (e.g. "10 October 2026"), computed from the role's config.
+// `role`          — "EMPLOYEE" | "RA"; controls the CTA URL only.
+// ────────────────────────────────────────────────────────────────────────────
+function monthlyPlanOpenTemplate({ recipientName, period, planDeadline, role }) {
+  const ctaUrl =
+    role === 'RA'
+      ? `${process.env.FRONTEND_URL}/ra/monthly-evaluation`
+      : `${process.env.FRONTEND_URL}/employee/monthly-plan`;
 
-module.exports = { baseTemplate, submissionTemplate, additionalItemsTemplate, evaluationTemplate, rejectionTemplate, reminderTemplate, incompleteAchievementReminderTemplate, deadlineExtensionTemplate };
+  return baseTemplate({
+    title: `Monthly Plan Submission Open — ${escapeHtml(period)}`,
+    bodyHtml: `
+      <p>Hi ${escapeHtml(recipientName)},</p>
+      <p>The <strong>Monthly Plan submission window for ${escapeHtml(period)}</strong> is now <strong>open</strong>.</p>
+      <p>You can log in to <strong>KRA</strong> and begin submitting your Monthly Plan and Progress for this month at your convenience.</p>
+      <p>
+        <strong>Submission deadline:</strong> ${escapeHtml(planDeadline)}
+      </p>
+      <p style="color:#555555;font-size:13px;">
+        Please submit before the deadline to avoid extension. If you need additional time, contact your Reporting Authority to request a deadline extension.
+      </p>
+    `,
+    ctaText: role === 'RA' ? 'Go to Dashboard' : 'Start Submitting',
+    ctaUrl,
+  });
+}
+
+
+module.exports = { baseTemplate, submissionTemplate, additionalItemsTemplate, evaluationTemplate, rejectionTemplate, reminderTemplate, incompleteAchievementReminderTemplate, deadlineExtensionTemplate, monthlyPlanOpenTemplate };

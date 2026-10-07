@@ -107,35 +107,6 @@ function ordinalSuffix(n) {
     return s[(v - 20) % 10] || s[v] || s[0];
 }
 
-function getProgressTokens(progress) {
-    const p = Math.min(100, Math.max(0, progress || 0));
-    if (p === 100) return {
-        label: 'Completed', ringColor: '#16A34A', barColor: '#16A34A',
-        badgeBg: '#F0FDF4', badgeText: '#15803D',
-        borderColor: '#16A34A', pctClass: 'pp-green', markerActive: 4
-    };
-    if (p >= 75) return {
-        label: 'Almost done', ringColor: '#D97706', barColor: '#F59E0B',
-        badgeBg: '#FFFBEB', badgeText: '#B45309',
-        borderColor: '#F59E0B', pctClass: 'pp-amber', markerActive: 3
-    };
-    if (p >= 50) return {
-        label: 'Halfway', ringColor: '#EA580C', barColor: '#F97316',
-        badgeBg: '#FFF7ED', badgeText: '#C2410C',
-        borderColor: '#F97316', pctClass: 'pp-orange', markerActive: 2
-    };
-    if (p >= 25) return {
-        label: 'Just started', ringColor: '#D97706', barColor: '#F59E0B',
-        badgeBg: '#FFFBEB', badgeText: '#B45309',
-        borderColor: '#F59E0B', pctClass: 'pp-amber', markerActive: 1
-    };
-    return {
-        label: 'Not started', ringColor: '#DC2626', barColor: '#EF4444',
-        badgeBg: '#FEF2F2', badgeText: '#B91C1C',
-        borderColor: '#EF4444', pctClass: 'pp-red', markerActive: 0
-    };
-}
-
 // Defensive sort shared by getPlanItems/getPlanItemRows below. The backend
 // is expected to return MonthlyPlanItem rows in itemOrder already, but a
 // nested Sequelize `include` order clause is easy to get wrong (it's
@@ -179,26 +150,21 @@ function getPlanItemRows(plan) {
         .filter(row => row.text);
 }
 
+// Legacy rows stored one text blob ("Plan 1 [50%]: ..."). Old blobs may still
+// carry a "[NN%]" marker; the pattern tolerates it purely so it is stripped
+// from the displayed text — the percentage itself is no longer used anywhere.
 function parseLegacyPlanAch(legacyText, planCount) {
-    const result = Array.from({ length: planCount }, () => ({ achievementDetails: '', progress: 0 }));
+    const result = Array.from({ length: planCount }, () => ({ achievementDetails: '' }));
     if (!legacyText) return result;
     const lines = legacyText.split('\n');
     let currentIdx = -1;
     lines.forEach(line => {
-        const withPct = line.match(/^Plan\s+(\d+)\s*\[(\d+)%\]:\s*(.*)/i);
-        const withoutPct = !withPct && line.match(/^Plan\s+(\d+):\s*(.*)/i);
-        if (withPct) {
-            const idx = parseInt(withPct[1]) - 1;
+        const header = line.match(/^Plan\s+(\d+)\s*(?:\[\d+%\])?:\s*(.*)/i);
+        if (header) {
+            const idx = parseInt(header[1], 10) - 1;
             if (idx >= 0 && idx < planCount) {
                 currentIdx = idx;
-                result[idx].progress = Math.min(100, parseInt(withPct[2]) || 0);
-                result[idx].achievementDetails = withPct[3].trim();
-            }
-        } else if (withoutPct) {
-            const idx = parseInt(withoutPct[1]) - 1;
-            if (idx >= 0 && idx < planCount) {
-                currentIdx = idx;
-                result[idx].achievementDetails = withoutPct[2].trim();
+                result[idx].achievementDetails = header[2].trim();
             }
         } else if (currentIdx >= 0 && line.trim() && !line.match(/^Additional:/i)) {
             result[currentIdx].achievementDetails +=
@@ -212,7 +178,7 @@ function getEffectivePlanAch(ach, planCount) {
     if (!ach) return null;
     const pa = ach.planAchievements;
     if (Array.isArray(pa) && pa.length > 0) {
-        const hasRealData = pa.some(a => (a.achievementDetails || '').trim() || (a.progress || 0) > 0);
+        const hasRealData = pa.some(a => (a.achievementDetails || '').trim());
         if (hasRealData) {
             // Always sort by planIndex so positional access is safe even if the
             // backend returns items in an unexpected order (e.g. insertion order).
@@ -221,7 +187,7 @@ function getEffectivePlanAch(ach, planCount) {
     }
     if (ach.achievementDetails) {
         const parsed = parseLegacyPlanAch(ach.achievementDetails, planCount);
-        const hasParsedData = parsed.some(a => (a.achievementDetails || '').trim() || (a.progress || 0) > 0);
+        const hasParsedData = parsed.some(a => (a.achievementDetails || '').trim());
         if (hasParsedData) return parsed;
     }
     return null;
@@ -235,7 +201,7 @@ function parseAdditionalAch(raw) {
     } catch { /* fall through */ }
     return raw.split('\n')
         .filter(l => l.trim() && !l.trim().startsWith('Additional:'))
-        .map(t => ({ text: t.trim(), progress: 100 }));
+        .map(t => ({ text: t.trim() }));
 }
 
 const MONTH_PALETTES = [
@@ -251,62 +217,6 @@ function getMonthChipStyle(monthStr) {
     if (!monthStr) return MONTH_PALETTES[0];
     const m = parseInt(monthStr.split('-')[1]) - 1;
     return MONTH_PALETTES[m] || MONTH_PALETTES[0];
-}
-
-/* ── Circular Progress Ring ── */
-function CircularProgress({ progress, size = 46 }) {
-    const p = Math.min(100, Math.max(0, progress || 0));
-    const r = (size - 6) / 2;
-    const circ = 2 * Math.PI * r;
-    const dash = (p / 100) * circ;
-    const tk = getProgressTokens(p);
-    return (
-        <svg width={size} height={size} style={{ transform: 'rotate(-90deg)', flexShrink: 0 }}>
-            <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#E2E8F0" strokeWidth={4.5} />
-            <circle cx={size / 2} cy={size / 2} r={r} fill="none"
-                stroke={tk.ringColor} strokeWidth={4.5}
-                strokeDasharray={`${dash} ${circ}`} strokeLinecap="round"
-                style={{ transition: 'stroke-dasharray 0.35s ease' }} />
-            <text x={size / 2} y={size / 2} textAnchor="middle" dominantBaseline="middle"
-                style={{
-                    transform: `rotate(90deg)`,
-                    transformOrigin: `${size / 2}px ${size / 2}px`,
-                    fontSize: 9.5, fontWeight: 700,
-                    fill: '#1E293B', fontFamily: 'inherit'
-                }}>
-                {p}%
-            </text>
-        </svg>
-    );
-}
-
-function DonutChart({ value, size = 68 }) {
-    const p = Math.min(100, Math.max(0, value || 0));
-    const r = (size - 10) / 2;
-    const circ = 2 * Math.PI * r;
-    const dash = (p / 100) * circ;
-    const color = p >= 70 ? '#16A34A' : p >= 40 ? '#F59E0B' : '#94A3B8';
-    return (
-        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ flexShrink: 0 }}>
-            <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#E2E8F0" strokeWidth={7} />
-            <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={7}
-                strokeDasharray={`${dash} ${circ}`} strokeLinecap="round"
-                transform={`rotate(-90 ${size / 2} ${size / 2})`}
-                style={{ transition: 'stroke-dasharray 0.5s ease' }} />
-        </svg>
-    );
-}
-
-/* ── Progress Bar ── */
-function ProgressBar({ value, height = 6, color }) {
-    const p = Math.min(100, Math.max(0, value || 0));
-    const tk = getProgressTokens(p);
-    const barColor = color || tk.barColor;
-    return (
-        <div className="mp-progress-track" style={{ height }}>
-            <div style={{ width: `${p}%`, height: '100%', background: barColor, borderRadius: 99, transition: 'width 0.4s ease' }} />
-        </div>
-    );
 }
 
 /* ====================================================
@@ -408,7 +318,7 @@ const MonthlyPlanPage = () => {
 
     const [achModal, setAchModal] = useState(null);
     const [achItems, setAchItems] = useState([]);
-    const [additionalAchItems, setAdditionalAchItems] = useState([{ text: '', progress: 0 }]);
+    const [additionalAchItems, setAdditionalAchItems] = useState([{ text: '' }]);
     // UNSAVED-CHANGES GUARD — snapshot of achItems/additionalAchItems taken the
     // instant the Achievement modal opens (openAchModal). Compared against the
     // live state on close-attempt so we only warn when the user actually typed
@@ -702,10 +612,10 @@ const MonthlyPlanPage = () => {
     const removeResubmitItem = (index) => { if (resubmitItems.length === 1) return; setResubmitItems(resubmitItems.filter((_, i) => i !== index)); };
 
     const updateAchItem = (index, field, value) => { const next = [...achItems]; next[index] = { ...next[index], [field]: value }; setAchItems(next); };
-    const addAdditionalItem = (afterIndex) => { const next = [...additionalAchItems]; next.splice(afterIndex + 1, 0, { text: '', progress: 0 }); setAdditionalAchItems(next); };
+    const addAdditionalItem = (afterIndex) => { const next = [...additionalAchItems]; next.splice(afterIndex + 1, 0, { text: '' }); setAdditionalAchItems(next); };
     const updateAdditionalItem = (index, field, value) => { const next = [...additionalAchItems]; next[index] = { ...next[index], [field]: value }; setAdditionalAchItems(next); };
     const removeAdditionalItem = (index) => {
-        if (additionalAchItems.length === 1) { setAdditionalAchItems([{ text: '', progress: 0 }]); return; }
+        if (additionalAchItems.length === 1) { setAdditionalAchItems([{ text: '' }]); return; }
         setAdditionalAchItems(additionalAchItems.filter((_, i) => i !== index));
     };
 
@@ -809,21 +719,19 @@ const MonthlyPlanPage = () => {
                 return {
                     planItemId: rowId ?? null,
                     achievementDetails: match?.achievementDetails ?? '',
-                    progress:           match?.progress           ?? 0,
                 };
             });
 
             if (existing.additionalAchievement) {
                 const parsed = parseAdditionalAch(existing.additionalAchievement);
-                nextAdditionalItems = parsed.length ? parsed : [{ text: '', progress: 0 }];
-            } else { nextAdditionalItems = [{ text: '', progress: 0 }]; }
+                nextAdditionalItems = parsed.length ? parsed : [{ text: '' }];
+            } else { nextAdditionalItems = [{ text: '' }]; }
         } else {
             nextAchItems = itemList.map((_, i) => ({
                 planItemId: itemRows[i]?.id ?? null,
                 achievementDetails: '',
-                progress: 0,
             }));
-            nextAdditionalItems = [{ text: '', progress: 0 }];
+            nextAdditionalItems = [{ text: '' }];
         }
 
         setAchItems(nextAchItems);
@@ -859,15 +767,14 @@ const MonthlyPlanPage = () => {
     // True only when the live form state has *meaningfully* diverged from
     // the snapshot captured at open-time. Values are normalised (trimmed,
     // empty/untouched extra boxes dropped) before comparing, so merely
-    // clicking "+" for a new blank box — or nudging a slider back to where
-    // it started — never trips a false "discard changes?" warning; only
-    // content the user would actually lose does.
+    // clicking "+" for a new blank box never trips a false "discard
+    // changes?" warning; only content the user would actually lose does.
     const normalizeAchRows = (items) =>
-        (items || []).map(a => ({ achievementDetails: (a.achievementDetails || '').trim(), progress: a.progress || 0 }));
+        (items || []).map(a => ({ achievementDetails: (a.achievementDetails || '').trim() }));
     const normalizeAdditionalRows = (items) =>
         (items || [])
-            .map(a => ({ text: (a.text || '').trim(), progress: a.progress || 0 }))
-            .filter(a => a.text || a.progress); // drop blank, never-touched boxes
+            .map(a => ({ text: (a.text || '').trim() }))
+            .filter(a => a.text); // drop blank, never-touched boxes
     const normalizePlanTexts = (items) => (items || []).map(s => (s || '').trim()).filter(Boolean);
 
     const isAchModalDirty = () => {
@@ -908,7 +815,7 @@ const MonthlyPlanPage = () => {
                 onConfirm: () => {
                     setAchModal(null);
                     setAchItems([]);
-                    setAdditionalAchItems([{ text: '', progress: 0 }]);
+                    setAdditionalAchItems([{ text: '' }]);
                 },
             });
         } else {
@@ -1045,26 +952,48 @@ const MonthlyPlanPage = () => {
 
     const submitAchievementRequest = async (asDraft) => {
         setSubmitting(true);
-        const filledAdditional = additionalAchItems.filter(a => a.text.trim());
+        const filledAdditional = additionalAchItems
+            .filter(a => a.text.trim())
+            .map(a => ({ text: a.text.trim() }));
         const additionalStr = filledAdditional.length ? JSON.stringify(filledAdditional) : '';
-        const legacyDetails = achItems.map((a, i) => `Plan ${i + 1} [${a.progress || 0}%]: ${a.achievementDetails || '—'}`).join('\n') + (additionalStr ? `\nAdditional: ${additionalStr}` : '');
+
+        // PARTIAL SUBMISSION — only include plan items that have progress filled in.
+        // Items left blank are excluded from the payload entirely; the backend will
+        // NOT create MonthlyAchievementItem rows for them, so the employee can
+        // return later to submit the remaining items. Draft saves include all items
+        // (even blank ones) since drafts are never validated for completeness.
+        const planAchPayload = asDraft
+            ? achItems.map((a, i) => ({
+                planItemId: a.planItemId || null,
+                planIndex: i,
+                achievementDetails: a.achievementDetails || '',
+            }))
+            : achItems
+                .map((a, i) => ({
+                    planItemId: a.planItemId || null,
+                    planIndex: i,
+                    achievementDetails: a.achievementDetails || '',
+                }))
+                .filter(a => a.achievementDetails.trim());
+
+        const legacyDetails = achItems
+            .filter(a => (a.achievementDetails || '').trim())
+            .map((a, i) => `Plan ${i + 1}: ${a.achievementDetails}`)
+            .join('\n') + (additionalStr ? `\nAdditional: ${additionalStr}` : '');
+
         try {
             await api.post('/employee/monthly-achievement', {
                 monthlyPlanId: achModal.id,
-                planAchievements: achItems.map((a, i) => ({
-                    planItemId: a.planItemId || null,
-                    planIndex: i, // legacy fallback only — the backend prefers planItemId when present
-                    achievementDetails: a.achievementDetails || '',
-                    progress: a.progress || 0,
-                })),
+                planAchievements: planAchPayload,
                 additionalAchievement: additionalStr, achievementDetails: legacyDetails,
                 status: asDraft ? 'DRAFT' : 'SUBMITTED',
             });
             toast.success(asDraft ? 'Draft saved!' : 'Monthly Progress submitted!');
-            setAchModal(null); setAchItems([]); setAdditionalAchItems([{ text: '', progress: 0 }]);
+            setAchModal(null); setAchItems([]); setAdditionalAchItems([{ text: '' }]);
             fetchData();
         } catch (err) {
             toast.error(err.response?.data?.message || 'Failed');
+
         } finally { setSubmitting(false); }
     };
 
@@ -1124,15 +1053,22 @@ const MonthlyPlanPage = () => {
         }
 
 
+        // PARTIAL SUBMISSION — the employee does not need to fill in progress for
+        // ALL plan items at once. They can submit progress for one or more items
+        // and come back later for the rest. The RA evaluation only unlocks once
+        // ALL plan items have progress (enforced server-side by
+        // isAchievementCompleteForPlan), so partial submissions are fully safe.
+        const filledCount = achItems.filter(a => (a.achievementDetails || '').trim()).length;
+        const hasAnyFilled = filledCount > 0 || additionalAchItems.some(a => (a.text || '').trim());
+
         if (!asDraft) {
-            const missingIndex = achItems.findIndex(a => !(a.achievementDetails || '').trim());
-            if (missingIndex !== -1) {
-                toast.error(`Plan ${missingIndex + 1} Progress is pending. Please write it before submitting.`);
+            // At least one plan item must have progress before submitting
+            if (!hasAnyFilled) {
+                toast.error('Please describe progress for at least one plan before submitting.');
                 return;
             }
         } else {
-            const hasAny = achItems.some(a => (a.achievementDetails || '').trim()) || additionalAchItems.some(a => (a.text || '').trim());
-            if (!hasAny) { toast.error('Please describe at least one progress to save as draft'); return; }
+            if (!hasAnyFilled) { toast.error('Please describe at least one progress to save as draft'); return; }
         }
 
         // Drafts are low-stakes and freely editable — save immediately, no confirmation needed.
@@ -1141,9 +1077,9 @@ const MonthlyPlanPage = () => {
             return;
         }
 
-        const overallProgress = achItems.length > 0
-            ? Math.round(achItems.reduce((s, a) => s + (Math.min(100, a.progress || 0)), 0) / achItems.length) : 0;
         const monthLabel = formatMonth(achModal.month);
+        const totalPlans = getPlanItems(achModal).length;
+        const pendingCount = totalPlans - filledCount;
 
         // Detect prior-submission / new-item counts the same way renderAchModal
         // does, for wording only — Sep 2026: this can now also be a pure edit
@@ -1156,21 +1092,28 @@ const MonthlyPlanPage = () => {
         const newCountForCheck = planItemsListForCheck.length - priorCountForCheck;
         const isEditForCheck = priorCountForCheck > 0; // some progress already existed before this save
 
+        // Build a partial-submission note if not all plans are filled
+        const partialNote = pendingCount > 0
+            ? ` You can submit progress for the remaining ${pendingCount} plan${pendingCount !== 1 ? 's' : ''} later — the RA evaluation only opens once all plans have progress.`
+            : '';
+
         setConfirmDialog(
             isEditForCheck && newCountForCheck > 0 ? {
                 title: 'Save Progress?',
-                message: `You're about to update your submitted progress and add progress for ${newCountForCheck} new plan${newCountForCheck !== 1 ? 's' : ''} for ${monthLabel}. Your Reporting Authority will be notified.`,
+                message: `You're about to update your submitted progress and add progress for ${newCountForCheck} new plan${newCountForCheck !== 1 ? 's' : ''} for ${monthLabel}. Your Reporting Authority will be notified.${partialNote}`,
                 confirmLabel: 'Yes, Save Progress',
                 onConfirm: () => submitAchievementRequest(false),
             } : isEditForCheck ? {
                 title: 'Save Changes?',
-                message: `You're about to save your updated progress for ${monthLabel}. Your Reporting Authority will see the revised entries.`,
+                message: `You're about to save your updated progress for ${monthLabel}. Your Reporting Authority will see the revised entries.${partialNote}`,
                 confirmLabel: 'Yes, Save Changes',
                 onConfirm: () => submitAchievementRequest(false),
             } : {
-                title: 'Submit Progress?',
-                message: `You're about to submit your monthly progress for ${monthLabel} at ${overallProgress}% overall progress. Once submitted, it will be sent to your Reporting Authority for evaluation.`,
-                confirmLabel: 'Yes, Submit Progress',
+                title: pendingCount > 0 ? 'Submit Partial Progress?' : 'Submit Progress?',
+                message: pendingCount > 0
+                    ? `You're about to submit progress for ${filledCount} of ${totalPlans} plans for ${monthLabel}.${partialNote}`
+                    : `You're about to submit your monthly progress for ${monthLabel}. Once submitted, it will be sent to your Reporting Authority for evaluation.`,
+                confirmLabel: pendingCount > 0 ? 'Yes, Submit Partial Progress' : 'Yes, Submit Progress',
                 onConfirm: () => submitAchievementRequest(false),
             }
         );
@@ -1225,65 +1168,34 @@ const MonthlyPlanPage = () => {
         </div>
     );
 
-    const renderAdditionalBox = (item, index) => {
-        const safeProgress = Math.min(100, item.progress || 0);
-        const tk = getProgressTokens(safeProgress);
-        return (
-            <div key={index} className="mp-plan-box-row" style={{ alignItems: 'flex-start' }}>
-                <div className="mp-ach-item-row mp-ach-item-row--amber" style={{ borderLeftColor: tk.borderColor, flex: 1, minWidth: 0, marginTop: 0 }}>
-                    <div className="mp-ach-item-header">
-                        <CircularProgress progress={safeProgress} size={48} />
-                        <div className="mp-ach-item-plan-info">
-                            <div className="mp-ach-item-plan-num">
-                                <span className="mp-plan-seq-num mp-plan-seq-num--amber mp-plan-seq-num--sm">{index + 1}</span>
-                                Extra Monthly Progress {index + 1}
-                            </div>
-                        </div>
-                        {(additionalAchItems.length > 1 || item.text) && (
-                            <button className="mp-plan-box-remove" onClick={() => removeAdditionalItem(index)} type="button"><FiX /></button>
-                        )}
+    const renderAdditionalBox = (item, index) => (
+        <div key={index} className="mp-plan-box-row" style={{ alignItems: 'flex-start' }}>
+            <div className="mp-ach-item-row mp-ach-item-row--amber" style={{ flex: 1, minWidth: 0, marginTop: 0 }}>
+                <div className="mp-ach-item-header">
+                    <span className="mp-plan-seq-num mp-plan-seq-num--amber mp-plan-seq-num--sm">{index + 1}</span>
+                    <div className="mp-ach-item-plan-info">
+                        <div className="mp-ach-item-plan-num">Extra Monthly Progress {index + 1}</div>
                     </div>
-                    <div className="mp-ach-progress-controls">
-                        <label className="mp-ach-ctrl-label">Progress</label>
-                        <div className="mp-ach-slider-wrap">
-                            <div className="mp-ach-slider-track-bg">
-                                <div className="mp-ach-slider-fill" style={{ width: `${safeProgress}%`, background: tk.barColor }} />
-                                <input type="range" min={0} max={100} step={5}
-                                    value={safeProgress}
-                                    onChange={e => updateAdditionalItem(index, 'progress', parseInt(e.target.value))}
-                                    className="mp-ach-range"
-                                    style={{ '--thumb-color': tk.ringColor }}
-                                />
-                            </div>
-                            <span className="mp-ach-slider-pct" style={{ color: tk.ringColor }}>{safeProgress}%</span>
-                        </div>
-                        <div className="mp-ach-progress-btns">
-                            {[0, 25, 50, 75, 100].map(v => (
-                                <button key={v} type="button"
-                                    className={`mp-ach-prog-btn${safeProgress === v ? ' active' : ''}`}
-                                    style={safeProgress === v ? { background: tk.barColor, borderColor: tk.barColor } : {}}
-                                    onClick={() => updateAdditionalItem(index, 'progress', v)}>
-                                    {v === 100 ? '✓ Done' : `${v}%`}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                    <div className="mp-ach-item-textarea-wrap">
-                        <label className="mp-ach-ctrl-label" style={{ color: '#854F0B' }}>MONTHLY PROGRESS DETAILS</label>
-                        <textarea
-                            className={`mp-plan-box-textarea mp-plan-box-textarea--amber${item.text ? ' filled-amber' : ''}`}
-                            value={item.text}
-                            onChange={e => updateAdditionalItem(index, 'text', e.target.value)}
-                            placeholder={`Describe extra monthly progress ${index + 1}...`}
-                            rows={3}
-                            style={{ background: 'transparent' }}
-                        />
-                    </div>
+                    {(additionalAchItems.length > 1 || item.text) && (
+                        <button className="mp-plan-box-remove" onClick={() => removeAdditionalItem(index)} type="button" aria-label={`Remove extra monthly progress ${index + 1}`}><FiX /></button>
+                    )}
                 </div>
-                <button className="mp-plan-add-btn" onClick={() => addAdditionalItem(index)} type="button" title="Add another extra achievement"><FiPlus /></button>
+                <div className="mp-ach-item-textarea-wrap">
+                    <label className="mp-ach-ctrl-label" htmlFor={`mp-ach-extra-${index}`} style={{ color: '#854F0B' }}>MONTHLY PROGRESS DETAILS</label>
+                    <textarea
+                        id={`mp-ach-extra-${index}`}
+                        className={`mp-plan-box-textarea mp-plan-box-textarea--amber${item.text ? ' filled-amber' : ''}`}
+                        value={item.text}
+                        onChange={e => updateAdditionalItem(index, 'text', e.target.value)}
+                        placeholder={`Describe extra monthly progress ${index + 1}...`}
+                        rows={3}
+                        style={{ background: 'transparent' }}
+                    />
+                </div>
             </div>
-        );
-    };
+            <button className="mp-plan-add-btn" onClick={() => addAdditionalItem(index)} type="button" title="Add another extra achievement"><FiPlus /></button>
+        </div>
+    );
 
     /* ======================================================
        ACHIEVEMENT MODAL
@@ -1293,9 +1205,6 @@ const MonthlyPlanPage = () => {
         const existing = achievementByPlanId[achModal.id];
         const isDraft = existing?.status === 'DRAFT';
         const planItemsList = getPlanItems(achModal);
-        const overallProgress = achItems.length > 0
-            ? Math.round(achItems.reduce((s, a) => s + (Math.min(100, a.progress || 0)), 0) / achItems.length) : 0;
-        const completedCount = achItems.filter(a => a.progress >= 100).length;
 
         // ── EDITABLE PROGRESS (Sep 2026) — previously, everything up to
         // `priorAch.length` was rendered locked/read-only and only newly
@@ -1310,6 +1219,11 @@ const MonthlyPlanPage = () => {
         const hasNewItems = priorCount > 0 && priorCount < planItemsList.length;
         const isPureEdit = priorCount > 0 && !hasNewItems;
 
+        // PARTIAL SUBMISSION — count how many plan items currently have progress filled
+        const filledNow = achItems.filter(a => (a.achievementDetails || '').trim()).length;
+        const pendingNow = planItemsList.length - filledNow;
+        const isPartial = !isDraft && filledNow > 0 && pendingNow > 0 && priorCount === 0;
+
         return createPortal(
             <div className="mp-overlay" onClick={requestCloseAchModal}>
                 <div className="mp-ach-modal mp-ach-modal--wide" onClick={e => e.stopPropagation()}>
@@ -1320,83 +1234,66 @@ const MonthlyPlanPage = () => {
                                 {isDraft ? 'Continue editing your draft'
                                     : isPureEdit ? 'Review and revise your submitted progress below.'
                                     : hasNewItems ? 'Report progress for your newly added plan(s) below, or revise anything already submitted.'
-                                    : `Submit Monthly Progress for ${planItemsList.length} plan${planItemsList.length > 1 ? 's' : ''}`}
+                                    : `Submit Monthly Progress — you can submit progress for one or more plans at a time`}
                             </p>
                         </div>
                         <button className="mp-modal-close" onClick={requestCloseAchModal}><FiX /></button>
                     </div>
-                    <div className="mp-ach-overall-summary">
-                        <div className="mp-ach-overall-left">
-                            <span className="mp-ach-overall-label">Overall Progress</span>
-                            <ProgressBar value={overallProgress} height={8} />
-                            <span className="mp-ach-overall-pct">{overallProgress}% complete</span>
+
+                    {/* PARTIAL SUBMISSION INFO BANNER */}
+                    {!isDraft && priorCount === 0 && planItemsList.length > 1 && (
+                        <div className="mp-partial-submit-notice">
+                            <FiAlertCircle size={14} />
+                            <span>
+                                You can submit progress for <strong>one plan at a time</strong> — you don't have to fill all plans at once.
+                                The RA evaluation only opens after <strong>all plans</strong> have progress submitted.
+                            </span>
                         </div>
-                        <div className="mp-ach-overall-right">
-                            <span className="mp-ach-overall-count">{completedCount}/{planItemsList.length}</span>
-                            <span className="mp-ach-overall-count-label">plans done</span>
-                        </div>
-                    </div>
+                    )}
+
                     <div className="mp-ach-items-container">
                         <div className="mp-ach-section-title">
                             <FiFileText /> Plan Progress
-                            <span className="mp-ach-section-count">{planItemsList.length} plan{planItemsList.length > 1 ? 's' : ''}</span>
+                            <span className="mp-ach-section-count">
+                                {filledNow > 0 && priorCount === 0
+                                    ? `${filledNow}/${planItemsList.length} filled`
+                                    : `${planItemsList.length} plan${planItemsList.length > 1 ? 's' : ''}`}
+                            </span>
                         </div>
                         {planItemsList.map((planText, idx) => {
-                            const item = achItems[idx] || { achievementDetails: '', progress: 0 };
-                            const safeProgress = Math.min(100, item.progress || 0);
-                            const tk = getProgressTokens(safeProgress);
+                            const item = achItems[idx] || { achievementDetails: '' };
+                            const hasFilled = !!(item.achievementDetails || '').trim();
 
-                            // Previously-submitted rows stay fully editable now (Sep 2026) —
-                            // only a small tag marks them as such, no more read-only branch.
-
+                            // Previously-submitted rows stay fully editable (Sep 2026) —
+                            // only a small tag marks them as such, no read-only branch.
                             return (
-                                <div key={idx} className="mp-ach-item-row" style={{ borderLeftColor: tk.borderColor }}>
+                                <div key={idx} className={`mp-ach-item-row${!hasFilled && priorCount === 0 ? ' mp-ach-item-row--unfilled' : ''}`}>
                                     <div className="mp-ach-item-header">
-                                        <CircularProgress progress={safeProgress} size={48} />
+                                        <span className={`mp-plan-seq-num mp-plan-seq-num--sm${hasFilled ? ' mp-plan-seq-num--filled' : ''}`}>{idx + 1}</span>
                                         <div className="mp-ach-item-plan-info">
                                             <div className="mp-ach-item-plan-num">
-                                                {/* <span className="mp-plan-seq-num mp-plan-seq-num--sm">{idx + 1}</span> */}
                                                 Plan {idx + 1}
                                                 {idx < priorCount && (
                                                     <span className="mp-plan-prior-tag"><FiEdit3 size={10} /> Previously submitted</span>
                                                 )}
+                                                {priorCount === 0 && hasFilled && (
+                                                    <span className="mp-plan-filled-tag"><FiCheckCircle size={10} /> Progress filled</span>
+                                                )}
+                                                {priorCount === 0 && !hasFilled && (
+                                                    <span className="mp-plan-optional-tag">Optional — can submit later</span>
+                                                )}
                                             </div>
                                             <div className="mp-ach-item-plan-text">{planText}</div>
                                         </div>
-                                        <span className="mp-ach-progress-badge" style={{ background: tk.badgeBg, color: tk.badgeText }}>{tk.label}</span>
-                                    </div>
-                                    <div className="mp-ach-progress-controls">
-                                        <label className="mp-ach-ctrl-label">Progress</label>
-                                        <div className="mp-ach-slider-wrap">
-                                            <div className="mp-ach-slider-track-bg">
-                                                <div className="mp-ach-slider-fill" style={{ width: `${safeProgress}%`, background: tk.barColor }} />
-                                                <input type="range" min={0} max={100} step={5}
-                                                    value={safeProgress}
-                                                    onChange={e => updateAchItem(idx, 'progress', parseInt(e.target.value))}
-                                                    className="mp-ach-range"
-                                                    style={{ '--thumb-color': tk.ringColor }}
-                                                />
-                                            </div>
-                                            <span className="mp-ach-slider-pct" style={{ color: tk.ringColor }}>{safeProgress}%</span>
-                                        </div>
-                                        <div className="mp-ach-progress-btns">
-                                            {[0, 25, 50, 75, 100].map(v => (
-                                                <button key={v} type="button"
-                                                    className={`mp-ach-prog-btn${safeProgress === v ? ' active' : ''}`}
-                                                    style={safeProgress === v ? { background: tk.barColor, borderColor: tk.barColor } : {}}
-                                                    onClick={() => updateAchItem(idx, 'progress', v)}>
-                                                    {v === 100 ? '✓ Done' : `${v}%`}
-                                                </button>
-                                            ))}
-                                        </div>
                                     </div>
                                     <div className="mp-ach-item-textarea-wrap">
-                                        <label className="mp-ach-ctrl-label">MONTHLY PROGRESS DETAILS</label>
+                                        <label className="mp-ach-ctrl-label" htmlFor={`mp-ach-details-${idx}`}>MONTHLY PROGRESS DETAILS</label>
                                         <textarea
-                                            className={`mp-ach-item-textarea${item.achievementDetails ? ' filled' : ''}`}
+                                            id={`mp-ach-details-${idx}`}
+                                            className={`mp-ach-item-textarea${hasFilled ? ' filled' : ''}`}
                                             value={item.achievementDetails}
                                             onChange={e => updateAchItem(idx, 'achievementDetails', e.target.value)}
-                                            placeholder={`Describe what you have done in Plan ${idx + 1}...`}
+                                            placeholder={`Describe what you have done in Plan ${idx + 1}... (optional — you can leave blank and submit later)`}
                                             rows={3}
                                         />
                                     </div>
@@ -1415,6 +1312,13 @@ const MonthlyPlanPage = () => {
                             </div>
                         </div>
                     </div>
+                    {/* Partial-submission progress hint in the footer */}
+                    {isPartial && (
+                        <div className="mp-ach-partial-hint">
+                            <FiAlertCircle size={13} />
+                            <span>You are submitting progress for <strong>{filledNow}</strong> of <strong>{planItemsList.length}</strong> plans. You can add progress for the remaining <strong>{pendingNow}</strong> plan{pendingNow !== 1 ? 's' : ''} later.</span>
+                        </div>
+                    )}
                     <div className="mp-ach-actions">
                         {priorCount === 0 && (
                             <button className="btn btn-secondary" disabled={submitting} onClick={() => handleAchSubmit(true)}>
@@ -1422,7 +1326,7 @@ const MonthlyPlanPage = () => {
                             </button>
                         )}
                         <button className="btn btn-primary" disabled={submitting} onClick={() => handleAchSubmit(false)}>
-                            <FiSend /> {submitting ? 'Submitting...' : isPureEdit ? 'Save Changes' : hasNewItems ? 'Save Progress' : 'Submit Monthly Progress'}
+                            <FiSend /> {submitting ? 'Submitting...' : isPureEdit ? 'Save Changes' : hasNewItems ? 'Save Progress' : isPartial ? `Submit Progress (${filledNow}/${planItemsList.length})` : 'Submit Monthly Progress'}
                         </button>
                         <button className="btn btn-secondary" onClick={requestCloseAchModal}>Cancel</button>
                     </div>
@@ -1478,16 +1382,10 @@ const MonthlyPlanPage = () => {
                 const captured = addlMatch[1].trim();
                 try {
                     const parsed = JSON.parse(captured);
-                    additionalItems = Array.isArray(parsed) ? parsed.filter(a => (a.text || '').trim()) : [{ text: captured, progress: 100 }];
-                } catch { additionalItems = [{ text: captured, progress: 100 }]; }
+                    additionalItems = Array.isArray(parsed) ? parsed.filter(a => (a.text || '').trim()) : [{ text: captured }];
+                } catch { additionalItems = [{ text: captured }]; }
             }
         }
-
-        const achOverall = hasStructuredAch && achIsSubmitted
-            ? Math.round(effectivePlanAch.reduce((s, a) => s + Math.min(100, a.progress || 0), 0) / effectivePlanAch.length)
-            : null;
-        const achCompleted = hasStructuredAch && achIsSubmitted
-            ? effectivePlanAch.filter(a => (a.progress || 0) >= 100).length : 0;
 
         // Stepper states: 'done' | 'active' | 'idle'
         const s1 = prog.planDone ? 'done' : 'active';
@@ -1579,35 +1477,17 @@ const MonthlyPlanPage = () => {
                     {/* ── BODY ── */}
                     <div className="dmod-body">
 
-                        {/* Overview cards */}
-                        {achIsSubmitted && achOverall !== null && (
-                            <div className="dmod-overview">
-                                <div className="dmod-ov-card">
-                                    <p className="dmod-ov-label">Plans Completed</p>
-                                    <p className="dmod-ov-value">
-                                        {achCompleted}
-                                        <span className="dmod-ov-denom"> / {effectivePlanAch.length}</span>
-                                    </p>
-                                    <div className="dmod-ov-bar">
-                                        <div className="dmod-ov-fill" style={{
-                                            width: `${(achCompleted / effectivePlanAch.length) * 100}%`,
-                                            background: achCompleted === effectivePlanAch.length ? '#16A34A' : '#F59E0B'
-                                        }} />
-                                    </div>
-                                    <p className="dmod-ov-sub-note">Submitted {formatDate(selectedPlan.submittedAt)}</p>
-                                </div>
-                                <div className="dmod-ov-card">
-                                    <p className="dmod-ov-label">Overall Progress</p>
-                                    <div className="dmod-ov-ach-row">
-                                        <div>
-                                            <p className="dmod-ov-pct" style={{ color: achOverall >= 70 ? '#16A34A' : achOverall >= 40 ? '#D97706' : '#94A3B8' }}>
-                                                {achOverall}%
-                                            </p>
-                                            <p className="dmod-ov-sub-note">Submitted {formatDate(ach?.submittedAt)}</p>
-                                        </div>
-                                        <DonutChart value={achOverall} size={68} />
-                                    </div>
-                                </div>
+                        {/* Submission timeline — replaces the old overview cards */}
+                        {achIsSubmitted && (
+                            <div className="dmod-timeline">
+                                <span className="dmod-timeline-item">
+                                    <FiFileText size={11} /> Plan submitted {formatDate(selectedPlan.submittedAt)}
+                                </span>
+                                {ach?.submittedAt && (
+                                    <span className="dmod-timeline-item">
+                                        <FiTrendingUp size={11} /> Progress submitted {formatDate(ach.submittedAt)}
+                                    </span>
+                                )}
                             </div>
                         )}
 
@@ -1673,35 +1553,34 @@ const MonthlyPlanPage = () => {
                             </div>
                             <div className="dmod-plan-cards">
                                 {planItemsList.map((planText, i) => {
-                                    const pa = hasStructuredAch && achIsSubmitted
-                                        ? (getDetailPlanAch(i) || { achievementDetails: '', progress: 0 })
-                                        : { achievementDetails: '', progress: 0 };
-                                    const p = Math.min(100, pa.progress || 0);
-                                    const statusLabel = p === 100 ? 'Completed' : p > 0 ? 'In Progress' : 'Not Started';
-                                    const statusCls = p === 100 ? 'dmod-badge--green' : p > 0 ? 'dmod-badge--amber' : 'dmod-badge--gray';
-                                    const barColor = p === 100 ? '#16A34A' : p > 0 ? '#F59E0B' : '#E2E8F0';
+                                    const pa = hasStructuredAch && achIsSubmitted ? getDetailPlanAch(i) : null;
+                                    const progressText = (pa?.achievementDetails || '').trim();
                                     return (
                                         <div key={i} className="dmod-plan-card">
+                                            {/* PLAN DETAIL */}
                                             <div className="dmod-plan-card-top">
                                                 <span className="dmod-plan-num">{i + 1}</span>
                                                 <div className="dmod-plan-card-info">
                                                     <div className="dmod-plan-card-title-row">
-                                                        <span className="dmod-plan-name">{planText}</span>
-                                                        {achIsSubmitted && <span className={`dmod-badge ${statusCls}`}>{statusLabel}</span>}
+                                                        <span className="dmod-field-lbl">Plan {i + 1}</span>
+                                                        {achIsSubmitted && (
+                                                            <span className={`dmod-badge ${progressText ? 'dmod-badge--green' : 'dmod-badge--gray'}`}>
+                                                                {progressText ? 'Progress reported' : 'Progress pending'}
+                                                            </span>
+                                                        )}
                                                     </div>
-                                                    {achIsSubmitted && (
-                                                        pa.achievementDetails
-                                                            ? <p className="dmod-plan-ach-text">{pa.achievementDetails}</p>
-                                                            : <p className="dmod-plan-ach-empty">No Monthly progress details</p>
-                                                    )}
+                                                    <div className="dmod-plan-name">{planText}</div>
                                                 </div>
                                             </div>
+                                            {/* PROGRESS DETAIL — directly beneath its plan */}
                                             {achIsSubmitted && (
-                                                <div className="dmod-plan-prog-row">
-                                                    <div className="dmod-plan-prog-bar">
-                                                        <div className="dmod-plan-prog-fill" style={{ width: `${p}%`, background: barColor }} />
+                                                <div className="dmod-prog-block">
+                                                    <div className="dmod-field-lbl">
+                                                        <FiTrendingUp size={11} /> Progress details
                                                     </div>
-                                                    <span className="dmod-plan-prog-pct" style={{ color: p === 0 ? '#CBD5E1' : barColor }}>{p}%</span>
+                                                    {progressText
+                                                        ? <p className="dmod-plan-ach-text">{progressText}</p>
+                                                        : <p className="dmod-plan-ach-empty">No monthly progress details</p>}
                                                 </div>
                                             )}
                                         </div>
@@ -1766,25 +1645,14 @@ const MonthlyPlanPage = () => {
                                     <span className="dmod-sec-badge">{additionalItems.length} extra</span>
                                 </div>
                                 <div className="dmod-extra-list">
-                                    {additionalItems.map((item, i) => {
-                                        const text = typeof item === 'string' ? item : (item.text || '');
-                                        const itemProg = typeof item === 'string' ? 100 : Math.min(100, item.progress ?? 100);
-                                        const barColor = itemProg === 100 ? '#16A34A' : itemProg > 0 ? '#F59E0B' : '#E2E8F0';
-                                        return (
-                                            <div key={i} className="dmod-extra-item">
-                                                <span className="dmod-extra-num">{i + 1}</span>
-                                                <div className="dmod-extra-content">
-                                                    <p className="dmod-extra-text">{text}</p>
-                                                    <div className="dmod-plan-prog-row" style={{ paddingLeft: 0 }}>
-                                                        <div className="dmod-plan-prog-bar">
-                                                            <div className="dmod-plan-prog-fill" style={{ width: `${itemProg}%`, background: barColor }} />
-                                                        </div>
-                                                        <span className="dmod-plan-prog-pct" style={{ color: itemProg === 0 ? '#CBD5E1' : barColor }}>{itemProg}%</span>
-                                                    </div>
-                                                </div>
+                                    {additionalItems.map((item, i) => (
+                                        <div key={i} className="dmod-extra-item">
+                                            <span className="dmod-extra-num">{i + 1}</span>
+                                            <div className="dmod-extra-content">
+                                                <p className="dmod-extra-text">{typeof item === 'string' ? item : (item.text || '')}</p>
                                             </div>
-                                        );
-                                    })}
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
                         )}
@@ -2090,8 +1958,7 @@ const MonthlyPlanPage = () => {
                         const planItemsList = getPlanItems(plan);
                         const chipStyle = getMonthChipStyle(plan.month);
                         const effectivePlanAch = ach && !isDraftAch ? getEffectivePlanAch(ach, planItemsList.length) : null;
-                        const achOverall = effectivePlanAch ? Math.round(effectivePlanAch.reduce((s, a) => s + Math.min(100, a.progress || 0), 0) / effectivePlanAch.length) : null;
-                        const achCompleted = effectivePlanAch ? effectivePlanAch.filter(a => (a.progress || 0) >= 100).length : 0;
+                        const achReported = effectivePlanAch ? effectivePlanAch.filter(a => (a.achievementDetails || '').trim()).length : 0;
 
                         return (
                             <div key={plan.id} className={`mp-unified-card status-${st.cls}`}>
@@ -2202,11 +2069,9 @@ const MonthlyPlanPage = () => {
                                         <>
                                             {effectivePlanAch ? (
                                                 <div className="mp-card-ach-summary">
-                                                    <div className="mp-card-ach-bar-wrap">
-                                                        <ProgressBar value={achOverall} height={7} />
-                                                        <span className="mp-card-ach-overall-pct">{achOverall}%</span>
-                                                    </div>
-                                                    <span className="mp-card-ach-summary-text">{achCompleted}/{effectivePlanAch.length} completed · {achOverall}% overall</span>
+                                                    <span className="mp-card-ach-summary-text">
+                                                        <FiCheckCircle size={12} /> Progress reported for {achReported} of {planItemsList.length} plan{planItemsList.length !== 1 ? 's' : ''}
+                                                    </span>
                                                 </div>
                                             ) : (
                                                 <div className="mp-section-text">{ach.achievementDetails}</div>
@@ -2217,17 +2082,25 @@ const MonthlyPlanPage = () => {
                                                 editing an already-submitted entry (e.g. acting on RA
                                                 feedback). Gated the same as before: current month only,
                                                 not yet evaluated, and the achievement window still open —
-                                                the exact same window that unlocks RA feedback. ── */}
+                                                the exact same window that unlocks RA feedback.
+                                                PARTIAL SUBMISSION: also shown when achReported < total
+                                                plans (employee submitted progress for some plans but not
+                                                all yet). ── */}
                                             {!isEval && plan.month === currentMonthDefault && achievementWindowStatus === 'open' && (() => {
                                                 const newCount = planItemsList.length - (effectivePlanAch ? effectivePlanAch.length : 0);
+                                                const remainingProgress = planItemsList.length - achReported;
+                                                const isPartialProgress = achReported > 0 && achReported < planItemsList.length && newCount === 0;
                                                 return (
                                                     <button className="mp-add-ach-btn mp-add-ach-btn--continue" onClick={() => openAchModal(plan)}>
                                                         {newCount > 0
                                                             ? <><FiPlus /> Add Progress for New Plan{newCount !== 1 ? 's' : ''}</>
-                                                            : <><FiEdit3 /> Edit Progress</>}
+                                                            : isPartialProgress
+                                                                ? <><FiPlus /> Add Remaining Progress ({achReported}/{planItemsList.length})</>
+                                                                : <><FiEdit3 /> Edit Progress</>}
                                                     </button>
                                                 );
                                             })()}
+
                                         </>
                                     ) : isDraftAch ? (
                                         <div className="mp-draft-inline">

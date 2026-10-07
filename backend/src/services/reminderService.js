@@ -65,7 +65,7 @@ const { User, MonthlyPlan, MonthlyPlanItem, MonthlyAchievement, MonthlyAchieveme
 const { parseDeadlineConfig, normalizeRole } = require("../controllers/configController");
 const { buildDeadlineDate, computeAchievementWindow, formatPeriod, formatDeadline } = require("../utils/dateHelpers");
 const { getEffectiveDeadline } = require("../utils/deadlineResolver");
-const { notifyDeadlineReminder, notifyIncompleteAchievementReminder } = require("./notificationService");
+const { notifyDeadlineReminder, notifyIncompleteAchievementReminder, notifyMonthlyPlanOpen } = require('./notificationService');
 // Single source of truth for "is a SUBMITTED achievement actually complete
 // for its plan" — same helper raController.js's evaluate-authorization
 // guard uses, moved out to ../utils/achievementCompleteness so this job
@@ -363,4 +363,89 @@ async function runDeadlineReminders() {
     }
 }
 
-module.exports = { runDeadlineReminders };
+/* ════════════════════════════════════════════════════════════════════
+   MONTHLY PLAN WINDOW OPEN — 1st-of-month announcement
+
+   Fires on the 1st of each month to notify every active employee
+   AND every active RA that the Monthly Plan submission window for
+   the new month is now open and submissions can begin.
+
+   DESIGN DECISIONS:
+   - Sent to both EMPLOYEE and RA roles, matching the spec:
+     employees need to know they can start submitting; RAs need to
+     know their team members will be submitting this month.
+   - Deadline in the email is derived from each user's role-specific
+     config (parseDeadlineConfig + buildDeadlineDate), so an RA
+     whose plan deadline differs from an employee's sees the correct
+     figure in their own email.
+   - Dedup: one ReminderLog row per (userId, "YYYY-MM", "PLAN_OPEN",
+     thresholdDays=0) — same immutable-insert contract as deadline
+     reminders. Fires the cron twice or runs two instances: each user
+     still gets exactly one email.
+   - No RA extension check (getEffectiveDeadline) — a plan-open
+     announcement is about the base deadline from config, not an
+     individual extension. Extensions are notified separately via
+     notifyDeadlineExtension when granted.
+════════════════════════════════════════════════════════════════════ */
+async function sendMonthlyPlanOpenNotifications(now) {
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
+    const currentMonth = `${year}-${String(month).padStart(2, "0")}`;
+    const periodLabel = formatPeriod(currentMonth);
+
+    // thresholdDays=0 is the sentinel used for this non-deadline-proximity
+    // reminder type — it has no natural "days until deadline" concept,
+    // so 0 is the least-surprising dedup key and avoids overloading the
+    // threshold semantics that PLAN/ACHIEVEMENT use.
+    const PLAN_OPEN_THRESHOLD = 0;
+
+    const users = await User.findAll({
+        where: { isActive: true, role: { [Op.in]: REMINDABLE_ROLES } },
+        attributes: ["id", "name", "email", "role"],
+    });
+
+    let sentCount = 0;
+
+    for (const user of users) {
+        // Dedup — one notice per user per month.
+        if (await alreadySent(user.id, currentMonth, "PLAN_OPEN", PLAN_OPEN_THRESHOLD)) continue;
+
+        // Compute the role-specific plan deadline so the email is accurate.
+        const role = normalizeRole(user.role);
+        const config = parseDeadlineConfig(role);
+        const baseDeadline = buildDeadlineDate(year, month, config.planDay, 0, true);
+        const planDeadlineLabel = formatDeadline(baseDeadline.toISOString().split("T")[0]);
+
+        const result = await notifyMonthlyPlanOpen({
+            recipient: user,
+            period: periodLabel,
+            planDeadline: planDeadlineLabel,
+            role: user.role,
+        });
+
+        if (result.success) {
+            await recordSent(user.id, currentMonth, "PLAN_OPEN", PLAN_OPEN_THRESHOLD, baseDeadline);
+            sentCount++;
+        }
+    }
+
+    return sentCount;
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   Entry point for the 1st-of-month "window open" cron (server.js).
+   Same "never throw" contract as runDeadlineReminders — a failed run
+   logs and lets the next scheduled run (or a manual retry) try again.
+════════════════════════════════════════════════════════════════════ */
+async function runMonthlyPlanOpenNotifications() {
+    const now = new Date();
+    console.log(`[reminder] Monthly-plan-open notification run started for ${now.toISOString()}`);
+    try {
+        const count = await sendMonthlyPlanOpenNotifications(now);
+        console.log(`[reminder] Monthly-plan-open run complete — ${count} notification(s) sent`);
+    } catch (err) {
+        console.error("[reminder] Monthly-plan-open run failed:", err.message);
+    }
+}
+
+module.exports = { runDeadlineReminders, runMonthlyPlanOpenNotifications };

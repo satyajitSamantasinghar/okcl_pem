@@ -306,6 +306,7 @@ const ExtendDeadlineModal = ({
                                     ) : (
                                         <input
                                             type="date"
+                                            lang="en-IN"
                                             value={newDeadline}
                                             min={minDate}
                                             max={maxDate || undefined}

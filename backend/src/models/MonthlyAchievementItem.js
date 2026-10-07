@@ -44,7 +44,8 @@ module.exports = (sequelize) => {
       },
       progress: {
         type: DataTypes.INTEGER,
-        defaultValue: 0,
+        allowNull: true,
+        defaultValue: null,
         validate: { min: 0, max: 100 },
       },
       // Origin tracking for the "Add More Progress" mid-cycle feature —

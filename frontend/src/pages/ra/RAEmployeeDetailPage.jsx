@@ -56,14 +56,6 @@ function formatDateShort(dateStr) {
     if (!dateStr) return '—';
     return new Date(dateStr).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
 }
-function getProgressTokens(p) {
-    const v = Math.min(100, Math.max(0, p || 0));
-    if (v === 100) return { label: 'Completed', ringColor: '#3B6D11', barColor: '#3B6D11', badgeBg: '#EAF3DE', badgeText: '#27500A', borderColor: '#3B6D11', pctClass: 'pp-green', markerActive: 4 };
-    if (v >= 75)  return { label: 'Almost done', ringColor: '#BA7517', barColor: '#BA7517', badgeBg: '#FAEEDA', badgeText: '#633806', borderColor: '#BA7517', pctClass: 'pp-amber', markerActive: 3 };
-    if (v >= 50)  return { label: 'Halfway', ringColor: '#E85523', barColor: '#E85523', badgeBg: '#FFF0EB', badgeText: '#993C1D', borderColor: '#E85523', pctClass: 'pp-orange', markerActive: 2 };
-    if (v >= 25)  return { label: 'Just started', ringColor: '#BA7517', barColor: '#BA7517', badgeBg: '#FAEEDA', badgeText: '#633806', borderColor: '#BA7517', pctClass: 'pp-amber', markerActive: 1 };
-    return { label: 'Not started', ringColor: '#A32D2D', barColor: '#A32D2D', badgeBg: '#FCEBEB', badgeText: '#791F1F', borderColor: '#A32D2D', pctClass: 'pp-red', markerActive: 0 };
-}
 function getPlanItems(plan) {
     if (!plan) return [];
     if (Array.isArray(plan.planItems) && plan.planItems.length > 0)
@@ -72,20 +64,22 @@ function getPlanItems(plan) {
         return plan.planDetails.split('\n').map(s => s.trim()).filter(Boolean);
     return [];
 }
+// Legacy rows stored one text blob ("Plan 1 [50%]: ..."). Old blobs may still
+// carry a "[NN%]" marker; the pattern tolerates it purely so it is stripped
+// from the displayed text — the percentage itself is no longer used anywhere.
 function parseLegacyPlanAch(legacyText, planCount) {
-    const result = Array.from({ length: planCount }, () => ({ achievementDetails: '', progress: 0 }));
+    const result = Array.from({ length: planCount }, () => ({ achievementDetails: '' }));
     if (!legacyText) return result;
     const lines = legacyText.split('\n');
     let currentIdx = -1;
     lines.forEach(line => {
-        const withPct = line.match(/^Plan\s+(\d+)\s*\[(\d+)%\]:\s*(.*)/i);
-        const withoutPct = !withPct && line.match(/^Plan\s+(\d+):\s*(.*)/i);
-        if (withPct) {
-            const idx = parseInt(withPct[1]) - 1;
-            if (idx >= 0 && idx < planCount) { currentIdx = idx; result[idx].progress = Math.min(100, parseInt(withPct[2]) || 0); result[idx].achievementDetails = withPct[3].trim(); }
-        } else if (withoutPct) {
-            const idx = parseInt(withoutPct[1]) - 1;
-            if (idx >= 0 && idx < planCount) { currentIdx = idx; result[idx].achievementDetails = withoutPct[2].trim(); }
+        const header = line.match(/^Plan\s+(\d+)\s*(?:\[\d+%\])?:\s*(.*)/i);
+        if (header) {
+            const idx = parseInt(header[1], 10) - 1;
+            if (idx >= 0 && idx < planCount) {
+                currentIdx = idx;
+                result[idx].achievementDetails = header[2].trim();
+            }
         } else if (currentIdx >= 0 && line.trim() && !line.match(/^Additional:/i)) {
             result[currentIdx].achievementDetails += (result[currentIdx].achievementDetails ? ' ' : '') + line.trim();
         }
@@ -96,12 +90,12 @@ function getEffectivePlanAch(ach, planCount) {
     if (!ach) return null;
     const pa = ach.planAchievements;
     if (Array.isArray(pa) && pa.length > 0) {
-        const hasRealData = pa.some(a => (a.achievementDetails || '').trim() || (a.progress || 0) > 0);
+        const hasRealData = pa.some(a => (a.achievementDetails || '').trim());
         if (hasRealData) return pa;
     }
     if (ach.achievementDetails) {
         const parsed = parseLegacyPlanAch(ach.achievementDetails, planCount);
-        const hasParsedData = parsed.some(a => (a.achievementDetails || '').trim() || (a.progress || 0) > 0);
+        const hasParsedData = parsed.some(a => (a.achievementDetails || '').trim());
         if (hasParsedData) return parsed;
     }
     return null;
@@ -118,9 +112,9 @@ function parseAdditionalAch(raw) {
             const p = JSON.parse(match[1].trim());
             if (Array.isArray(p)) return p.filter(a => (a.text || '').trim());
         } catch { /* fall through */ }
-        return [{ text: match[1].trim(), progress: 100 }];
+        return [{ text: match[1].trim() }];
     }
-    return raw.split('\n').filter(l => l.trim() && !l.trim().startsWith('Additional:')).map(t => ({ text: t.trim(), progress: 100 }));
+    return raw.split('\n').filter(l => l.trim() && !l.trim().startsWith('Additional:')).map(t => ({ text: t.trim() }));
 }
 const MONTH_PALETTES_RA = [
     { bg: '#E6F1FB', color: '#0C447C' }, { bg: '#EAF3DE', color: '#27500A' },
@@ -135,32 +129,6 @@ function getMonthChipStyle(monthStr) {
     const m = parseInt(monthStr.split('-')[1]) - 1;
     return MONTH_PALETTES_RA[m] || MONTH_PALETTES_RA[0];
 }
-function CircularProgressMod({ progress, size = 46 }) {
-    const p = Math.min(100, Math.max(0, progress || 0));
-    const r = (size - 6) / 2;
-    const circ = 2 * Math.PI * r;
-    const dash = (p / 100) * circ;
-    const tk = getProgressTokens(p);
-    return (
-        <svg width={size} height={size} style={{ transform: 'rotate(-90deg)', flexShrink: 0 }}>
-            <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--border-default)" strokeWidth={4.5} />
-            <circle cx={size / 2} cy={size / 2} r={r} fill="none"
-                stroke={tk.ringColor} strokeWidth={4.5}
-                strokeDasharray={`${dash} ${circ}`} strokeLinecap="round"
-                style={{ transition: 'stroke-dasharray 0.35s ease' }} />
-            <text x={size / 2} y={size / 2} textAnchor="middle" dominantBaseline="middle"
-                style={{
-                    transform: `rotate(90deg)`,
-                    transformOrigin: `${size / 2}px ${size / 2}px`,
-                    fontSize: 9.5, fontWeight: 700,
-                    fill: 'var(--text-primary)', fontFamily: 'inherit'
-                }}>
-                {p}%
-            </text>
-        </svg>
-    );
-}
-
 /* ════════════════════════════════════════════════════
    KPI CARD
 ════════════════════════════════════════════════════ */
@@ -456,7 +424,7 @@ const availableYears = Array.from(fySet).sort((a, b) =>
 
     /* ════════════════════════════════════════════════════
        MONTHLY REVIEW MODAL — New design matching MonthlyPlanPage
-       Shows each plan linked with its achievement, progress ring/bar
+       Shows each plan with its progress details directly beneath it
     ════════════════════════════════════════════════════ */
     const renderDetailModal = () => {
         if (!selectedMonthDetail) return null;
@@ -480,17 +448,10 @@ const availableYears = Array.from(fySet).sort((a, b) =>
                 const captured = addlMatch[1].trim();
                 try {
                     const parsed = JSON.parse(captured);
-                    additionalItems = Array.isArray(parsed) ? parsed.filter(a => (a.text || '').trim()) : [{ text: captured, progress: 100 }];
-                } catch { additionalItems = [{ text: captured, progress: 100 }]; }
+                    additionalItems = Array.isArray(parsed) ? parsed.filter(a => (a.text || '').trim()) : [{ text: captured }];
+                } catch { additionalItems = [{ text: captured }]; }
             }
         }
-
-        // Overall progress
-        const achOverall = hasStructuredAch
-            ? Math.round(effectivePlanAch.reduce((s, a) => s + Math.min(100, a.progress || 0), 0) / effectivePlanAch.length)
-            : null;
-        const achCompleted = hasStructuredAch
-            ? effectivePlanAch.filter(a => (a.progress || 0) >= 100).length : 0;
 
         // Stepper
         const stepperPlan = 'done';
@@ -569,31 +530,19 @@ const availableYears = Array.from(fySet).sort((a, b) =>
                             </div>
                         )}
 
-                        {/* Overall progress bar — only when achievement exists & structured */}
-                        {ach && ach.status !== 'DRAFT' && achOverall !== null && (
-                            <div className="dmod-op-bar">
-                                <div className="dmod-op-row">
-                                    <span className="dmod-op-lbl">Overall progress</span>
-                                    <span className="dmod-op-val">
-                                        {achCompleted}/{effectivePlanAch.length} plans done
-                                        <span> · {achOverall}%</span>
-                                    </span>
-                                </div>
-                                <div className="dmod-pt">
-                                    <div className="dmod-pf" style={{ width: `${achOverall}%` }} />
-                                </div>
-                                <div className="dmod-ts-row">
+                        {/* Submission timeline — only once progress has been submitted */}
+                        {ach && ach.status !== 'DRAFT' && (
+                            <div className="dmod-ts-bar">
+                                <span className="dmod-ts-item">
+                                    <FiFileText size={11} />
+                                    Plan submitted {formatDateShort(plan.submittedAt)}
+                                </span>
+                                {ach?.submittedAt && (
                                     <span className="dmod-ts-item">
-                                        <FiFileText size={10} />
-                                        Plan submitted {formatDateShort(plan.submittedAt)}
+                                        <FiTrendingUp size={11} />
+                                        Progress submitted {formatDateShort(ach.submittedAt)}
                                     </span>
-                                    {ach?.submittedAt && (
-                                        <span className="dmod-ts-item">
-                                            <FiTrendingUp size={10} />
-                                            Progress submitted {formatDateShort(ach.submittedAt)}
-                                        </span>
-                                    )}
-                                </div>
+                                )}
                             </div>
                         )}
 
@@ -629,52 +578,31 @@ const availableYears = Array.from(fySet).sort((a, b) =>
                             {ach && ach.status !== 'DRAFT' && hasStructuredAch && (
                                 <div className="dmod-plan-list">
                                     {planItemsList.map((planText, i) => {
-                                        const pa = effectivePlanAch[i] || { achievementDetails: '', progress: 0 };
-                                        const p = Math.min(100, pa.progress || 0);
-                                        const tk = getProgressTokens(p);
-                                        const pStatusLabel = p === 100 ? 'Completed' : p > 0 ? 'In progress' : 'Not started';
-                                        const pStatusCls = p === 100 ? 'dmod-pstatus--done' : p > 0 ? 'dmod-pstatus--partial' : 'dmod-pstatus--none';
+                                        const progressText = (effectivePlanAch[i]?.achievementDetails || '').trim();
                                         return (
                                             <div key={i} className="dmod-pcard-wrap">
-                                                <div className="dmod-pcard" style={{ borderLeftColor: tk.borderColor }}>
+                                                <div className={`dmod-pcard ${progressText ? 'dmod-pcard--reported' : 'dmod-pcard--missing'}`}>
+                                                    {/* PLAN DETAIL */}
                                                     <div className="dmod-ptop">
-                                                        <div className="dmod-pring-wrap">
-                                                            <span className="dmod-plan-idx-pill" style={{ background: tk.badgeBg, color: tk.badgeText }}>{i + 1}</span>
-                                                            <CircularProgressMod progress={p} size={44} />
-                                                        </div>
+                                                        <span className="dmod-plan-idx-pill">{i + 1}</span>
                                                         <div className="dmod-pinfo">
                                                             <div className="dmod-pname-row">
                                                                 <span className="dmod-pname">Plan {i + 1}</span>
-                                                                <span className={`dmod-pstatus ${pStatusCls}`}>{pStatusLabel}</span>
+                                                                <span className={`dmod-pstatus ${progressText ? 'dmod-pstatus--done' : 'dmod-pstatus--none'}`}>
+                                                                    {progressText ? 'Progress reported' : 'Not reported'}
+                                                                </span>
                                                             </div>
                                                             <div className="dmod-pdesc">{planText}</div>
                                                         </div>
                                                     </div>
-                                                    <div className="dmod-prog-section">
-                                                        <div className="dmod-prog-labels">
-                                                            <span className="dmod-prog-title">Progress</span>
-                                                            <span className={`dmod-prog-pct ${tk.pctClass}`}>
-                                                                {p}% {p === 100 ? '— Done' : p > 0 ? '— In progress' : '— Not started'}
-                                                            </span>
-                                                        </div>
-                                                        <div className="dmod-prog-bar">
-                                                            <div className="dmod-pb-fill" style={{ width: `${p}%`, background: tk.barColor }} />
-                                                        </div>
-                                                        <div className="dmod-prog-markers">
-                                                            {[0, 25, 50, 75].map((m, mi) => (
-                                                                <span key={m} style={p >= m && mi <= tk.markerActive ? { color: tk.barColor, fontWeight: 600 } : {}}>{m}%</span>
-                                                            ))}
-                                                            <span style={p === 100 ? { color: tk.barColor, fontWeight: 600 } : {}}>Done</span>
-                                                        </div>
-                                                    </div>
+                                                    {/* PROGRESS DETAIL — directly beneath its plan */}
                                                     <div className="dmod-ach-section">
                                                         <div className="dmod-ach-lbl">
                                                             <FiTrendingUp size={11} /> Progress details
                                                         </div>
-                                                        {pa.achievementDetails
-                                                            ? <div className="dmod-ach-text">{pa.achievementDetails}</div>
-                                                            : <div className="dmod-ach-empty">No details provided</div>
-                                                        }
+                                                        {progressText
+                                                            ? <div className="dmod-ach-text">{progressText}</div>
+                                                            : <div className="dmod-ach-empty">No details provided</div>}
                                                     </div>
                                                 </div>
                                             </div>
@@ -708,28 +636,17 @@ const availableYears = Array.from(fySet).sort((a, b) =>
                         {additionalItems.length > 0 && (
                             <div className="dmod-extras-card">
                                 <div className="dmod-extras-hdr">
-                                    <div className="dmod-extras-title"><FiStar size={13} /> Additional work done with progress</div>
+                                    <div className="dmod-extras-title"><FiStar size={13} /> Additional work done</div>
                                     <span className="dmod-extras-badge">{additionalItems.length} extra{additionalItems.length !== 1 ? 's' : ''}</span>
                                 </div>
-                                {additionalItems.map((item, i) => {
-                                    const text = typeof item === 'string' ? item : (item.text || '');
-                                    const iprog = typeof item === 'string' ? 100 : Math.min(100, item.progress || 100);
-                                    const tk = getProgressTokens(iprog);
-                                    return (
-                                        <div key={i} className="dmod-extra-item">
-                                            <div className="dmod-extra-num">{i + 1}</div>
-                                            <div className="dmod-extra-content">
-                                                <div className="dmod-extra-text">{text}</div>
-                                                <div className="dmod-extra-prog-row">
-                                                    <div className="dmod-extra-bar">
-                                                        <div className="dmod-extra-bar-fill" style={{ width: `${iprog}%`, background: tk.barColor }} />
-                                                    </div>
-                                                    <span className="dmod-extra-pct-lbl" style={{ color: tk.badgeText }}>{iprog}% — {tk.label}</span>
-                                                </div>
-                                            </div>
+                                {additionalItems.map((item, i) => (
+                                    <div key={i} className="dmod-extra-item">
+                                        <div className="dmod-extra-num">{i + 1}</div>
+                                        <div className="dmod-extra-content">
+                                            <div className="dmod-extra-text">{typeof item === 'string' ? item : (item.text || '')}</div>
                                         </div>
-                                    );
-                                })}
+                                    </div>
+                                ))}
                             </div>
                         )}
 

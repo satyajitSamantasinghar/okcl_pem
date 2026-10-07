@@ -1,5 +1,7 @@
 /* ============================================================
-   MD MONTHLY OVERVIEW PAGE
+   MONTHLY OVERVIEW — shared by the MD and HRD overview pages
+   (.mmo-* = list/table/KPI/filter chrome). HRD-only additions live
+   in HRDMonthlyOverview.css. Keep selectors here role-agnostic.
 ============================================================ */
 
 /* Banner Spacing */
@@ -352,11 +354,20 @@
     right: 10px;
     top: 50%;
     transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px;
     background: none;
     border: none;
+    border-radius: 50%;
     color: var(--text-muted);
     cursor: pointer;
     font-size: 0.875rem;
+}
+
+.mmo-search-clear:hover {
+    color: var(--text-primary);
 }
 
 .mmo-filter-controls {
@@ -382,6 +393,7 @@
     font-weight: 600;
     background: var(--bg-card);
     color: var(--text-primary);
+    cursor: pointer;
 }
 
 .mmo-sort-btn {
@@ -409,8 +421,9 @@
 /* result meta */
 .mmo-result-meta {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 10px;
+    gap: 6px 12px;
     font-size: 0.75rem;
     color: var(--text-muted);
     margin-bottom: 14px;
@@ -422,7 +435,8 @@
     gap: 4px;
     background: none;
     border: none;
-    font-size: 0.6875rem;
+    padding: 2px 4px;
+    font-size: 0.75rem;
     color: var(--primary);
     font-weight: 600;
     cursor: pointer;
@@ -434,12 +448,14 @@
     border: 1px solid var(--border-default);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-card);
-    overflow: hidden;
+    overflow-x: auto;
+    overflow-y: hidden;
     margin-bottom: 16px;
 }
 
 .mmo-table {
     width: 100%;
+    min-width: 860px;
     border-collapse: collapse;
 }
 
@@ -449,7 +465,7 @@
 
 .mmo-table th {
     padding: 11px 14px;
-    font-size: 0.625rem;
+    font-size: 0.6875rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -485,14 +501,11 @@
     outline-offset: -2px;
 }
 
-.mmo-row:focus-visible td:first-child {
-    border-radius: 4px 0 0 4px;
-}
 
 /* cells */
 .mmo-cell-num {
     color: var(--text-muted);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     font-weight: 600;
     width: 32px;
 }
@@ -525,7 +538,7 @@
 }
 
 .mmo-emp-code {
-    font-size: 0.5625rem;
+    font-size: 0.6875rem;
     color: var(--text-muted);
 }
 
@@ -583,8 +596,9 @@
 .mmo-status-badge {
     padding: 3px 8px;
     border-radius: 100px;
-    font-size: 0.5625rem;
+    font-size: 0.6875rem;
     font-weight: 700;
+    letter-spacing: 0.02em;
     text-transform: uppercase;
     white-space: nowrap;
 }
@@ -618,13 +632,17 @@
     font-weight: 800;
 }
 
+.mmo-score-icon {
+    font-size: 0.75rem;
+}
+
 .mmo-no-score {
     color: var(--text-muted);
     font-size: 0.75rem;
 }
 
 .mmo-cell-date {
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     color: var(--text-muted);
     white-space: nowrap;
 }
@@ -632,6 +650,7 @@
 /* ── Pagination ─────────────────────────────── */
 .mmo-pagination {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: center;
     gap: 6px;
@@ -665,7 +684,16 @@
 
 .mmo-page-numbers {
     display: flex;
+    align-items: center;
     gap: 4px;
+}
+
+.mmo-page-gap {
+    min-width: 20px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.8125rem;
+    user-select: none;
 }
 
 .mmo-page-num {
@@ -1116,8 +1144,8 @@
 }
 
 @media (max-width: 768px) {
-    .mmo-stats-row {
-        flex-direction: column;
+    .mmo-table {
+        min-width: 560px;
     }
 
     .mmo-filter-bar {
@@ -1157,7 +1185,7 @@
     background: var(--bg-muted);
     border: 1px solid var(--border-default);
     color: var(--text-secondary);
-    font-size: 0.625rem;
+    font-size: 0.6875rem;
     font-weight: 700;
     cursor: pointer;
     text-transform: uppercase;
@@ -1210,8 +1238,12 @@
     text-transform: uppercase;
 }
 
-.mmo-row-rejected td {
-    background: rgba(239, 68, 68, .025) !important;
+.mmo-table tbody tr.mmo-row-rejected td {
+    background: rgba(239, 68, 68, .025);
+}
+
+.mmo-table tbody tr.mmo-row-rejected:hover td {
+    background: rgba(239, 68, 68, .06);
 }
 
 /* reject hint in result meta */
@@ -1220,7 +1252,7 @@
     display: flex;
     align-items: center;
     gap: 4px;
-    font-size: 0.625rem;
+    font-size: 0.75rem;
     color: var(--text-muted);
     font-style: italic;
 }
@@ -1426,4 +1458,35 @@
 
 .mmo-reject-cancel-btn:hover {
     border-color: var(--text-muted);
+}
+
+/* ── Keyboard focus (visible for keyboard users only) ── */
+.mmo-sort-btn:focus-visible,
+.mmo-page-btn:focus-visible,
+.mmo-page-num:focus-visible,
+.mmo-view-btn:focus-visible,
+.mmo-clear-filters:focus-visible,
+.mmo-search-clear:focus-visible,
+.mmo-filter-group select:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+/* ── Respect the OS "reduce motion" setting ── */
+@media (prefers-reduced-motion: reduce) {
+
+    .mmo-kpi-card,
+    .mmo-kpi-fill,
+    .mmo-stat-card,
+    .mmo-overlay,
+    .mmo-detail-modal,
+    .mmo-reject-modal {
+        animation: none;
+        transition: none;
+    }
+
+    .mmo-kpi-card:hover,
+    .mmo-stat-card:hover {
+        transform: none;
+    }
 }

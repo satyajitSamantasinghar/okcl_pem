@@ -59,28 +59,21 @@ function getPlanItems(plan) {
     return [];
 }
 
+// Legacy rows stored one text blob ("Plan 1 [50%]: ..."). Old blobs may still
+// carry a "[NN%]" marker; the pattern tolerates it purely so it is stripped
+// from the displayed text — the percentage itself is no longer used anywhere.
 function parseLegacyPlanAch(legacyText, planCount) {
-    const result = Array.from({ length: planCount }, () => ({
-        achievementDetails: '', progress: 0
-    }));
+    const result = Array.from({ length: planCount }, () => ({ achievementDetails: '' }));
     if (!legacyText) return result;
     const lines = legacyText.split('\n');
     let currentIdx = -1;
     lines.forEach(line => {
-        const withPct = line.match(/^Plan\s+(\d+)\s*\[(\d+)%\]:\s*(.*)/i);
-        const withoutPct = !withPct && line.match(/^Plan\s+(\d+):\s*(.*)/i);
-        if (withPct) {
-            const idx = parseInt(withPct[1]) - 1;
+        const header = line.match(/^Plan\s+(\d+)\s*(?:\[\d+%\])?:\s*(.*)/i);
+        if (header) {
+            const idx = parseInt(header[1], 10) - 1;
             if (idx >= 0 && idx < planCount) {
                 currentIdx = idx;
-                result[idx].progress = Math.min(100, parseInt(withPct[2]) || 0);
-                result[idx].achievementDetails = withPct[3].trim();
-            }
-        } else if (withoutPct) {
-            const idx = parseInt(withoutPct[1]) - 1;
-            if (idx >= 0 && idx < planCount) {
-                currentIdx = idx;
-                result[idx].achievementDetails = withoutPct[2].trim();
+                result[idx].achievementDetails = header[2].trim();
             }
         } else if (currentIdx >= 0 && line.trim() && !line.match(/^Additional:/i)) {
             result[currentIdx].achievementDetails +=
@@ -94,37 +87,16 @@ function getEffectivePlanAch(ach, planCount) {
     if (!ach) return null;
     const pa = ach.planAchievements;
     if (Array.isArray(pa) && pa.length > 0) {
-        const hasRealData = pa.some(
-            a => (a.achievementDetails || '').trim() || (a.progress || 0) > 0
-        );
+        const hasRealData = pa.some(a => (a.achievementDetails || '').trim());
         if (hasRealData) return pa;
     }
     if (ach.achievementDetails) {
         const parsed = parseLegacyPlanAch(ach.achievementDetails, planCount);
-        const hasParsedData = parsed.some(
-            a => (a.achievementDetails || '').trim() || (a.progress || 0) > 0
-        );
+        const hasParsedData = parsed.some(a => (a.achievementDetails || '').trim());
         if (hasParsedData) return parsed;
     }
     return null;
 }
-
-function getProgressTokens(progress) {
-    const p = Math.min(100, Math.max(0, progress || 0));
-    if (p === 100) return { label: 'Completed', color: '#3B6D11', bg: '#EAF3DE', text: '#27500A', border: '#3B6D11' };
-    if (p >= 75) return { label: 'Almost done', color: '#BA7517', bg: '#FAEEDA', text: '#633806', border: '#BA7517' };
-    if (p >= 50) return { label: 'Halfway', color: '#E85523', bg: '#FFF0EB', text: '#993C1D', border: '#E85523' };
-    if (p >= 25) return { label: 'Just started', color: '#BA7517', bg: '#FAEEDA', text: '#633806', border: '#BA7517' };
-    return { label: 'Not started', color: '#A32D2D', bg: '#FCEBEB', text: '#791F1F', border: '#A32D2D' };
-}
-
-// Distinct (indigo, non-alarming) token set for a plan item that was
-// appended post-submission and has no progress yet. Deliberately NOT the
-// same red used by getProgressTokens' 0% state — a brand-new item with no
-// progress is expected and different from an old item the employee has
-// neglected, and the RA shouldn't have to guess which one they're looking
-// at from color alone.
-const NEW_ITEM_TOKENS = { label: 'New — not started', color: '#4F46E5', bg: '#EEF2FF', text: '#3730A3', border: '#4F46E5' };
 
 function parseAdditionalAch(raw) {
     if (!raw) return [];
@@ -139,10 +111,10 @@ function parseAdditionalAch(raw) {
             const p = JSON.parse(match[1].trim());
             if (Array.isArray(p)) return p.filter(a => (a.text || '').trim());
         } catch { /* fall through */ }
-        return [{ text: match[1].trim(), progress: 100 }];
+        return [{ text: match[1].trim() }];
     }
     return raw.split('\n').filter(l => l.trim() && !l.trim().startsWith('Additional:'))
-        .map(t => ({ text: t.trim(), progress: 100 }));
+        .map(t => ({ text: t.trim() }));
 }
 
 /* ─────────────────────────────────────────
@@ -205,11 +177,16 @@ const formatDate = (d) => {
    bug from two call sites quietly drifting out of sync on identical
    logic, so the badge render below now calls this same function.
 ───────────────────────────────────────── */
-const PROGRESS_STATUS = { REJECTED: 'REJECTED', SUBMITTED: 'SUBMITTED', PENDING: 'PENDING' };
+const PROGRESS_STATUS = { REJECTED: 'REJECTED', SUBMITTED: 'SUBMITTED', PARTIAL: 'PARTIAL', PENDING: 'PENDING' };
 
 function getProgressStatus(ev) {
     if (ev.monthlyPlanId?.status === 'REJECTED') return PROGRESS_STATUS.REJECTED;
-    return ev.hasAchievement ? PROGRESS_STATUS.SUBMITTED : PROGRESS_STATUS.PENDING;
+    if (ev.hasAchievement) return PROGRESS_STATUS.SUBMITTED;
+    // PARTIAL: employee submitted progress for some plan items but not all yet.
+    // hasPartialAchievement is set by getMonthlyEvaluations when a SUBMITTED
+    // achievement exists but isAchievementCompleteForPlan returns false.
+    if (ev.hasPartialAchievement) return PROGRESS_STATUS.PARTIAL;
+    return PROGRESS_STATUS.PENDING;
 }
 
 // Options for the "Progress" filter dropdown — value must match a
@@ -217,6 +194,7 @@ function getProgressStatus(ev) {
 const PROGRESS_FILTER_OPTIONS = [
     { value: 'ALL', label: 'All Progress' },
     { value: PROGRESS_STATUS.SUBMITTED, label: 'Progress Submitted' },
+    { value: PROGRESS_STATUS.PARTIAL, label: 'Partial Progress' },
     { value: PROGRESS_STATUS.PENDING, label: 'Progress Pending' },
     { value: PROGRESS_STATUS.REJECTED, label: 'Plan Rejected' },
 ];
@@ -292,35 +270,6 @@ function getRowPriority(ev) {
 }
 
 /* ─────────────────────────────────────────
-   CIRCULAR PROGRESS RING
-───────────────────────────────────────── */
-function CircularProgress({ progress, size = 44 }) {
-    const p = Math.min(100, Math.max(0, progress || 0));
-    const r = (size - 6) / 2;
-    const circ = 2 * Math.PI * r;
-    const dash = (p / 100) * circ;
-    const tk = getProgressTokens(p);
-    return (
-        <svg width={size} height={size} style={{ transform: 'rotate(-90deg)', flexShrink: 0 }}>
-            <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--border-default)" strokeWidth={4} />
-            <circle cx={size / 2} cy={size / 2} r={r} fill="none"
-                stroke={tk.color} strokeWidth={4}
-                strokeDasharray={`${dash} ${circ}`} strokeLinecap="round"
-                style={{ transition: 'stroke-dasharray 0.35s ease' }} />
-            <text x={size / 2} y={size / 2} textAnchor="middle" dominantBaseline="middle"
-                style={{
-                    transform: `rotate(90deg)`,
-                    transformOrigin: `${size / 2}px ${size / 2}px`,
-                    fontSize: 9, fontWeight: 700,
-                    fill: 'var(--text-primary)', fontFamily: 'inherit'
-                }}>
-                {p}%
-            </text>
-        </svg>
-    );
-}
-
-/* ─────────────────────────────────────────
    SUMMARY CARD
 ───────────────────────────────────────── */
 const SummaryCard = ({ icon, value, label, subtitle, color }) => (
@@ -350,17 +299,21 @@ const StatusBadge = ({ status }) => {
 };
 
 /* ─────────────────────────────────────────
-   PROGRESS BADGE (table) — same three states/classes/icons the inline
-   IIFE previously rendered, now driven by getProgressStatus so this
-   badge and the Progress filter read from one shared classification.
+   PROGRESS BADGE (table) — four states now: REJECTED, SUBMITTED, PARTIAL, PENDING.
+   Driven by getProgressStatus so this badge and the Progress filter read from
+   one shared classification. PARTIAL (Oct 2026) is for employees who have
+   submitted progress for some plan items but not all yet.
 ───────────────────────────────────────── */
 const ProgressBadge = ({ status }) => {
     if (status === PROGRESS_STATUS.REJECTED)
         return <span className="meval-ach-badge meval-ach-badge--rejected"><FiXCircle size={10} /> Plan Rejected</span>;
     if (status === PROGRESS_STATUS.SUBMITTED)
         return <span className="meval-ach-badge meval-ach-badge--submitted"><FiCheckCircle size={10} /> Submitted</span>;
+    if (status === PROGRESS_STATUS.PARTIAL)
+        return <span className="meval-ach-badge meval-ach-badge--partial"><FiAlertTriangle size={10} /> Partial Progress</span>;
     return <span className="meval-ach-badge meval-ach-badge--pending"><FiClock size={10} /> Pending</span>;
 };
+
 
 /* ─────────────────────────────────────────
    SCORE BAR (table)
@@ -413,46 +366,28 @@ const PlanContextPanel = ({ plan, achievement, className = '' }) => {
 
     const hasAch = !!achievement && achievement.status !== 'DRAFT';
 
-    const overallProg = effectivePlanAch
-        ? Math.round(effectivePlanAch.reduce((s, a) => s + Math.min(100, a.progress || 0), 0) / effectivePlanAch.length)
-        : null;
-    const completed = effectivePlanAch
-        ? effectivePlanAch.filter(a => (a.progress || 0) >= 100).length
-        : 0;
-
     return (
         <div className={`meval-ctx ${className}`}>
-            {/* Overall progress strip */}
-            {hasAch && overallProg !== null && (
-                <div className="meval-ctx-overall">
-                    <div className="meval-ctx-overall-row">
-                        <span className="meval-ctx-overall-lbl">Overall Progress</span>
-                        <span className="meval-ctx-overall-val">
-                            {completed}/{planItems.length} plans &middot; {overallProg}%
-                        </span>
-                    </div>
-                    <div className="meval-ctx-prog-track">
-                        <div className="meval-ctx-prog-fill" style={{ width: `${overallProg}%` }} />
-                    </div>
-                    <div className="meval-ctx-ts-row">
-                        {plan?.submittedAt && (
-                            <span className="meval-ctx-ts"><FiFileText size={9} /> Plan submitted on {formatDate(plan.submittedAt)}</span>
-                        )}
-                        {achievement?.submittedAt && (
-                            <span className="meval-ctx-ts"><FiTrendingUp size={9} /> Progress submitted on {formatDate(achievement.submittedAt)}</span>
-                        )}
-                    </div>
+            {/* Submission timeline */}
+            {hasAch && (plan?.submittedAt || achievement?.submittedAt) && (
+                <div className="meval-ctx-timeline">
+                    {plan?.submittedAt && (
+                        <span className="meval-ctx-ts"><FiFileText size={10} /> Plan submitted on {formatDate(plan.submittedAt)}</span>
+                    )}
+                    {achievement?.submittedAt && (
+                        <span className="meval-ctx-ts"><FiTrendingUp size={10} /> Progress submitted on {formatDate(achievement.submittedAt)}</span>
+                    )}
                 </div>
             )}
 
             {/* Section label */}
             <div className="meval-ctx-sec-lbl">
                 <FiFileText size={12} />
-                {hasAch ? 'Plans & Achievements' : 'Plan Details'}
+                {hasAch ? 'Plans & Progress' : 'Plan Details'}
                 <span className="meval-ctx-sec-count">{planItems.length} plan{planItems.length !== 1 ? 's' : ''}</span>
             </div>
 
-            {/* Plans */}
+            {/* Plans — plan detail first, its progress detail directly beneath */}
             <div className="meval-ctx-plan-list">
                 {planItems.map((item, i) => {
                     const isLateAddition = item.addedVia === 'ADD_MORE';
@@ -470,16 +405,16 @@ const PlanContextPanel = ({ plan, achievement, className = '' }) => {
                         </div>
                     );
 
-                    const pa = getPlanAch(item, i) || { achievementDetails: '', progress: 0 };
-                    const p = Math.min(100, pa.progress || 0);
+                    const pa = getPlanAch(item, i);
+                    const progressText = (pa?.achievementDetails || '').trim();
 
                     if (!hasAch || !effectivePlanAch) {
                         return (
                             <div key={i} className="meval-ctx-plan-card meval-ctx-plan-card--idle">
                                 <div className="meval-ctx-plan-top">
-                                    <span className="meval-ctx-plan-idx">{i + 1}</span>
                                     <div className="meval-ctx-plan-info">
                                         <div className="meval-ctx-plan-name-row">
+                                            <span className="meval-ctx-plan-idx">{i + 1}</span>
                                             <span className="meval-ctx-plan-name">Plan {i + 1}</span>
                                             <span className="meval-ctx-plan-badge meval-ctx-plan-badge--idle">Pending</span>
                                             {addedLaterBadge}
@@ -493,17 +428,15 @@ const PlanContextPanel = ({ plan, achievement, className = '' }) => {
                     }
 
                     // A late-added item with no progress yet is expected, not a red
-                    // flag — give it its own neutral treatment instead of reusing
-                    // the "Not started" (0%) state that otherwise reads as neglect.
-                    const isNewNoProgress = isLateAddition && p === 0 && !pa.achievementDetails;
-                    const tk = isNewNoProgress ? NEW_ITEM_TOKENS : getProgressTokens(p);
-                    const statusLabel = isNewNoProgress ? 'New — Not Started' : p === 100 ? 'Completed' : p > 0 ? 'In Progress' : 'Not Started';
-                    const statusCls = isNewNoProgress ? 'new' : p === 100 ? 'done' : p > 0 ? 'partial' : 'none';
+                    // flag — it gets its own neutral treatment instead of the
+                    // "Not Reported" state that otherwise reads as neglect.
+                    const isNewNoProgress = isLateAddition && !progressText;
+                    const statusCls = progressText ? 'done' : isNewNoProgress ? 'new' : 'none';
+                    const statusLabel = progressText ? 'Progress Reported' : isNewNoProgress ? 'New — Not Reported' : 'Not Reported';
 
                     return (
-                        <div key={i} className="meval-ctx-plan-card" style={{ borderLeftColor: tk.border }}>
+                        <div key={i} className={`meval-ctx-plan-card meval-ctx-plan-card--${statusCls}`}>
                             <div className="meval-ctx-plan-top">
-                                <CircularProgress progress={p} size={42} />
                                 <div className="meval-ctx-plan-info">
                                     <div className="meval-ctx-plan-name-row">
                                         <span className="meval-ctx-plan-idx">{i + 1}</span>
@@ -515,25 +448,10 @@ const PlanContextPanel = ({ plan, achievement, className = '' }) => {
                                     {addedLaterMeta}
                                 </div>
                             </div>
-                            <div className="meval-ctx-prog-section">
-                                <div className="meval-ctx-prog-labels">
-                                    <span>Progress</span>
-                                    <span style={{ color: tk.color, fontWeight: 700 }}>{p}%{p === 100 ? ' — Done' : p > 0 ? ' — In Progress' : isNewNoProgress ? ' — New, Not Started' : ' — Not Started'}</span>
-                                </div>
-                                <div className="meval-ctx-prog-track">
-                                    <div className="meval-ctx-prog-fill" style={{ width: `${p}%`, background: tk.color }} />
-                                </div>
-                                <div className="meval-ctx-prog-markers">
-                                    {[0, 25, 50, 75].map(m => (
-                                        <span key={m} style={p >= m && p > 0 ? { color: tk.color, fontWeight: 600 } : {}}>{m}%</span>
-                                    ))}
-                                    <span style={p === 100 ? { color: tk.color, fontWeight: 600 } : {}}>Done</span>
-                                </div>
-                            </div>
                             <div className="meval-ctx-ach-section">
                                 <div className="meval-ctx-ach-lbl"><FiTrendingUp size={10} /> Progress Details</div>
-                                {pa.achievementDetails
-                                    ? <div className="meval-ctx-ach-text">{pa.achievementDetails}</div>
+                                {progressText
+                                    ? <div className="meval-ctx-ach-text">{progressText}</div>
                                     : isNewNoProgress
                                         ? <div className="meval-ctx-ach-empty meval-ctx-ach-empty--new">Newly added plan — progress not yet reported</div>
                                         : <div className="meval-ctx-ach-empty">No details provided</div>}
@@ -543,50 +461,28 @@ const PlanContextPanel = ({ plan, achievement, className = '' }) => {
                 })}
             </div>
 
-            {/* Additional achievements */}
+            {/* Additional work */}
             {additionalItems.length > 0 && (
                 <div className="meval-ctx-extras">
                     <div className="meval-ctx-sec-lbl" style={{ marginTop: '16px', marginBottom: '12px' }}>
                         <FiStar size={12} />
-                        Additional Work done with progress update 
+                        Additional Work Done
                         <span className="meval-ctx-sec-count">{additionalItems.length} extra</span>
                     </div>
                     {additionalItems.map((item, i) => {
-                        const text = typeof item === 'string' ? item : (item.text || '');
-                        const prog = typeof item === 'string' ? 100 : Math.min(100, item.progress || 100);
-                        const tk = getProgressTokens(prog);
-                        const statusLabel = prog === 100 ? 'Completed' : prog > 0 ? 'In Progress' : 'Not Started';
-                        const statusCls = prog === 100 ? 'done' : prog > 0 ? 'partial' : 'none';
-
+                        const text = (typeof item === 'string' ? item : (item.text || '')).trim();
                         return (
-                            <div key={i} className="meval-ctx-plan-card" style={{ borderLeftColor: tk.border }}>
+                            <div key={i} className="meval-ctx-plan-card meval-ctx-plan-card--extra">
                                 <div className="meval-ctx-plan-top">
-                                    <CircularProgress progress={prog} size={42} />
                                     <div className="meval-ctx-plan-info">
                                         <div className="meval-ctx-plan-name-row">
                                             <span className="meval-ctx-plan-idx">{i + 1}</span>
-                                            <span className="meval-ctx-plan-name">Extra Work with progress update {i + 1}</span>
-                                            <span className={`meval-ctx-plan-badge meval-ctx-plan-badge--${statusCls}`}>{statusLabel}</span>
+                                            <span className="meval-ctx-plan-name">Additional Work {i + 1}</span>
                                         </div>
                                     </div>
                                 </div>
-                                <div className="meval-ctx-prog-section">
-                                    <div className="meval-ctx-prog-labels">
-                                        <span>Progress Percentage</span>
-                                        <span style={{ color: tk.color, fontWeight: 700 }}>{prog}%{prog === 100 ? ' — Done' : prog > 0 ? ' — In Progress' : ' — Not Started'}</span>
-                                    </div>
-                                    <div className="meval-ctx-prog-track">
-                                        <div className="meval-ctx-prog-fill" style={{ width: `${prog}%`, background: tk.color }} />
-                                    </div>
-                                    <div className="meval-ctx-prog-markers">
-                                        {[0, 25, 50, 75].map(m => (
-                                            <span key={m} style={prog >= m && prog > 0 ? { color: tk.color, fontWeight: 600 } : {}}>{m}%</span>
-                                        ))}
-                                        <span style={prog === 100 ? { color: tk.color, fontWeight: 600 } : {}}>Done</span>
-                                    </div>
-                                </div>
                                 <div className="meval-ctx-ach-section">
-                                    <div className="meval-ctx-ach-lbl"><FiStar size={10} color="#BA7517" />Work details with progress update</div>
+                                    <div className="meval-ctx-ach-lbl"><FiStar size={10} color="#BA7517" /> Work details</div>
                                     {text
                                         ? <div className="meval-ctx-ach-text">{text}</div>
                                         : <div className="meval-ctx-ach-empty">No details provided</div>}
@@ -597,7 +493,7 @@ const PlanContextPanel = ({ plan, achievement, className = '' }) => {
                 </div>
             )}
 
-            {/* No achievement block */}
+            {/* No progress block */}
             {!hasAch && (
                 <div className="meval-ctx-no-ach">
                     <FiTrendingUp size={16} />
@@ -710,6 +606,10 @@ const DetailModal = ({ ev, detail, detailLoading, onClose, onEvaluate, onReject,
     // "Progress" step, and the "Awaiting RA review" footer label should
     // treat progress as done.
     const hasAch = !!detail?.status?.achievementComplete;
+    // isPartialAch: the employee has submitted SOME progress but not all plan items
+    // yet. achievementSubmitted = any SUBMITTED achievement exists, achievementComplete
+    // = all plan items are covered. Partial = submitted but not complete.
+    const isPartialAch = !hasAch && !!detail?.status?.achievementSubmitted;
     const isEvaluated = detail?.status?.evaluated || ev.status === 'EVALUATED';
     const isRejected = ev.monthlyPlanId?.status === 'REJECTED' || detail?.plan?.status === 'REJECTED';
     // Sep 2026: evaluation only unlocks once the plan owner's own
@@ -721,7 +621,8 @@ const DetailModal = ({ ev, detail, detailLoading, onClose, onEvaluate, onReject,
     const canGiveFeedback = !!detail?.plan && !isEvaluated && !isRejected && !canEvaluate;
 
     const stepperPlan = 'done';
-    const stepperAch = hasAch ? 'done' : 'active';
+    // Stepper: 'done' = all progress in, 'partial' = some progress in, 'active' = none yet
+    const stepperAch = hasAch ? 'done' : isPartialAch ? 'partial' : 'active';
     const stepperEval = isEvaluated ? 'done' : hasAch ? 'active' : 'idle';
 
     return createPortal(
@@ -755,14 +656,16 @@ const DetailModal = ({ ev, detail, detailLoading, onClose, onEvaluate, onReject,
                         </div>
                         <span className={`meval-step-lbl meval-step-lbl--${stepperPlan}`}>Plan</span>
                     </div>
-                    <div className={`meval-step-line meval-step-line--${hasAch ? 'filled' : 'empty'}`} />
+                    <div className="meval-step-line" style={{ background: (hasAch || isPartialAch) ? 'var(--primary)' : 'var(--border-default)' }} />
                     <div className="meval-step">
                         <div className={`meval-step-dot meval-step-dot--${stepperAch}`}>
                             {stepperAch === 'done'
                                 ? <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" /></svg>
-                                : <FiTrendingUp size={11} />}
+                                : stepperAch === 'partial'
+                                    ? <FiAlertTriangle size={11} />
+                                    : <FiTrendingUp size={11} />}
                         </div>
-                        <span className={`meval-step-lbl meval-step-lbl--${stepperAch}`}>Progress</span>
+                        <span className={`meval-step-lbl meval-step-lbl--${stepperAch}`}>Progress{isPartialAch ? ' (Partial)' : ''}</span>
                     </div>
                     <div className={`meval-step-line meval-step-line--${isEvaluated ? 'filled' : 'empty'}`} />
                     <div className="meval-step">
@@ -870,6 +773,7 @@ const DetailModal = ({ ev, detail, detailLoading, onClose, onEvaluate, onReject,
                                     : isRejected ? 'Plan rejected — awaiting resubmission'
                                     : hasAch && !canEvaluate ? `Locked until ${formatDate(evaluationOpensAt)}`
                                     : hasAch ? 'Awaiting RA review'
+                                    : isPartialAch ? 'Partial progress — employee submitting more'
                                     : 'Progress pending'}
                             </span>
                             <div style={{ display: 'flex', gap: 8 }}>
@@ -1245,7 +1149,7 @@ const RAMonthlyEvaluationPage = () => {
         return { year: now.getFullYear(), month: now.getMonth() + 1 };
     }, []);
     const [search, setSearch] = useState('');
-    // Progress column filter — 'ALL' | 'SUBMITTED' | 'PENDING' | 'REJECTED' (see PROGRESS_STATUS).
+    // Progress column filter — 'ALL' | 'SUBMITTED' | 'PARTIAL' | 'PENDING' | 'REJECTED' (see PROGRESS_STATUS).
     const [progressFilter, setProgressFilter] = useState('ALL');
     // Status column filter — 'ALL' | 'PENDING' | 'EVALUATED'.
     const [evalStatusFilter, setEvalStatusFilter] = useState('ALL');
@@ -1452,7 +1356,7 @@ const RAMonthlyEvaluationPage = () => {
 
     // Facet counts shown in each filter option's label, e.g. "Progress Pending (4)".
     const progressCounts = useMemo(() => {
-        const counts = { ALL: searchFiltered.length, SUBMITTED: 0, PENDING: 0, REJECTED: 0 };
+        const counts = { ALL: searchFiltered.length, SUBMITTED: 0, PARTIAL: 0, PENDING: 0, REJECTED: 0 };
         searchFiltered.forEach(ev => { counts[getProgressStatus(ev)]++; });
         return counts;
     }, [searchFiltered]);
@@ -1826,7 +1730,7 @@ const RAMonthlyEvaluationPage = () => {
                                             </div>
 
                                             {/* Achievement status / Plan rejection badge */}
-                                            <div className="meval-cell" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                            <div className="meval-cell meval-cell--progress">
                                                 <ProgressBadge status={getProgressStatus(ev)} />
                                                 {ev.openFeedbackCount > 0 && (
                                                     <span

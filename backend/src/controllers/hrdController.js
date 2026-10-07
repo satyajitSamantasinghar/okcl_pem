@@ -37,6 +37,20 @@ const {
 
 const { Op } = require("sequelize");
 
+// Progress is text-only (achievementDetails per plan). The numeric `progress`
+// column on MonthlyAchievementItem is retired, so it is excluded from every
+// API response here — same approach as raController.js. Transitional: once the
+// column is dropped from the model and database this constant (and its usages)
+// can be deleted; excluding an attribute the model no longer defines is a
+// harmless no-op until then.
+const LEGACY_ACHIEVEMENT_ITEM_ATTRS = ["progress"];
+
+// Sequelize ignores `order` placed inside an `include` option, so nested rows
+// come back in arbitrary order. The UI pairs plan items with their progress
+// entries by position, so both lists are sorted explicitly after the query.
+const byItemOrder = (a, b) => (a.itemOrder ?? 0) - (b.itemOrder ?? 0);
+const byPlanIndex = (a, b) => (a.planIndex ?? 0) - (b.planIndex ?? 0);
+
 /* ─── HRD DASHBOARD ─────────────────────────────────────────────────────────── */
 exports.getHRDDashboard = async (req, res) => {
   try {
@@ -46,11 +60,16 @@ exports.getHRDDashboard = async (req, res) => {
     }
 
     // CHANGE 1: countDocuments → Model.count({ where })
-    const [selYear, selMonthNum] = month.split("-").map(Number);
     // Last millisecond of the selected month (month is 1-based → pass it
     // directly as the month arg to get the 0th day of the *next* month = last
-    // day of the selected month, then set time to 23:59:59.999)
-    const endOfSelectedMonth = new Date(selYear, selMonthNum, 0, 23, 59, 59, 999);
+    // day of the selected month, then set time to 23:59:59.999).
+    // `month` is optional; without it, fall back to "now" instead of crashing
+    // on month.split().
+    let endOfSelectedMonth = new Date();
+    if (month) {
+      const [selYear, selMonthNum] = month.split("-").map(Number);
+      endOfSelectedMonth = new Date(selYear, selMonthNum, 0, 23, 59, 59, 999);
+    }
 
     const totalEmployees = await User.count({ where: { role: "EMPLOYEE", isActive: true, createdAt: { [Op.lte]: endOfSelectedMonth } } });
     const totalRAs = await User.count({ where: { role: "RA", isActive: true, createdAt: { [Op.lte]: endOfSelectedMonth } } });
@@ -251,15 +270,18 @@ exports.getEmployeeDetail = async (req, res) => {
     if (!employee) return res.status(404).json({ message: "Employee not found" });
 
     const [monthlyPlans, monthlyEvaluations, quarterlyEvaluations, monthlyAchievements, yearlyPlans, yearlyReports] = await Promise.all([
-      MonthlyPlan.findAll({ where: { employeeId: id }, include: [{ model: MonthlyPlanItem, as: "planItems", order: [["itemOrder", "ASC"]] }], order: [["month", "DESC"]], limit: 12 }),
+      MonthlyPlan.findAll({ where: { employeeId: id }, include: [{ model: MonthlyPlanItem, as: "planItems" }], order: [["month", "DESC"]], limit: 12 }),
       MonthlyEvaluation.findAll({ where: { employeeId: id }, include: [{ model: User, as: "ra", attributes: ["id", "name", "employeeCode"] }], order: [["month", "DESC"]], limit: 12 }),
       QuarterlyEvaluation.findAll({ where: { employeeId: id }, include: [{ model: User, as: "ra", attributes: ["id", "name", "employeeCode"] }], order: [["createdAt", "DESC"]] }),
-      MonthlyAchievement.findAll({ where: { employeeId: id }, include: [{ model: MonthlyAchievementItem, as: "planAchievements" }] }),
+      MonthlyAchievement.findAll({ where: { employeeId: id }, include: [{ model: MonthlyAchievementItem, as: "planAchievements", attributes: { exclude: LEGACY_ACHIEVEMENT_ITEM_ATTRS } }] }),
       // FIX: exclude DRAFT yearly plans from per-employee detail view (HRD perspective).
       YearlyPlan.findAll({ where: { employeeId: id, status: { [Op.ne]: "DRAFT" } }, include: [{ model: YearlyPlanKra, as: "kras", order: [["kraIndex", "ASC"]] }], order: [["submittedAt", "DESC"]] }),
       // FIX: exclude DRAFT appraisal reports from per-employee detail view.
       YearlyAppraisalReport.findAll({ where: { employeeId: id, status: { [Op.ne]: "DRAFT" } }, include: [{ model: YearlyAppraisalKraAssessment, as: "kraAssessments" }], order: [["submittedAt", "DESC"]] }),
     ]);
+
+    monthlyPlans.forEach(plan => plan.planItems?.sort(byItemOrder));
+    monthlyAchievements.forEach(ach => ach.planAchievements?.sort(byPlanIndex));
 
     res.json({ employee, monthlyPlans, monthlyEvaluations, quarterlyEvaluations, monthlyAchievements, yearlyPlans, yearlyReports });
   } catch (error) {
@@ -304,7 +326,7 @@ exports.getMonthlyPlansList = async (req, res) => {
       where,
       include: [
         { model: User, as: "employee", required: true, attributes: ["id", "name", "employeeCode", "department"] },
-        { model: MonthlyPlanItem, as: "planItems", order: [["itemOrder", "ASC"]] },
+        { model: MonthlyPlanItem, as: "planItems" },
       ],
       order: [["month", "DESC"], ["submittedAt", "DESC"]],
       limit: 100,
@@ -324,7 +346,7 @@ exports.getMonthlyPlansList = async (req, res) => {
       }),
       MonthlyAchievement.findAll({
         where: { monthlyPlanId: { [Op.in]: planIds } },
-        include: [{ model: MonthlyAchievementItem, as: "planAchievements", order: [["planIndex", "ASC"]] }],
+        include: [{ model: MonthlyAchievementItem, as: "planAchievements", attributes: { exclude: LEGACY_ACHIEVEMENT_ITEM_ATTRS } }],
       }),
     ]);
 
@@ -338,8 +360,11 @@ exports.getMonthlyPlansList = async (req, res) => {
     let result = plans.map(p => {
       const ev = evalMap[`${p.employeeId}__${p.month}`];
       const ach = achMap[p.id];
+      const planJson = p.toJSON();
+      if (Array.isArray(planJson.planItems)) planJson.planItems.sort(byItemOrder);
+      const planAchievements = (ach?.planAchievements || []).map(a => a.toJSON()).sort(byPlanIndex);
       return {
-        ...p.toJSON(),
+        ...planJson,
         evaluationStatus: ev?.status || null,
         // FIX: MonthlyEvaluation.score is a Postgres NUMERIC/DECIMAL column, which
         // Sequelize returns as a string (e.g. "9.00") to avoid float rounding —
@@ -353,7 +378,7 @@ exports.getMonthlyPlansList = async (req, res) => {
         hasAchievement: !!(ach && ach.status !== "DRAFT"),
         achievementStatus: ach?.status || null,
         achievementDetails: ach?.achievementDetails || null,
-        planAchievements: ach?.planAchievements || [],
+        planAchievements,
         additionalAchievement: ach?.additionalAchievement || null,
         achievementDate: ach?.submittedAt || null,
       };

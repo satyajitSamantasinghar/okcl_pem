@@ -51,6 +51,12 @@ const { getEffectiveDeadline } = require("../utils/deadlineResolver");
 const { buildDeadlineDate } = require("../utils/dateHelpers");
 const { notifySubmission, notifyAddition } = require("../services/notificationService");
 
+// Progress is text-only (achievementDetails per plan). The numeric `progress`
+// column on MonthlyAchievementItem is retired, so it is excluded from every
+// API response. Transitional: delete this constant and its usages once the
+// column is dropped from the model and database.
+const LEGACY_ACHIEVEMENT_ITEM_ATTRS = ["progress"];
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // EMAIL NOTIFICATION HELPERS
@@ -470,6 +476,9 @@ exports.submitMonthlyPlan = async (req, res) => {
 // 2. SUBMIT MONTHLY ACHIEVEMENT
 //    CHANGE J: planAchievements embedded array → MonthlyAchievementItem rows
 //    CHANGE: pre-save hook (achievementDetails rebuild) → done inline here
+//    Progress is text-only: each plan carries `achievementDetails` and nothing
+//    else. Any `progress` value a stale client still sends is ignored — every
+//    row mapping below is an explicit field whitelist.
 // ─────────────────────────────────────────────────────────────────────────────
 exports.submitMonthlyAchievement = async (req, res) => {
   const t = await sequelize.transaction();
@@ -499,7 +508,7 @@ exports.submitMonthlyAchievement = async (req, res) => {
     // CHANGE: Rebuild achievementDetails from planAchievements (replaces pre-save hook)
     const buildAchievementDetails = (planAchs, additional) => {
       if (!planAchs?.length) return achievementDetails || "";
-      const lines = planAchs.map((a, i) => `Plan ${i + 1} [${a.progress || 0}%]: ${a.achievementDetails || "—"}`);
+      const lines = planAchs.map((a, i) => `Plan ${i + 1}: ${a.achievementDetails || "—"}`);
       if (additional?.trim()) lines.push(`Additional: ${additional}`);
       return lines.join("\n");
     };
@@ -585,7 +594,7 @@ exports.submitMonthlyAchievement = async (req, res) => {
         // Previously this branch required every existing row to be byte-for-
         // byte unchanged ("prefixUnchanged") and only allowed appending new
         // rows. That's relaxed here: an existing progress entry may now be
-        // EDITED (details and/or % complete) at any point before evaluation,
+        // EDITED (its progress details) at any point before evaluation,
         // matching the plan-level "RA feedback" feature — an RA can ask the
         // employee to revise a progress entry, and the employee updates it
         // in place rather than being locked out. What still can't happen is
@@ -604,10 +613,8 @@ exports.submitMonthlyAchievement = async (req, res) => {
           const row = existingItems[idx];
           const match = matchIncoming(row, idx);
           const newDetails = match.achievementDetails || "";
-          const newProgress = match.progress || 0;
-          if (newDetails !== (row.achievementDetails || "") || newProgress !== (row.progress || 0)) {
+          if (newDetails !== (row.achievementDetails || "")) {
             row.achievementDetails = newDetails;
-            row.progress = newProgress;
             await row.save({ transaction: t });
             editedCount++;
           }
@@ -638,7 +645,6 @@ exports.submitMonthlyAchievement = async (req, res) => {
               planItemId: resolvePlanItemId(a, existingItems.length + i),
               planIndex: nextPlanIndex + i,
               achievementDetails: a.achievementDetails || "",
-              progress: a.progress || 0,
               // Same origin-tracking as MonthlyPlanItem: this progress entry
               // was appended after the achievement was already SUBMITTED.
               addedVia: "ADD_MORE",
@@ -712,7 +718,6 @@ exports.submitMonthlyAchievement = async (req, res) => {
               planItemId: resolvePlanItemId(a, idx),
               planIndex: a.planIndex ?? idx,
               achievementDetails: a.achievementDetails || "",
-              progress: a.progress || 0,
               // Full replace (draft save / non-append resubmit) — every
               // row here is treated as part of the current, original set.
               addedVia: "INITIAL_SUBMISSION",
@@ -755,7 +760,6 @@ exports.submitMonthlyAchievement = async (req, res) => {
           planItemId: resolvePlanItemId(a, idx),
           planIndex: a.planIndex ?? idx,
           achievementDetails: a.achievementDetails || "",
-          progress: a.progress || 0,
           addedVia: "INITIAL_SUBMISSION",
           addedAt: new Date(),
         })),
@@ -1056,7 +1060,7 @@ exports.getMonthlyAchievements = async (req, res) => {
         { model: MonthlyPlan, as: "monthlyPlan", attributes: ["id", "month", "planDetails"] },
         // NOTE: Sequelize v6 silently ignores `order` inside a nested `include`.
         // Ordering is applied in JS after the query (see sort below).
-        { model: MonthlyAchievementItem, as: "planAchievements" },
+        { model: MonthlyAchievementItem, as: "planAchievements", attributes: { exclude: LEGACY_ACHIEVEMENT_ITEM_ATTRS } },
       ],
       order: [["submittedAt", "DESC"]],
     });

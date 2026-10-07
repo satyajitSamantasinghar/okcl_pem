@@ -1,7 +1,7 @@
 'use strict';
 
 const { sendMail } = require('./email');
-const { submissionTemplate, additionalItemsTemplate, evaluationTemplate, rejectionTemplate, reminderTemplate, incompleteAchievementReminderTemplate, deadlineExtensionTemplate } = require("./emailTemplates");
+const { submissionTemplate, additionalItemsTemplate, evaluationTemplate, rejectionTemplate, reminderTemplate, incompleteAchievementReminderTemplate, deadlineExtensionTemplate, monthlyPlanOpenTemplate } = require("./emailTemplates");
 const { formatPeriod, formatDeadline } = require('../utils/dateHelpers');
 
 /**
@@ -224,4 +224,35 @@ async function notifyIncompleteAchievementReminder({ employee, period, deadlineL
     });
 }
 
-module.exports = { notifySubmission, notifyAddition, notifyEvaluation, notifyRejection, notifyDeadlineExtension, notifyFeedback, notifyDeadlineReminder, notifyIncompleteAchievementReminder };
+
+/**
+ * Fired on the 1st of each month by reminderService.js's monthly-open job.
+ * Sent to every active employee AND their RA to announce that the Monthly
+ * Plan submission window for the new month is now open.
+ *
+ * `recipient`    — the User row for the individual being notified (may be
+ *                  an employee OR an RA — caller handles the loop).
+ * `period`       — human-readable month label, e.g. "October 2026".
+ * `planDeadline` — human-readable deadline label, e.g. "10 October 2026".
+ * `role`         — "EMPLOYEE" | "RA"; drives the CTA URL inside the template.
+ */
+async function notifyMonthlyPlanOpen({ recipient, period, planDeadline, role }) {
+    if (!recipient?.email) {
+        console.warn(`[notification] No email on file — skipped monthly-open notice for user ${recipient?.id}`);
+        return { success: false, error: 'Recipient email missing' };
+    }
+
+    return sendMail({
+        to: recipient.email,
+        subject: `Monthly Plan Submission Open — ${period}`,
+        html: monthlyPlanOpenTemplate({
+            recipientName: recipient.name,
+            period,
+            planDeadline,
+            role,
+        }),
+        logLabel: 'Monthly Plan Window Open',
+    });
+}
+
+module.exports = { notifySubmission, notifyAddition, notifyEvaluation, notifyRejection, notifyDeadlineExtension, notifyFeedback, notifyDeadlineReminder, notifyIncompleteAchievementReminder, notifyMonthlyPlanOpen };

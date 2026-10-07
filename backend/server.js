@@ -26,7 +26,7 @@ const {
 const { DataTypes, Op, QueryTypes, Transaction } = require("sequelize");
 const { verifyEmailConnection } = require('./src/services/email');
 const cron = require('node-cron');
-const { runDeadlineReminders } = require('./src/services/reminderService');
+const { runDeadlineReminders, runMonthlyPlanOpenNotifications } = require('./src/services/reminderService');
 const bcrypt = require('bcrypt');
 
 
@@ -227,6 +227,57 @@ const runMigrations = async () => {
     if (!hasAdminEnumValue) {
         await sequelize.query(`ALTER TYPE "enum_users_role" ADD VALUE 'ADMIN'`);
         console.log("✅ Migration 9: added 'ADMIN' value to enum_users_role type");
+    }
+
+    // ── Migration 10: Add 'PLAN_OPEN' to the reminder_logs.type enum ─────────
+    //  Needed for the 1st-of-month "Monthly Plan window is now open"
+    //  notification added in reminderService.js. Same Postgres ENUM extension
+    //  pattern as Migration 9 above — checks pg_enum first so the migration
+    //  is a no-op on subsequent restarts.
+    //
+    //  Sequelize auto-names the type: enum_<table>_<column> → "enum_reminder_logs_type".
+    const [existingReminderTypeEnumValues] = await sequelize.query(`
+        SELECT e.enumlabel
+        FROM pg_type t
+        JOIN pg_enum e ON t.oid = e.enumtypid
+        WHERE t.typname = 'enum_reminder_logs_type'
+    `);
+    const hasPlanOpenEnumValue = existingReminderTypeEnumValues.some((row) => row.enumlabel === "PLAN_OPEN");
+    if (!hasPlanOpenEnumValue) {
+        await sequelize.query(`ALTER TYPE "enum_reminder_logs_type" ADD VALUE 'PLAN_OPEN'`);
+        console.log("✅ Migration 10: added 'PLAN_OPEN' value to enum_reminder_logs_type");
+    }
+
+    // ── Migration 11: Make monthly_achievement_items.progress nullable ────────
+    //  The model changed: progress went from { defaultValue: 0 } (implicitly
+    //  NOT NULL) to { allowNull: true, defaultValue: null }.
+    //
+    //  WHY: Progress can now be intentionally absent (null) when a plan item
+    //  has been added via "Add More Plans" but the employee hasn't yet
+    //  submitted progress for it. A value of 0 was ambiguous — it meant both
+    //  "no progress reported" and "genuinely 0% done". null is unambiguous.
+    //
+    //  SAFETY:
+    //  - Idempotent: describeTable check prevents re-running on restarts.
+    //    Once allowNull is true, the condition is false and this is a no-op.
+    //  - No data loss: existing rows with progress = 0 are untouched.
+    //    Only the column constraint and default are changed.
+    //  - No downtime risk: ALTER COLUMN DROP NOT NULL + SET DEFAULT NULL
+    //    takes an ACCESS EXCLUSIVE lock only for the duration of a metadata
+    //    update — it does NOT rewrite table rows, so it completes instantly
+    //    regardless of table size.
+    //
+    //  Idempotency guard: qi.describeTable returns { allowNull: false } when
+    //  the column is NOT NULL, and { allowNull: true } once already migrated.
+    //  Same pattern as Migration 2 (password_hash → nullable).
+    const achievementItemsDesc = await qi.describeTable("monthly_achievement_items");
+    if (achievementItemsDesc.progress && achievementItemsDesc.progress.allowNull === false) {
+        await qi.changeColumn("monthly_achievement_items", "progress", {
+            type: DataTypes.INTEGER,
+            allowNull: true,
+            defaultValue: null,
+        });
+        console.log("✅ Migration 11: monthly_achievement_items.progress set to nullable with NULL default");
     }
 };
 
@@ -1178,6 +1229,20 @@ const startServer = async () => {
                 runDeadlineReminders();
             }, { timezone: reminderTz });
             console.log(`✅ Deadline reminder job scheduled ("${reminderSchedule}", ${reminderTz})`);
+
+            // ─── 1st-of-month "Monthly Plan window is open" announcement ──────────────
+            // Fires at 09:00 on the 1st of every month (same timezone as the
+            // deadline-reminder job). Sends one email per active employee/RA
+            // informing them that plan and progress submissions are now open.
+            // Override the schedule via PLAN_OPEN_CRON_SCHEDULE env var
+            // (e.g. "0 8 1 * *" to shift to 08:00) without a code change.
+            // The run is deduped at the DB level so firing it manually for a
+            // retry is always safe.
+            const planOpenSchedule = process.env.PLAN_OPEN_CRON_SCHEDULE || "0 9 1 * *";
+            cron.schedule(planOpenSchedule, () => {
+                runMonthlyPlanOpenNotifications();
+            }, { timezone: reminderTz });
+            console.log(`✅ Monthly-plan-open notification job scheduled ("${planOpenSchedule}", ${reminderTz})`);
         } else {
             console.log("⏸️  Deadline reminder job disabled (REMINDER_JOB_ENABLED=false)");
         }

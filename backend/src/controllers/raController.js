@@ -53,6 +53,13 @@ const { notifyEvaluation, notifyRejection, notifyDeadlineExtension, notifyFeedba
 // header for why this moved out of being controller-local.
 const { isAchievementCompleteForPlan } = require("../utils/achievementCompleteness");
 
+// Progress is text-only (achievementDetails per plan). The numeric `progress`
+// column on MonthlyAchievementItem is retired, so it is excluded from every
+// API response here. Transitional: once the column is dropped from the model
+// and database this constant (and its three usages) can be deleted — excluding
+// an attribute the model no longer defines is a harmless no-op until then.
+const LEGACY_ACHIEVEMENT_ITEM_ATTRS = ["progress"];
+
 /* helper — mirrors the old in-file function */
 function getQuarterMonths(quarter) {
   return getQuarterMonthStrings(quarter);
@@ -492,7 +499,7 @@ exports.getEmployeeDetail = async (req, res) => {
       // getMonthlyPlans). Both queries below are sorted in JS right after
       // this Promise.all resolves instead of relying on an include-level order.
       MonthlyPlan.findAll({ where: { employeeId: id }, include: [{ model: MonthlyPlanItem, as: "planItems" }], order: [["month", "DESC"]] }),
-      MonthlyAchievement.findAll({ where: { employeeId: id }, include: [{ model: MonthlyPlan, as: "monthlyPlan", attributes: ["id", "month", "planDetails"] }, { model: MonthlyAchievementItem, as: "planAchievements" }], order: [["submittedAt", "DESC"]] }),
+      MonthlyAchievement.findAll({ where: { employeeId: id }, include: [{ model: MonthlyPlan, as: "monthlyPlan", attributes: ["id", "month", "planDetails"] }, { model: MonthlyAchievementItem, as: "planAchievements", attributes: { exclude: LEGACY_ACHIEVEMENT_ITEM_ATTRS } }], order: [["submittedAt", "DESC"]] }),
       MonthlyEvaluation.findAll({ where: { employeeId: id }, include: [{ model: User, as: "ra", attributes: ["id", "name"] }], order: [["month", "DESC"]] }),
       QuarterlyEvaluation.findAll({ where: { employeeId: id }, include: [{ model: User, as: "ra", attributes: ["id", "name"] }], order: [["createdAt", "DESC"]] }),
       YearlyPlan.findAll({ where: { employeeId: id }, include: [{ model: YearlyPlanKra, as: "kras", order: [["kraIndex", "ASC"]] }], order: [["submittedAt", "DESC"]] }),
@@ -850,6 +857,11 @@ exports.getMonthlyEvaluations = async (req, res) => {
     // Guard: Op.in([]) generates invalid SQL in PostgreSQL ("IN ()") → 500.
     // When no evaluations have a linked plan, skip the achievement lookup entirely.
     const achSet = new Set();
+    // partialAchSet: plan IDs where a SUBMITTED achievement exists but does NOT
+    // yet cover all plan items. Allows the RA to distinguish "no progress at all"
+    // from "partial progress submitted — more still pending" without changing
+    // the existing hasAchievement semantics (which is and stays the evaluate gate).
+    const partialAchSet = new Set();
     if (planIds.length > 0) {
       // FIX: only SUBMITTED achievements should mark hasAchievement = true in the
       // evaluation list. A DRAFT achievement (employee saved progress locally but
@@ -869,6 +881,11 @@ exports.getMonthlyEvaluations = async (req, res) => {
       // therefore the Evaluate button, the "Submitted" badge, and the
       // "pending" summary count) all went true as soon as ANY achievement
       // existed — even one that predates a still-unreported new plan item.
+      //
+      // PARTIAL SUBMISSION (Oct 2026): employees can now submit progress for
+      // one plan item at a time. A partial submission (achievementItemCount > 0
+      // but < planItemCount) is tracked separately via partialAchSet so the RA
+      // list can show "Partial Progress" rather than plain "Pending".
       const achIds = achievements.map(a => a.id);
       const achievementItemCounts = achIds.length > 0
         ? await MonthlyAchievementItem.findAll({
@@ -896,6 +913,9 @@ exports.getMonthlyEvaluations = async (req, res) => {
         const achievementItemCount = itemCountByAchievementId.get(String(a.id)) || 0;
         if (isAchievementCompleteForPlan(planItemCount, achievementItemCount)) {
           achSet.add(String(a.monthlyPlanId));
+        } else if (achievementItemCount > 0) {
+          // Some progress exists but doesn't cover all plan items — partial submission.
+          partialAchSet.add(String(a.monthlyPlanId));
         }
       });
     }
@@ -944,7 +964,16 @@ exports.getMonthlyEvaluations = async (req, res) => {
       score: excludeScore ? null : ev.score,
       status: ev.status,
       monthlyPlanId: ev.monthlyPlan,
+      // hasAchievement: true only when ALL plan items have progress submitted
+      // (isAchievementCompleteForPlan). This is the gate for the Evaluate button.
       hasAchievement: ev.monthlyPlanId ? achSet.has(String(ev.monthlyPlanId)) : false,
+      // hasPartialAchievement: true when SOME (but not all) plan items have
+      // progress submitted. Distinct from hasAchievement — lets the RA list
+      // show "Partial Progress" instead of plain "Pending" so the RA can see
+      // the employee is in progress rather than not started.
+      hasPartialAchievement: ev.monthlyPlanId
+        ? (!achSet.has(String(ev.monthlyPlanId)) && partialAchSet.has(String(ev.monthlyPlanId)))
+        : false,
       openFeedbackCount: ev.monthlyPlanId ? (feedbackCountByPlanId.get(String(ev.monthlyPlanId)) || 0) : 0,
       ...(evalWindowById.get(String(ev.id)) || { canEvaluate: false, evaluationOpensAt: null }),
     }));
@@ -989,7 +1018,7 @@ exports.getMonthlyEvaluationById = async (req, res) => {
     const achievement = planDoc
       ? await MonthlyAchievement.findOne({
         where: { monthlyPlanId: planDoc.id, status: "SUBMITTED" },
-        include: [{ model: MonthlyAchievementItem, as: "planAchievements" }],
+        include: [{ model: MonthlyAchievementItem, as: "planAchievements", attributes: { exclude: LEGACY_ACHIEVEMENT_ITEM_ATTRS } }],
       })
       : null;
     if (achievement && Array.isArray(achievement.planAchievements)) {
@@ -1547,7 +1576,7 @@ exports.getQuarterlyFullDetail = async (req, res) => {
         const achievement = planDoc
           ? await MonthlyAchievement.findOne({
             where: { monthlyPlanId: planDoc.id, status: "SUBMITTED" },
-            include: [{ model: MonthlyAchievementItem, as: "planAchievements" }],
+            include: [{ model: MonthlyAchievementItem, as: "planAchievements", attributes: { exclude: LEGACY_ACHIEVEMENT_ITEM_ATTRS } }],
           })
           : null;
         if (achievement && Array.isArray(achievement.planAchievements)) {

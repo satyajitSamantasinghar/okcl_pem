@@ -1,0 +1,11 @@
+/* ============================================================
+   HRD MONTHLY OVERVIEW — page-specific additions
+   List / table / KPI / filter chrome is shared and lives in
+   MDMonthlyOverview.css. Detail-modal additions live in
+   HRDPlanModal.css. Namespaced .hmo-* to avoid cross-role leaks.
+============================================================ */
+
+/* Page header spacing (was an inline style) */
+.hmo-page-header {
+    margin-bottom: 16px;
+}

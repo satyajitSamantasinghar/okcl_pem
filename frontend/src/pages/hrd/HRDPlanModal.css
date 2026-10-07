@@ -1,0 +1,57 @@
+/* ============================================================
+   HRD PLAN DETAIL MODAL — additions shared by the HRD Monthly
+   Overview page and the HRD Employee Detail page.
+   Base modal styles (.dmod-*, .red-*) come from RAEmployeeDetail.css;
+   everything here is namespaced .hpm-* so no other role's stylesheet
+   can override it. The modal shows text and dates only — there are
+   no progress percentages anywhere.
+============================================================ */
+
+/* Submission timeline (dates only) */
+.hpm-timeline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 18px;
+    margin-bottom: 14px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.hpm-timeline-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.hpm-timeline-item svg {
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
+/* Per-plan card accent: green when progress details were reported.
+   Two-class selectors win over .dmod-pcard regardless of load order. */
+.dmod-pcard.hpm-pcard--updated {
+    border-left-color: #3B6D11;
+}
+
+.dmod-pcard.hpm-pcard--pending {
+    border-left-color: var(--border-default, #E2E8F0);
+}
+
+/* Rejection banner / section spacing (replaces inline styles) */
+.hpm-banner {
+    margin-bottom: 12px;
+}
+
+.hpm-banner-reason {
+    display: block;
+    margin-top: 6px;
+    font-size: 0.8125rem;
+    font-weight: 400;
+    opacity: 0.85;
+}
+
+.hpm-reject-section {
+    margin-top: 12px;
+}

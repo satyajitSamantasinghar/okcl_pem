@@ -452,13 +452,20 @@
 .qd-plan-card {
     border: 1px solid #E2E8F0;
     border-left: 4px solid #94A3B8;
-    /* overridden inline */
     border-radius: 12px;
     overflow: hidden;
     background: #FFFFFF;
     /* Level 3 — pure white cards */
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
     transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.qd-plan-card--reported {
+    border-left-color: #16A34A;
+}
+
+.qd-plan-card--missing {
+    border-left-color: #DC2626;
 }
 
 .qd-plan-card:hover {
@@ -472,10 +479,6 @@
     gap: 13px;
     padding: 14px 16px 12px;
     background: #FFFFFF;
-}
-
-.qd-plan-ring-wrap {
-    flex-shrink: 0;
 }
 
 .qd-plan-info {
@@ -502,6 +505,18 @@
     font-size: 11px;
     font-weight: 800;
     flex-shrink: 0;
+    background: #F1F5F9;
+    color: #475569;
+}
+
+.qd-plan-card--reported .qd-plan-num-chip {
+    background: #DCFCE7;
+    color: #166534;
+}
+
+.qd-plan-card--missing .qd-plan-num-chip {
+    background: #FEE2E2;
+    color: #991B1B;
 }
 
 .qd-plan-name {
@@ -521,53 +536,25 @@
     margin-left: auto;
 }
 
+.qd-plan-status-badge--idle {
+    background: #F1F5F9;
+    color: #475569;
+}
+
+.qd-plan-status-badge--reported {
+    background: #DCFCE7;
+    color: #166534;
+}
+
+.qd-plan-status-badge--missing {
+    background: #FEE2E2;
+    color: #991B1B;
+}
+
 .qd-plan-desc {
     font-size: 14px;
     color: #1E293B;
     line-height: 1.5;
-    font-weight: 500;
-}
-
-/* Progress section */
-.qd-plan-prog-section {
-    padding: 10px 16px 11px;
-    border-top: 1px solid #F1F5F9;
-    background: #FAFAFA;
-}
-
-.qd-plan-prog-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 7px;
-}
-
-.qd-plan-prog-lbl {
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.6px;
-    color: #64748B;
-    font-weight: 700;
-}
-
-.qd-plan-prog-pct {
-    font-size: 12px;
-    font-weight: 800;
-}
-
-.qd-bar-track {
-    width: 100%;
-    background: #E5E7EB;
-    border-radius: 100px;
-    overflow: hidden;
-}
-
-.qd-plan-markers {
-    display: flex;
-    justify-content: space-between;
-    font-size: 10px;
-    color: #94A3B8;
-    margin-top: 5px;
     font-weight: 500;
 }
 
@@ -599,6 +586,7 @@
     padding: 10px 13px;
     line-height: 1.6;
     font-weight: 500;
+    white-space: pre-wrap;
 }
 
 .qd-plan-ach-empty,

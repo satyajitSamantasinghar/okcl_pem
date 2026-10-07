@@ -16,7 +16,8 @@ import {
 } from 'recharts';
 import './HRDEmployeeDetail.css';
 import '../ra/RAEmployeeDetail.css';
-import { getCurrentFiscalYear, getFiscalYearShort } from '../../utils/fiscalUtils';
+import './HRDPlanModal.css';
+import { getCurrentFiscalYear } from '../../utils/fiscalUtils';
 
 /* ════════════════════════════════════════════════════
    PURE HELPERS — UNCHANGED
@@ -56,14 +57,6 @@ function formatDateShort(dateStr) {
     if (!dateStr) return '—';
     return new Date(dateStr).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
 }
-function getProgressTokens(p) {
-    const v = Math.min(100, Math.max(0, p || 0));
-    if (v === 100) return { label: 'Completed', ringColor: '#3B6D11', barColor: '#3B6D11', badgeBg: '#EAF3DE', badgeText: '#27500A', borderColor: '#3B6D11', pctClass: 'pp-green', markerActive: 4 };
-    if (v >= 75) return { label: 'Almost done', ringColor: '#BA7517', barColor: '#BA7517', badgeBg: '#FAEEDA', badgeText: '#633806', borderColor: '#BA7517', pctClass: 'pp-amber', markerActive: 3 };
-    if (v >= 50) return { label: 'Halfway', ringColor: '#E85523', barColor: '#E85523', badgeBg: '#FFF0EB', badgeText: '#993C1D', borderColor: '#E85523', pctClass: 'pp-orange', markerActive: 2 };
-    if (v >= 25) return { label: 'Just started', ringColor: '#BA7517', barColor: '#BA7517', badgeBg: '#FAEEDA', badgeText: '#633806', borderColor: '#BA7517', pctClass: 'pp-amber', markerActive: 1 };
-    return { label: 'Not started', ringColor: '#A32D2D', barColor: '#A32D2D', badgeBg: '#FCEBEB', badgeText: '#791F1F', borderColor: '#A32D2D', pctClass: 'pp-red', markerActive: 0 };
-}
 function getPlanItems(plan) {
     if (!plan) return [];
     if (Array.isArray(plan.planItems) && plan.planItems.length > 0)
@@ -72,56 +65,87 @@ function getPlanItems(plan) {
         return plan.planDetails.split('\n').map(s => s.trim()).filter(Boolean);
     return [];
 }
+
+/* Legacy rows stored progress as one text blob ("Plan 1 [50%]: …").
+   We still split it per plan, but any "[NN%]" marker is discarded —
+   percentages are no longer part of the product. */
 function parseLegacyPlanAch(legacyText, planCount) {
-    const result = Array.from({ length: planCount }, () => ({ achievementDetails: '', progress: 0 }));
+    const result = Array.from({ length: planCount }, () => ({ achievementDetails: '' }));
     if (!legacyText) return result;
-    const lines = legacyText.split('\n');
     let currentIdx = -1;
-    lines.forEach(line => {
-        const withPct = line.match(/^Plan\s+(\d+)\s*\[(\d+)%\]:\s*(.*)/i);
-        const withoutPct = !withPct && line.match(/^Plan\s+(\d+):\s*(.*)/i);
-        if (withPct) {
-            const idx = parseInt(withPct[1]) - 1;
-            if (idx >= 0 && idx < planCount) { currentIdx = idx; result[idx].progress = Math.min(100, parseInt(withPct[2]) || 0); result[idx].achievementDetails = withPct[3].trim(); }
-        } else if (withoutPct) {
-            const idx = parseInt(withoutPct[1]) - 1;
-            if (idx >= 0 && idx < planCount) { currentIdx = idx; result[idx].achievementDetails = withoutPct[2].trim(); }
-        } else if (currentIdx >= 0 && line.trim() && !line.match(/^Additional:/i)) {
+    legacyText.split('\n').forEach(line => {
+        const header = line.match(/^Plan\s+(\d+)\s*(?:\[\d+%\])?\s*:\s*(.*)/i);
+        if (header) {
+            const idx = parseInt(header[1]) - 1;
+            if (idx >= 0 && idx < planCount) {
+                currentIdx = idx;
+                result[idx].achievementDetails = header[2].trim();
+            }
+        } else if (currentIdx >= 0 && line.trim() && !/^Additional:/i.test(line)) {
             result[currentIdx].achievementDetails += (result[currentIdx].achievementDetails ? ' ' : '') + line.trim();
         }
     });
     return result;
 }
+
+/* Returns [{ achievementDetails }] aligned to plan order, or null when the
+   employee has not reported anything usable yet. */
 function getEffectivePlanAch(ach, planCount) {
     if (!ach) return null;
+    const hasText = list => list.some(a => (a.achievementDetails || '').trim());
     const pa = ach.planAchievements;
-    if (Array.isArray(pa) && pa.length > 0) {
-        const hasRealData = pa.some(a => (a.achievementDetails || '').trim() || (a.progress || 0) > 0);
-        if (hasRealData) return pa;
+    if (Array.isArray(pa) && pa.length > 0 && hasText(pa)) {
+        return pa.map(a => ({ achievementDetails: a.achievementDetails || '' }));
     }
     if (ach.achievementDetails) {
         const parsed = parseLegacyPlanAch(ach.achievementDetails, planCount);
-        const hasParsedData = parsed.some(a => (a.achievementDetails || '').trim() || (a.progress || 0) > 0);
-        if (hasParsedData) return parsed;
+        if (hasText(parsed)) return parsed;
     }
     return null;
 }
+
+/* Additional (unplanned) work → [{ text }]. Accepts the JSON array form, the
+   legacy "Additional: …" suffix, or plain text. Stored percentages ignored. */
 function parseAdditionalAch(raw) {
     if (!raw) return [];
+    const toItems = arr => arr
+        .map(a => ({ text: (typeof a === 'string' ? a : a?.text || '').trim() }))
+        .filter(a => a.text);
     try {
         const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) return parsed.filter(a => (a.text || '').trim());
-    } catch { /* fall through */ }
+        if (Array.isArray(parsed)) return toItems(parsed);
+    } catch { /* not JSON — fall through */ }
     const match = raw.match(/Additional:\s*([\s\S]+)/i);
     if (match) {
+        const captured = match[1].trim();
         try {
-            const p = JSON.parse(match[1].trim());
-            if (Array.isArray(p)) return p.filter(a => (a.text || '').trim());
-        } catch { /* fall through */ }
-        return [{ text: match[1].trim(), progress: 100 }];
+            const parsed = JSON.parse(captured);
+            if (Array.isArray(parsed)) return toItems(parsed);
+        } catch { /* plain text */ }
+        return captured ? [{ text: captured }] : [];
     }
-    return raw.split('\n').filter(l => l.trim() && !l.trim().startsWith('Additional:')).map(t => ({ text: t.trim(), progress: 100 }));
+    return toItems(raw.split('\n').filter(l => l.trim() && !/^Additional:/i.test(l.trim())));
 }
+
+/* Additional work: prefer the dedicated field; fall back to an
+   "Additional: …" suffix inside the legacy details text. Never treats the
+   plain details text as additional work. */
+function getAdditionalItems(additionalRaw, detailsRaw) {
+    const direct = parseAdditionalAch(additionalRaw || '');
+    if (direct.length > 0) return direct;
+    const m = (detailsRaw || '').match(/Additional:\s*([\s\S]+)/i);
+    return m ? parseAdditionalAch(`Additional: ${m[1]}`) : [];
+}
+
+/* Legacy free-text progress: hide "[NN%]" markers and the machine-readable
+   "Additional: …" suffix (shown separately as extras). */
+function stripLegacyMarkup(text) {
+    return (text || '')
+        .replace(/\s*Additional:[\s\S]*$/i, '')
+        .replace(/\s*\[\d+%\]/g, '')
+        .trim();
+}
+
 const MONTH_PALETTES = [
     { bg: '#E6F1FB', color: '#0C447C' }, { bg: '#EAF3DE', color: '#27500A' },
     { bg: '#FAEEDA', color: '#633806' }, { bg: '#FCEBEB', color: '#791F1F' },
@@ -135,35 +159,6 @@ function getMonthChipStyle(monthStr) {
     const m = parseInt(monthStr.split('-')[1]) - 1;
     return MONTH_PALETTES[m] || MONTH_PALETTES[0];
 }
-function CircularProgressMod({ progress, size = 46 }) {
-    const p = Math.min(100, Math.max(0, progress || 0));
-    const r = (size - 6) / 2;
-    const circ = 2 * Math.PI * r;
-    const dash = (p / 100) * circ;
-    const tk = getProgressTokens(p);
-    return (
-        <svg width={size} height={size} style={{ transform: 'rotate(-90deg)', flexShrink: 0 }}>
-            <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--border-default)" strokeWidth={4.5} />
-            <circle cx={size / 2} cy={size / 2} r={r} fill="none"
-                stroke={tk.ringColor} strokeWidth={4.5}
-                strokeDasharray={`${dash} ${circ}`} strokeLinecap="round"
-                style={{ transition: 'stroke-dasharray 0.35s ease' }} />
-            <text x={size / 2} y={size / 2} textAnchor="middle" dominantBaseline="middle"
-                style={{
-                    transform: `rotate(90deg)`,
-                    transformOrigin: `${size / 2}px ${size / 2}px`,
-                    fontSize: 9.5, fontWeight: 700,
-                    fill: 'var(--text-primary)', fontFamily: 'inherit'
-                }}>
-                {p}%
-            </text>
-        </svg>
-    );
-}
-
-/* ════════════════════════════════════════════════════
-   KPI CARD
-════════════════════════════════════════════════════ */
 function KPICard({ label, value, sub, icon, trend, color }) {
     return (
         <div className="hed-kpi-card">
@@ -243,6 +238,14 @@ const HRDEmployeeDetailPage = () => {
         };
         fetchDetail();
     }, [id, navigate]);
+
+    /* Close the monthly detail modal on Escape */
+    useEffect(() => {
+        if (!selectedMonthDetail) return;
+        const onKeyDown = e => { if (e.key === 'Escape') setSelectedMonthDetail(null); };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [selectedMonthDetail]);
 
     if (loading) {
         return (
@@ -400,7 +403,7 @@ const HRDEmployeeDetailPage = () => {
     const getStatusBadge = plan => {
         if (plan.status === 'REJECTED') return <span className="hed-badge hed-badge--rejected">Rejected by RA</span>;
         if (plan.isEval) return <span className="hed-badge hed-badge--evaluated">Evaluated</span>;
-        if (plan.hasAchievement) return <span className="hed-badge hed-badge--achievement">Progree Submitted</span>;
+        if (plan.hasAchievement) return <span className="hed-badge hed-badge--achievement">Progress Submitted</span>;
         return <span className="hed-badge hed-badge--submitted">Plan Submitted</span>;
     };
 
@@ -421,25 +424,10 @@ const HRDEmployeeDetailPage = () => {
         const effectivePlanAch = getEffectivePlanAch(ach, planItemsList.length);
         const hasStructuredAch = !!effectivePlanAch;
 
-        // Additional achievements
-        let additionalItems = parseAdditionalAch(ach?.additionalAchievement || '');
-        if (additionalItems.length === 0 && ach?.achievementDetails) {
-            const addlMatch = ach.achievementDetails.match(/Additional:\s*([\s\S]+)/i);
-            if (addlMatch) {
-                const captured = addlMatch[1].trim();
-                try {
-                    const parsed = JSON.parse(captured);
-                    additionalItems = Array.isArray(parsed) ? parsed.filter(a => (a.text || '').trim()) : [{ text: captured, progress: 100 }];
-                } catch { additionalItems = [{ text: captured, progress: 100 }]; }
-            }
-        }
-
-        // Overall progress
-        const achOverall = hasStructuredAch
-            ? Math.round(effectivePlanAch.reduce((s, a) => s + Math.min(100, a.progress || 0), 0) / effectivePlanAch.length)
-            : null;
-        const achCompleted = hasStructuredAch
-            ? effectivePlanAch.filter(a => (a.progress || 0) >= 100).length : 0;
+        // Additional work (text only)
+        const additionalItems = getAdditionalItems(ach?.additionalAchievement, ach?.achievementDetails);
+        const progressSubmitted = !!ach && ach.status !== 'DRAFT';
+        const close = () => setSelectedMonthDetail(null);
 
         // Stepper
         const stepperPlan = 'done';
@@ -453,8 +441,14 @@ const HRDEmployeeDetailPage = () => {
         const stCls = isRejected ? 'sp-rejected' : isEval ? 'sp-eval' : plan.hasAchievement ? 'sp-ach' : 'sp-plan';
 
         return createPortal(
-            <div className="mp-overlay" onClick={() => setSelectedMonthDetail(null)}>
-                <div className="dmod dmod--wide" onClick={e => e.stopPropagation()}>
+            <div className="mp-overlay" onClick={close}>
+                <div
+                    className="dmod dmod--wide"
+                    onClick={e => e.stopPropagation()}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="dmod-title"
+                >
 
                     {/* ── HEADER ── */}
                     <div className="dmod-hdr">
@@ -464,7 +458,7 @@ const HRDEmployeeDetailPage = () => {
                                 <span className="dmod-mc-yr">{shortYear(plan.month)}</span>
                             </div>
                             <div>
-                                <div className="dmod-title">{formatMonth(plan.month)}</div>
+                                <div className="dmod-title" id="dmod-title">{formatMonth(plan.month)}</div>
                                 <div className="dmod-meta">
                                     <FiClock size={11} />
                                     <span>Submitted {formatDateShort(plan.submittedAt)}</span>
@@ -475,7 +469,7 @@ const HRDEmployeeDetailPage = () => {
                                 </div>
                             </div>
                         </div>
-                        <button className="dmod-close" onClick={() => setSelectedMonthDetail(null)}>
+                        <button className="dmod-close" onClick={close} aria-label="Close details">
                             <FiX size={16} />
                         </button>
                     </div>
@@ -513,36 +507,22 @@ const HRDEmployeeDetailPage = () => {
 
                         {/* MD rejection banner */}
                         {isRejected && (
-                            <div className="red-status-banner red-status-banner--rejected" style={{ marginBottom: 12 }}>
+                            <div className="red-status-banner red-status-banner--rejected hpm-banner">
                                 <FiAlertCircle /> This plan was rejected by the Reporting Authority (RA)
                             </div>
                         )}
 
-                        {/* Overall progress bar — only when achievement exists & structured */}
-                        {ach && ach.status !== 'DRAFT' && achOverall !== null && (
-                            <div className="dmod-op-bar">
-                                <div className="dmod-op-row">
-                                    <span className="dmod-op-lbl">Overall progress</span>
-                                    <span className="dmod-op-val">
-                                        {achCompleted}/{effectivePlanAch.length} plans done
-                                        <span> · {achOverall}%</span>
+                        {/* Submission timeline (dates only — no progress metrics) */}
+                        {progressSubmitted && (
+                            <div className="hpm-timeline">
+                                <span className="hpm-timeline-item">
+                                    <FiFileText size={12} /> Plan submitted {formatDateShort(plan.submittedAt)}
+                                </span>
+                                {ach.submittedAt && (
+                                    <span className="hpm-timeline-item">
+                                        <FiTrendingUp size={12} /> Progress submitted {formatDateShort(ach.submittedAt)}
                                     </span>
-                                </div>
-                                <div className="dmod-pt">
-                                    <div className="dmod-pf" style={{ width: `${achOverall}%` }} />
-                                </div>
-                                <div className="dmod-ts-row">
-                                    <span className="dmod-ts-item">
-                                        <FiFileText size={10} />
-                                        Plan submitted {formatDateShort(plan.submittedAt)}
-                                    </span>
-                                    {ach?.submittedAt && (
-                                        <span className="dmod-ts-item">
-                                            <FiTrendingUp size={10} />
-                                            Progress submitted {formatDateShort(ach.submittedAt)}
-                                        </span>
-                                    )}
-                                </div>
+                                )}
                             </div>
                         )}
 
@@ -550,12 +530,12 @@ const HRDEmployeeDetailPage = () => {
                         <div>
                             <div className="dmod-sec-lbl">
                                 <FiFileText size={13} />
-                                {ach && ach.status !== 'DRAFT' ? 'Plans & Progresss' : 'Plan details'}
+                                {progressSubmitted ? 'Plans & Progress' : 'Plan details'}
                                 <span className="dmod-sec-count-pill">{planItemsList.length} plan{planItemsList.length !== 1 ? 's' : ''}</span>
                             </div>
 
-                            {/* Case A — no achievement yet: simple plan list */}
-                            {(!ach || ach.status === 'DRAFT') && (
+                            {/* Case A — no progress yet: plain plan list */}
+                            {!progressSubmitted && (
                                 <div className="dmod-plan-list">
                                     {planItemsList.map((p, i) => (
                                         <div key={i} className="dmod-plan-simple-item">
@@ -574,56 +554,34 @@ const HRDEmployeeDetailPage = () => {
                                 </div>
                             )}
 
-                            {/* Case B — achievement submitted with structured per-plan data */}
-                            {ach && ach.status !== 'DRAFT' && hasStructuredAch && (
+                            {/* Case B — progress submitted, per-plan details */}
+                            {progressSubmitted && hasStructuredAch && (
                                 <div className="dmod-plan-list">
                                     {planItemsList.map((planText, i) => {
-                                        const pa = effectivePlanAch[i] || { achievementDetails: '', progress: 0 };
-                                        const p = Math.min(100, pa.progress || 0);
-                                        const tk = getProgressTokens(p);
-                                        const pStatusLabel = p === 100 ? 'Completed' : p > 0 ? 'In progress' : 'Not started';
-                                        const pStatusCls = p === 100 ? 'dmod-pstatus--done' : p > 0 ? 'dmod-pstatus--partial' : 'dmod-pstatus--none';
+                                        const details = (effectivePlanAch[i]?.achievementDetails || '').trim();
+                                        const updated = !!details;
                                         return (
                                             <div key={i} className="dmod-pcard-wrap">
-                                                <div className="dmod-pcard" style={{ borderLeftColor: tk.borderColor }}>
+                                                <div className={`dmod-pcard hpm-pcard ${updated ? 'hpm-pcard--updated' : 'hpm-pcard--pending'}`}>
                                                     <div className="dmod-ptop">
-                                                        <div className="dmod-pring-wrap">
-                                                            <span className="dmod-plan-idx-pill" style={{ background: tk.badgeBg, color: tk.badgeText }}>{i + 1}</span>
-                                                            <CircularProgressMod progress={p} size={44} />
-                                                        </div>
+                                                        <span className="dmod-plan-idx-pill">{i + 1}</span>
                                                         <div className="dmod-pinfo">
                                                             <div className="dmod-pname-row">
                                                                 <span className="dmod-pname">Plan {i + 1}</span>
-                                                                <span className={`dmod-pstatus ${pStatusCls}`}>{pStatusLabel}</span>
+                                                                <span className={`dmod-pstatus ${updated ? 'dmod-pstatus--done' : 'dmod-pstatus--idle'}`}>
+                                                                    {updated ? 'Progress added' : 'No update'}
+                                                                </span>
                                                             </div>
                                                             <div className="dmod-pdesc">{planText}</div>
-                                                        </div>
-                                                    </div>
-                                                    <div className="dmod-prog-section">
-                                                        <div className="dmod-prog-labels">
-                                                            <span className="dmod-prog-title">Progress</span>
-                                                            <span className={`dmod-prog-pct ${tk.pctClass}`}>
-                                                                {p}% {p === 100 ? '— Done' : p > 0 ? '— In progress' : '— Not started'}
-                                                            </span>
-                                                        </div>
-                                                        <div className="dmod-prog-bar">
-                                                            <div className="dmod-pb-fill" style={{ width: `${p}%`, background: tk.barColor }} />
-                                                        </div>
-                                                        <div className="dmod-prog-markers">
-                                                            {[0, 25, 50, 75].map((m, mi) => (
-                                                                <span key={m} style={p >= m && mi <= tk.markerActive ? { color: tk.barColor, fontWeight: 600 } : {}}>{m}%</span>
-                                                            ))}
-                                                            <span style={p === 100 ? { color: tk.barColor, fontWeight: 600 } : {}}>Done</span>
                                                         </div>
                                                     </div>
                                                     <div className="dmod-ach-section">
                                                         <div className="dmod-ach-lbl">
                                                             <FiTrendingUp size={11} /> Progress details
                                                         </div>
-                                                        {pa.achievementDetails
-                                                            ? <div className="dmod-ach-text">{pa.achievementDetails}</div>
-                                                            : <div className="dmod-ach-empty">No details provided</div>
-                                                        }
+                                                        {updated
+                                                            ? <div className="dmod-ach-text">{details}</div>
+                                                            : <div className="dmod-ach-empty">No details provided</div>}
                                                     </div>
                                                 </div>
                                             </div>
@@ -633,21 +591,21 @@ const HRDEmployeeDetailPage = () => {
                             )}
 
                             {/* Case C — achievement submitted but fully legacy text only */}
-                            {ach && ach.status !== 'DRAFT' && !hasStructuredAch && ach.achievementDetails && (
+                            {progressSubmitted && !hasStructuredAch && ach.achievementDetails && (
                                 <div className="dmod-legacy-ach">
-                                    <div className="dmod-ach-lbl"><FiTrendingUp size={11} /> Progress</div>
-                                    <div className="dmod-ach-text">{ach.achievementDetails}</div>
+                                    <div className="dmod-ach-lbl"><FiTrendingUp size={11} /> Progress details</div>
+                                    <div className="dmod-ach-text">{stripLegacyMarkup(ach.achievementDetails)}</div>
                                 </div>
                             )}
                         </div>
 
                         {/* No achievement yet block */}
-                        {(!ach || ach.status === 'DRAFT') && (
+                        {!progressSubmitted && (
                             <div className="dmod-no-ach-block">
                                 <div className="dmod-no-ach-icon"><FiTrendingUp size={16} /></div>
                                 <div className="dmod-no-ach-text">
                                     {ach?.status === 'DRAFT'
-                                        ? 'progress draft saved — not yet submitted.'
+                                        ? 'Progress draft saved — not yet submitted.'
                                         : 'Progress not submitted yet.'}
                                 </div>
                             </div>
@@ -657,28 +615,17 @@ const HRDEmployeeDetailPage = () => {
                         {additionalItems.length > 0 && (
                             <div className="dmod-extras-card">
                                 <div className="dmod-extras-hdr">
-                                    <div className="dmod-extras-title"><FiStar size={13} /> Additional work with progress</div>
+                                    <div className="dmod-extras-title"><FiStar size={13} /> Additional work</div>
                                     <span className="dmod-extras-badge">{additionalItems.length} extra{additionalItems.length !== 1 ? 's' : ''}</span>
                                 </div>
-                                {additionalItems.map((item, i) => {
-                                    const text = typeof item === 'string' ? item : (item.text || '');
-                                    const iprog = typeof item === 'string' ? 100 : Math.min(100, item.progress || 100);
-                                    const tk = getProgressTokens(iprog);
-                                    return (
-                                        <div key={i} className="dmod-extra-item">
-                                            <div className="dmod-extra-num">{i + 1}</div>
-                                            <div className="dmod-extra-content">
-                                                <div className="dmod-extra-text">{text}</div>
-                                                <div className="dmod-extra-prog-row">
-                                                    <div className="dmod-extra-bar">
-                                                        <div className="dmod-extra-bar-fill" style={{ width: `${iprog}%`, background: tk.barColor }} />
-                                                    </div>
-                                                    <span className="dmod-extra-pct-lbl" style={{ color: tk.badgeText }}>{iprog}% — {tk.label}</span>
-                                                </div>
-                                            </div>
+                                {additionalItems.map((item, i) => (
+                                    <div key={i} className="dmod-extra-item">
+                                        <div className="dmod-extra-num">{i + 1}</div>
+                                        <div className="dmod-extra-content">
+                                            <div className="dmod-extra-text">{item.text}</div>
                                         </div>
-                                    );
-                                })}
+                                    </div>
+                                ))}
                             </div>
                         )}
 
@@ -708,15 +655,15 @@ const HRDEmployeeDetailPage = () => {
                             )}
                         </div>
 
-                        {/* MD rejection remarks */}
-                        {isRejected && plan.mdRemarks && (
-                            <div className="red-modal-section red-modal-section--danger" style={{ marginTop: 12 }}>
+                        {/* RA rejection reason */}
+                        {isRejected && plan.raRemarks && (
+                            <div className="red-modal-section red-modal-section--danger hpm-reject-section">
                                 <div className="red-modal-section-hd">
                                     <div className="red-modal-section-icon red-modal-section-icon--danger"><FiAlertCircle /></div>
-                                    <span>MD Rejection Remarks</span>
+                                    <span>RA Rejection Reason</span>
                                 </div>
                                 <div className="red-modal-section-body">
-                                    <p className="red-modal-text red-modal-text--danger">{plan.mdRemarks}</p>
+                                    <p className="red-modal-text red-modal-text--danger">{plan.raRemarks}</p>
                                 </div>
                             </div>
                         )}
@@ -728,7 +675,7 @@ const HRDEmployeeDetailPage = () => {
                         <span className="dmod-ftr-state">
                             {isEval ? 'Evaluated' : plan.hasAchievement ? 'Awaiting RA review' : 'Progress pending'}
                         </span>
-                        <button className="dmod-btn-close" onClick={() => setSelectedMonthDetail(null)}>Close</button>
+                        <button className="dmod-btn-close" onClick={close}>Close</button>
                     </div>
 
                 </div>
@@ -949,7 +896,7 @@ const HRDEmployeeDetailPage = () => {
                                 <thead>
                                     <tr>
                                         <th>Month</th>
-                                        <th>Progress</th>
+                                        <th>Stage</th>
                                         <th>Score</th>
                                         <th>Submitted</th>
                                         <th>Detail</th>
@@ -957,8 +904,17 @@ const HRDEmployeeDetailPage = () => {
                                 </thead>
                                 <tbody>
                                     {filteredMonths.map(plan => (
-                                        <tr key={plan.id} className="hed-table-row"
-                                            onClick={() => setSelectedMonthDetail(plan)}>
+                                        <tr
+                                            key={plan.id}
+                                            className="hed-table-row"
+                                            onClick={() => setSelectedMonthDetail(plan)}
+                                            tabIndex={0}
+                                            role="button"
+                                            aria-label={`View ${formatMonth(plan.month)} details`}
+                                            onKeyDown={e => {
+                                                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedMonthDetail(plan); }
+                                            }}
+                                        >
                                             <td>
                                                 <div className="hed-month-cell">
                                                     <div className="hed-month-badge">{shortMonth(plan.month)}</div>
@@ -972,7 +928,7 @@ const HRDEmployeeDetailPage = () => {
                                                 <div className="hed-stepper-mini">
                                                     <div className="hed-step-dot-mini hed-step-dot-mini--done" title="Plan" />
                                                     <div className={`hed-step-line-mini ${plan.hasAchievement ? 'hed-step-line-mini--done' : ''}`} />
-                                                    <div className={`hed-step-dot-mini ${plan.hasAchievement ? 'hed-step-dot-mini--done' : ''}`} title="Achievement" />
+                                                    <div className={`hed-step-dot-mini ${plan.hasAchievement ? 'hed-step-dot-mini--done' : ''}`} title="Progress submitted" />
                                                     <div className={`hed-step-line-mini ${plan.isEval ? 'hed-step-line-mini--done' : ''}`} />
                                                     <div className={`hed-step-dot-mini ${plan.isEval ? 'hed-step-dot-mini--done' : ''}`} title="Evaluated" />
                                                 </div>
@@ -985,7 +941,7 @@ const HRDEmployeeDetailPage = () => {
                                                     </span>
                                                 ) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
                                             </td>
-                                            <td className="hed-date-cell">{new Date(plan.submittedAt).toLocaleDateString()}</td>
+                                            <td className="hed-date-cell">{formatDateShort(plan.submittedAt)}</td>
                                             <td>
                                                 <button className="hed-detail-btn"
                                                     onClick={e => { e.stopPropagation(); setSelectedMonthDetail(plan); }}>

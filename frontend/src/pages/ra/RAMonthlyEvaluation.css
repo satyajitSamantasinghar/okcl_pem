@@ -1505,33 +1505,38 @@
    This guarantees badges, pills and action buttons NEVER overflow.
 
    Column widths are sized to their worst-case content:
-     Employee    → flexible (all remaining space)
-     Month       → 128px  ("January 2026" + calendar icon)
-     Plans       → 76px   ("3 plans" pill)
-     Achievement → 108px  ("Plan Rejected" badge — widest variant)
+     Employee    → flexible (all remaining space, never below 150px)
+     Month       → 124px  ("September 2026" + calendar icon)
+     Plans       → 72px   ("3 plans" pill)
+     Progress    → 168px  ("Partial Progress" badge 117px + gap 6px + feedback pill ~40px)
      Score       → 108px  (score bar + "8.5/10")
      Status      → 96px   ("Evaluated" badge)
      Actions     → 280px  (View 70px + Evaluate 88px + Reject Plan 102px + 2×gap 5px)
+
+   column-gap guarantees a visible gutter between neighbouring columns, so
+   content that fills its track (badges, pills, the score bar) can never
+   touch the next column's content.
 ============================================================ */
 .meval-table-head--v2,
 .meval-table-row--v2 {
     grid-template-columns:
-        minmax(0, 1fr)
-        /* Employee    — takes all spare space */
-        128px
-        /* Month       */
-        76px
-        /* Plans       */
+        minmax(150px, 1fr)
+        /* Employee — takes all spare space */
+        124px
+        /* Month    */
+        72px
+        /* Plans    */
+        168px
+        /* Progress */
         108px
-        /* Achievement */
-        108px
-        /* Score       */
+        /* Score    */
         96px
-        /* Status      */
+        /* Status   */
         280px;
-    /* Actions     */
-    min-width: 876px;
-    /* sum of fixed cols + 100px min for Employee */
+    /* Actions  */
+    column-gap: 10px;
+    /* 150 (employee) + 848 (fixed cols) + 60 (6 gutters) + 40 (row padding) = 1098 */
+    min-width: 1100px;
 }
 
 /* Plans count pill */
@@ -1573,9 +1578,47 @@
     border: 1px solid rgba(164, 163, 155, 0.3);
 }
 
+/* Partial progress — employee has submitted some but not all plan items */
+.meval-ach-badge--partial {
+    background: #FEF3C7;
+    color: #92400E;
+    border: 1px solid rgba(217, 119, 6, 0.35);
+}
+
+/* ── Progress cell: status badge + optional feedback-count pill ──
+   - Items never shrink, so a badge's text is never squeezed or clipped.
+   - flex-wrap is a safety net: if a row ever has more content than the
+     168px track can hold (e.g. a 3-digit feedback count), the pill drops
+     to a second line instead of bleeding into the Score column.
+   - min-width: 0 (inherited from .meval-cell) keeps the cell inside its track. */
+.meval-cell--progress {
+    flex-wrap: wrap;
+    gap: 4px 6px;
+}
+
+.meval-cell--progress>* {
+    flex: 0 0 auto;
+}
+
+/* Match the feedback pill to the badge's metrics so both sit on the same
+   baseline with identical height (badge: 3px 9px / 0.68rem). */
+.meval-cell--progress .meval-feedback-pill {
+    padding: 3px 8px;
+    font-size: 0.68rem;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Score cell: fixed-width bar that can never exceed its 108px track
+   (the shared .meval-score-wrap allows up to 130px, which would overflow). */
+.meval-table-row--v2 .meval-score-wrap {
+    width: 90px;
+    min-width: 0;
+    max-width: 100%;
+}
+
 /* ── No responsive override needed for the v2 grid.
    Because all columns except Employee are fixed px, there is nothing to override.
-   The meval-table-scroll wrapper handles any viewport narrower than min-width (876px)
+   The meval-table-scroll wrapper handles any viewport narrower than min-width (1100px)
    by showing a horizontal scrollbar — the industry-standard approach for data tables. ── */
 
 @media (max-width: 960px) {
@@ -1589,6 +1632,8 @@
         align-items: flex-start;
         gap: 8px;
         padding: 14px 20px;
+        min-width: 0;
+        /* stacked cards don't need the desktop grid's min-width */
     }
 
     .meval-cell--actions {
@@ -1707,6 +1752,13 @@
     color: var(--primary);
 }
 
+/* Partial progress: some plan items submitted, not all — amber accent */
+.meval-step-dot--partial {
+    background: rgba(217, 119, 6, .1);
+    border: 2px solid #D97706;
+    color: #D97706;
+}
+
 .meval-step-dot--idle {
     background: var(--bg-muted);
     border: 1.5px solid var(--border-default);
@@ -1725,6 +1777,10 @@
 
 .meval-step-lbl--active {
     color: var(--primary);
+}
+
+.meval-step-lbl--partial {
+    color: #D97706;
 }
 
 .meval-step-lbl--idle {
@@ -1881,60 +1937,6 @@
 }
 
 /* Overall progress strip */
-.meval-ctx-overall {
-    padding: 12px 14px;
-    background: linear-gradient(135deg, #F8FFF3 0%, #FAFFF8 100%);
-    border: 1px solid rgba(59, 109, 17, .2);
-    border-radius: 10px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-
-.meval-ctx-overall-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-}
-
-.meval-ctx-overall-lbl {
-    font-size: 0.6875rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: #3B6D11;
-}
-
-.meval-ctx-overall-val {
-    font-size: 0.75rem;
-    font-weight: 700;
-    color: #3B6D11;
-}
-
-.meval-ctx-prog-track {
-    height: 6px;
-    background: var(--border-default);
-    border-radius: 99px;
-    overflow: hidden;
-}
-
-.meval-ctx-prog-track--sm {
-    height: 4px;
-}
-
-.meval-ctx-prog-fill {
-    height: 100%;
-    border-radius: 99px;
-    background: #3B6D11;
-    transition: width 0.4s ease;
-}
-
-.meval-ctx-ts-row {
-    display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
-}
-
 .meval-ctx-ts {
     display: flex;
     align-items: center;
@@ -1942,6 +1944,17 @@
     font-size: 0.6875rem;
     color: var(--text-muted);
     font-weight: 500;
+}
+
+/* Submission timeline strip (plan / progress submitted dates) */
+.meval-ctx-timeline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+    padding: 9px 13px;
+    background: var(--bg-page);
+    border: 1px solid var(--border-default);
+    border-radius: 10px;
 }
 
 /* Section label */
@@ -1989,6 +2002,19 @@
 .meval-ctx-plan-card--idle {
     border-left-color: var(--border-default);
     background: var(--bg-page);
+}
+
+/* Progress state accents — default (green) is the "reported" state */
+.meval-ctx-plan-card--none {
+    border-left-color: #A32D2D;
+}
+
+.meval-ctx-plan-card--new {
+    border-left-color: #4F46E5;
+}
+
+.meval-ctx-plan-card--extra {
+    border-left-color: #BA7517;
 }
 
 .meval-ctx-plan-top {
@@ -2053,11 +2079,6 @@
     color: #27500A;
 }
 
-.meval-ctx-plan-badge--partial {
-    background: #FFF0EB;
-    color: #993C1D;
-}
-
 .meval-ctx-plan-badge--none {
     background: #FCEBEB;
     color: #791F1F;
@@ -2104,31 +2125,6 @@
     margin: 2px 0 0;
 }
 
-/* Progress section */
-.meval-ctx-prog-section {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    padding: 0 13px 10px;
-}
-
-.meval-ctx-prog-labels {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    font-size: 0.6875rem;
-    font-weight: 600;
-    color: var(--text-muted);
-}
-
-.meval-ctx-prog-markers {
-    display: flex;
-    justify-content: space-between;
-    font-size: 0.5875rem;
-    color: var(--text-muted);
-    margin-top: 2px;
-}
-
 /* Achievement section */
 .meval-ctx-ach-section {
     padding: 8px 13px 12px;
@@ -2154,6 +2150,7 @@
     font-size: 0.8125rem;
     color: var(--text-primary);
     line-height: 1.6;
+    white-space: pre-wrap;
 }
 
 .meval-ctx-ach-empty {
@@ -2259,16 +2256,6 @@
     font-size: 0.8125rem;
     color: var(--text-primary);
     line-height: 1.5;
-}
-
-.meval-ctx-extra-prog {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.meval-ctx-extra-prog .meval-ctx-prog-track {
-    flex: 1;
 }
 
 /* ============================================================

@@ -47,16 +47,6 @@ function getPlanItems(plan) {
     return [];
 }
 
-/* Progress tokens — consistent colours across rings, bars, badges */
-function getProgressTokens(p) {
-    const v = Math.min(100, Math.max(0, p || 0));
-    if (v === 100) return { label: 'Completed', ring: '#16A34A', bar: '#22C55E', badgeBg: '#DCFCE7', badgeText: '#166534', border: '#16A34A', pctColor: '#16A34A', track: '#D1FAE5' };
-    if (v >= 75) return { label: 'Almost done', ring: '#D97706', bar: '#F59E0B', badgeBg: '#FEF3C7', badgeText: '#92400E', border: '#D97706', pctColor: '#D97706', track: '#FDE68A' };
-    if (v >= 50) return { label: 'Halfway', ring: '#EA580C', bar: '#F97316', badgeBg: '#FFEDD5', badgeText: '#9A3412', border: '#EA580C', pctColor: '#EA580C', track: '#FED7AA' };
-    if (v >= 25) return { label: 'Just started', ring: '#D97706', bar: '#F59E0B', badgeBg: '#FEF3C7', badgeText: '#92400E', border: '#D97706', pctColor: '#D97706', track: '#FDE68A' };
-    return { label: 'Not started', ring: '#DC2626', bar: '#EF4444', badgeBg: '#FEE2E2', badgeText: '#991B1B', border: '#DC2626', pctColor: '#DC2626', track: '#FECACA' };
-}
-
 /* Score colour */
 function getScoreColor(s) {
     if (s >= 8) return '#16A34A';
@@ -114,25 +104,19 @@ function getMonthChip(monthStr) {
 
 /* Legacy achievement parsing */
 function parseLegacyPlanAch(legacyText, planCount) {
-    const result = Array.from({ length: planCount }, () => ({ achievementDetails: '', progress: 0 }));
+    const result = Array.from({ length: planCount }, () => ({ achievementDetails: '' }));
     if (!legacyText) return result;
     const lines = legacyText.split('\n');
     let currentIdx = -1;
     lines.forEach(line => {
-        const withPct = line.match(/^Plan\s+(\d+)\s*\[(\d+)%\]:\s*(.*)/i);
-        const withoutPct = !withPct && line.match(/^Plan\s+(\d+):\s*(.*)/i);
-        if (withPct) {
-            const idx = parseInt(withPct[1]) - 1;
+        // Old blobs may carry a "[NN%]" marker; it is tolerated only so it is
+        // stripped from the displayed text — the percentage is no longer used.
+        const header = line.match(/^Plan\s+(\d+)\s*(?:\[\d+%\])?:\s*(.*)/i);
+        if (header) {
+            const idx = parseInt(header[1], 10) - 1;
             if (idx >= 0 && idx < planCount) {
                 currentIdx = idx;
-                result[idx].progress = Math.min(100, parseInt(withPct[2]) || 0);
-                result[idx].achievementDetails = withPct[3].trim();
-            }
-        } else if (withoutPct) {
-            const idx = parseInt(withoutPct[1]) - 1;
-            if (idx >= 0 && idx < planCount) {
-                currentIdx = idx;
-                result[idx].achievementDetails = withoutPct[2].trim();
+                result[idx].achievementDetails = header[2].trim();
             }
         } else if (currentIdx >= 0 && line.trim() && !line.match(/^Additional:/i)) {
             result[currentIdx].achievementDetails += (result[currentIdx].achievementDetails ? ' ' : '') + line.trim();
@@ -145,12 +129,12 @@ function getEffectivePlanAch(ach, planCount) {
     if (!ach) return null;
     const pa = ach.planAchievements;
     if (Array.isArray(pa) && pa.length > 0) {
-        const hasRealData = pa.some(a => (a.achievementDetails || '').trim() || (a.progress || 0) > 0);
+        const hasRealData = pa.some(a => (a.achievementDetails || '').trim());
         if (hasRealData) return pa;
     }
     if (ach.achievementDetails) {
         const parsed = parseLegacyPlanAch(ach.achievementDetails, planCount);
-        const hasParsedData = parsed.some(a => (a.achievementDetails || '').trim() || (a.progress || 0) > 0);
+        const hasParsedData = parsed.some(a => (a.achievementDetails || '').trim());
         if (hasParsedData) return parsed;
     }
     return null;
@@ -168,107 +152,36 @@ function parseAdditionalAch(raw) {
             const p = JSON.parse(match[1].trim());
             if (Array.isArray(p)) return p.filter(a => (a.text || '').trim());
         } catch { /* fall through */ }
-        return [{ text: match[1].trim(), progress: 100 }];
+        return [{ text: match[1].trim() }];
     }
-    return raw.split('\n').filter(l => l.trim() && !l.trim().startsWith('Additional:')).map(t => ({ text: t.trim(), progress: 100 }));
+    return raw.split('\n').filter(l => l.trim() && !l.trim().startsWith('Additional:')).map(t => ({ text: t.trim() }));
 }
 
 /* ====================================================
    SUB-COMPONENTS
 ==================================================== */
 
-/* Clean progress ring */
-const ProgressRing = ({ progress, size = 46, color }) => {
-    const p = Math.min(100, Math.max(0, progress || 0));
-    const r = (size - 6) / 2;
-    const circ = 2 * Math.PI * r;
-    const dash = (p / 100) * circ;
-    const tk = getProgressTokens(p);
-    const ringColor = color || tk.ring;
-    return (
-        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}
-            style={{ transform: 'rotate(-90deg)', flexShrink: 0 }}>
-            <circle cx={size / 2} cy={size / 2} r={r}
-                fill="none" stroke="#E5E7EB" strokeWidth={4.5} />
-            <circle cx={size / 2} cy={size / 2} r={r}
-                fill="none" stroke={ringColor} strokeWidth={4.5}
-                strokeDasharray={`${dash} ${circ}`} strokeLinecap="round"
-                style={{ transition: 'stroke-dasharray 0.5s ease' }} />
-            <text x={size / 2} y={size / 2} textAnchor="middle" dominantBaseline="middle"
-                style={{
-                    transform: `rotate(90deg)`, transformOrigin: `${size / 2}px ${size / 2}px`,
-                    fontSize: size < 40 ? 8 : 9, fontWeight: 700,
-                    fill: ringColor, fontFamily: 'inherit'
-                }}>
-                {p}%
-            </text>
-        </svg>
-    );
-};
-
-const ProgressBar = ({ value, color, trackColor, height = 6 }) => {
-    const p = Math.min(100, Math.max(0, value || 0));
-    const tk = getProgressTokens(p);
-    return (
-        <div className="qd-bar-track" style={{ height, background: trackColor || '#E5E7EB' }}>
-            <div style={{
-                width: `${p}%`, height: '100%',
-                background: color || tk.bar,
-                borderRadius: 99, transition: 'width 0.5s ease'
-            }} />
-        </div>
-    );
-};
-
-/* Plan card */
+/* Plan card — plan detail first, its progress detail directly beneath */
 const PlanCard = ({ planText, planIndex, pa, hasAchievementRecord }) => {
-    const p = pa ? Math.min(100, pa.progress || 0) : 0;
-    const tk = getProgressTokens(p);
-    const hasAchText = pa?.achievementDetails?.trim();
+    const progressText = (pa?.achievementDetails || '').trim();
+    const state = !hasAchievementRecord ? 'idle' : progressText ? 'reported' : 'missing';
+    const statusLabel = { idle: 'Pending', reported: 'Progress reported', missing: 'Not reported' }[state];
 
     return (
-        <div className="qd-plan-card" style={{ borderLeftColor: tk.border }}>
-            {/* Header */}
+        <div className={`qd-plan-card qd-plan-card--${state}`}>
+            {/* Plan detail */}
             <div className="qd-plan-top">
-                <div className="qd-plan-ring-wrap">
-                    <ProgressRing progress={p} size={46} color={tk.ring} />
-                </div>
                 <div className="qd-plan-info">
                     <div className="qd-plan-name-row">
-                        <div className="qd-plan-num-chip"
-                            style={{ background: tk.badgeBg, color: tk.badgeText }}>
-                            {planIndex + 1}
-                        </div>
+                        <div className="qd-plan-num-chip">{planIndex + 1}</div>
                         <span className="qd-plan-name">Plan {planIndex + 1}</span>
-                        <span className="qd-plan-status-badge"
-                            style={{ background: tk.badgeBg, color: tk.badgeText }}>
-                            {tk.label}
-                        </span>
+                        <span className={`qd-plan-status-badge qd-plan-status-badge--${state}`}>{statusLabel}</span>
                     </div>
                     <div className="qd-plan-desc">{planText}</div>
                 </div>
             </div>
 
-            {/* Progress */}
-            <div className="qd-plan-prog-section">
-                <div className="qd-plan-prog-row">
-                    <span className="qd-plan-prog-lbl">Progress</span>
-                    <span className="qd-plan-prog-pct" style={{ color: tk.pctColor }}>
-                        {p}% — {tk.label}
-                    </span>
-                </div>
-                <ProgressBar value={p} color={tk.bar} trackColor="#E5E7EB" height={6} />
-                <div className="qd-plan-markers">
-                    {[0, 25, 50, 75].map(m => (
-                        <span key={m} style={(p >= m && m > 0) ? { color: tk.bar, fontWeight: 600 } : (p === 0 && m === 0) ? { color: tk.bar, fontWeight: 600 } : {}}>
-                            {m}%
-                        </span>
-                    ))}
-                    <span style={p === 100 ? { color: tk.bar, fontWeight: 600 } : {}}>Done</span>
-                </div>
-            </div>
-
-            {/* Achievement */}
+            {/* Progress detail */}
             <div className="qd-plan-ach-section">
                 <div className="qd-plan-ach-lbl">
                     <FiTrendingUp size={10} /> Progress details
@@ -277,8 +190,8 @@ const PlanCard = ({ planText, planIndex, pa, hasAchievementRecord }) => {
                     <div className="qd-plan-ach-no-submission">
                         <FiClock size={11} /> No progress submitted for this month
                     </div>
-                ) : hasAchText ? (
-                    <div className="qd-plan-ach-text">{pa.achievementDetails}</div>
+                ) : progressText ? (
+                    <div className="qd-plan-ach-text">{progressText}</div>
                 ) : (
                     <div className="qd-plan-ach-empty">No progress details provided</div>
                 )}

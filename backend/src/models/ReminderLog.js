@@ -54,7 +54,9 @@ module.exports = (sequelize) => {
 
             // ── Which submission this reminder was about ───────────────────────────
             type: {
-                type: DataTypes.ENUM("PLAN", "ACHIEVEMENT"),
+                // PLAN_OPEN: first-of-month "submission window is now open" notice
+                // (one per user per month; deduped the same way as PLAN/ACHIEVEMENT).
+                type: DataTypes.ENUM("PLAN", "ACHIEVEMENT", "PLAN_OPEN"),
                 allowNull: false,
             },
 
